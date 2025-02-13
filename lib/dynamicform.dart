@@ -444,10 +444,21 @@ class _DynamicFormState extends State<DynamicForm> {
           children: [
             Column(
               children: (field['options'] as List<dynamic>).map<Widget>((option) {
-                return ReactiveRadioListTile<String>(
-                  formControlName: field['name'],
-                  value: option.toString(),
-                  title: Text(option.toString()),
+                return Container(
+                  padding: EdgeInsets.zero,
+                  margin: EdgeInsets.symmetric(vertical: 4.0),
+                  child: Transform.translate(
+                    offset: Offset(-12, 0),
+                    child: ReactiveRadioListTile<String>(
+                      formControlName: field['name'],
+                      value: option.toString(),
+                      title: Text(
+                        option.toString(),
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
                 );
               }).toList(),
             ),
@@ -482,17 +493,80 @@ class _DynamicFormState extends State<DynamicForm> {
         formField = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ReactiveDropdownField<String>(
+            ReactiveValueListenableBuilder<String>(
               formControlName: field['name'],
-              items: (field['options'] as List<dynamic>).map<DropdownMenuItem<String>>((option) {
-                return DropdownMenuItem<String>(
-                  value: option.toString(),
-                  child: Text(option.toString()),
+              builder: (context, control, child) {
+                return InkWell(
+                  onTap: () {
+                    showModalBottomSheet(
+                      context: widget.context,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+                      ),
+                      builder: (BuildContext context) {
+                        return Container(
+                          padding: EdgeInsets.symmetric(vertical: 20),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: Text(
+                                  field['label'] ?? 'Select an option',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              Divider(),
+                              Flexible(
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    children: (field['options'] as List<dynamic>)
+                                        .map<Widget>((option) => ListTile(
+                                              title: Text(option.toString()),
+                                              selected: control.value == option.toString(),
+                                              selectedTileColor: Colors.grey[200],
+                                              onTap: () {
+                                                control.value = option.toString();
+                                                Navigator.pop(context);
+                                              },
+                                            ))
+                                        .toList(),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          control.value?.toString() ?? 'Select an option',
+                          style: TextStyle(
+                            color: control.value == null ? Colors.grey[600] : Colors.black,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
+                      ],
+                    ),
+                  ),
                 );
-              }).toList(),
-              decoration: InputDecoration(labelText: field['label']),
+              },
             ),
-            // Handle sub-questions for dropdown
+            // Handle sub-questions
             ReactiveValueListenableBuilder(
               formControlName: field['name'],
               builder: (context, control, child) {
@@ -500,14 +574,11 @@ class _DynamicFormState extends State<DynamicForm> {
                     field['subQuestions'] != null && 
                     field['subQuestions'][control.value] != null) {
                   return Padding(
-                    padding: EdgeInsets.only(left: 20.0),
+                    padding: EdgeInsets.only(left: 20.0, top: 16.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: (field['subQuestions'][control.value] as List)
-                          .map<Widget>((subField) => Padding(
-                                padding: EdgeInsets.only(top: 16.0),
-                                child: _buildField(subField),
-                              ))
+                          .map<Widget>((subField) => _buildField(subField))
                           .toList(),
                     ),
                   );
@@ -523,7 +594,6 @@ class _DynamicFormState extends State<DynamicForm> {
         formField = ReactiveValueListenableBuilder<String>(
           formControlName: field['name'],
           builder: (context, control, child) {
-            // Clear the field immediately when the value matches the field type
             if (control.value != null && 
                 control.value.toString().toLowerCase() == field['inputType']?.toString().toLowerCase()) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -536,7 +606,7 @@ class _DynamicFormState extends State<DynamicForm> {
               keyboardType: field['inputType'] == 'number'
                   ? TextInputType.number
                   : TextInputType.text,
-              decoration: InputDecoration(labelText: field['label']),
+             
             );
           },
         );
@@ -550,16 +620,19 @@ class _DynamicFormState extends State<DynamicForm> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (field['label'] != null) ...[
-          Text(
-            field['label'],
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.black87,
+          Container(
+            padding: EdgeInsets.zero,
+            child: Text(
+              field['label'],
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
             ),
           ),
           if (field['validators']?.contains('required') == true)
-            Padding(
+            Container(
               padding: EdgeInsets.only(top: 4.0),
               child: Text(
                 '* Required',
