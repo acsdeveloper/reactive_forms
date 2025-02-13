@@ -13,6 +13,7 @@ final List<Map<String, dynamic>> formJson = [
     'requireAttachmentsOn': 'Yes',
     'showAttachmentsOn': 'Yes',
     'disableAttachmentsOn': 'No',
+    'hasComments': true
   },
   {
     'name': 'pest_control',

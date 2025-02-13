@@ -493,80 +493,17 @@ class _DynamicFormState extends State<DynamicForm> {
         formField = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ReactiveValueListenableBuilder<String>(
+            ReactiveDropdownField<String>(
               formControlName: field['name'],
-              builder: (context, control, child) {
-                return InkWell(
-                  onTap: () {
-                    showModalBottomSheet(
-                      context: widget.context,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
-                      ),
-                      builder: (BuildContext context) {
-                        return Container(
-                          padding: EdgeInsets.symmetric(vertical: 20),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                child: Text(
-                                  field['label'] ?? 'Select an option',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              Divider(),
-                              Flexible(
-                                child: SingleChildScrollView(
-                                  child: Column(
-                                    children: (field['options'] as List<dynamic>)
-                                        .map<Widget>((option) => ListTile(
-                                              title: Text(option.toString()),
-                                              selected: control.value == option.toString(),
-                                              selectedTileColor: Colors.grey[200],
-                                              onTap: () {
-                                                control.value = option.toString();
-                                                Navigator.pop(context);
-                                              },
-                                            ))
-                                        .toList(),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    );
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          control.value?.toString() ?? 'Select an option',
-                          style: TextStyle(
-                            color: control.value == null ? Colors.grey[600] : Colors.black,
-                            fontSize: 16,
-                          ),
-                        ),
-                        Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
-                      ],
-                    ),
-                  ),
+              items: (field['options'] as List<dynamic>).map<DropdownMenuItem<String>>((option) {
+                return DropdownMenuItem<String>(
+                  value: option.toString(),
+                  child: Text(option.toString()),
                 );
-              },
+              }).toList(),
+             
             ),
-            // Handle sub-questions
+            // Handle sub-questions for dropdown
             ReactiveValueListenableBuilder(
               formControlName: field['name'],
               builder: (context, control, child) {
@@ -574,11 +511,14 @@ class _DynamicFormState extends State<DynamicForm> {
                     field['subQuestions'] != null && 
                     field['subQuestions'][control.value] != null) {
                   return Padding(
-                    padding: EdgeInsets.only(left: 20.0, top: 16.0),
+                    padding: EdgeInsets.only(left: 20.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: (field['subQuestions'][control.value] as List)
-                          .map<Widget>((subField) => _buildField(subField))
+                          .map<Widget>((subField) => Padding(
+                                padding: EdgeInsets.only(top: 16.0),
+                                child: _buildField(subField),
+                              ))
                           .toList(),
                     ),
                   );
@@ -656,63 +596,60 @@ class _DynamicFormState extends State<DynamicForm> {
               
               if (!showAttachments) return SizedBox.shrink();
 
+              // Initialize the comment control if it doesn't exist and if comments are enabled
+              final commentControlName = '${field['name']}_comment';
+              if (field['hasComments'] == true && !controller.form.contains(commentControlName)) {
+                controller.form.addAll({
+                  commentControlName: FormControl<String>(value: ''),
+                });
+              }
+
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _showFilePickerOptions(field['name'], field['label']),
-                      icon: Icon(
-                        Icons.attach_file,
-                        size: 24,
+                  InkWell(
+                    onTap: () => _showFilePickerOptions(field['name'], field['label']),
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: widget.primaryColor,
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      label: Text(
-                        'Add Attachment',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: widget.primaryColor ?? Colors.black,
-                        foregroundColor: widget.buttonTextColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.upload_file_rounded,
+                            color: widget.buttonTextColor,
+                            size: 24,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Upload Files',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: widget.buttonTextColor,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  if (controller.uploadedFiles[field['name']]!.isNotEmpty) ...[
+                  if (field['hasComments'] == true) ...[
                     SizedBox(height: 16),
-                    ...controller.uploadedFiles[field['name']]!.map((file) => Card(
-                      margin: EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: Icon(
-                          _getFileIcon(file['fileType']),
-                          color: widget.primaryColor ?? Colors.black,
-                          size: 24,
-                        ),
-                        title: Text(
-                          file['fileName'] ?? 'Unnamed file',
-                          style: TextStyle(fontSize: 14),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: IconButton(
-                          icon: Icon(Icons.delete, color: Colors.red),
-                          onPressed: () {
-                            setState(() {
-                              controller.uploadedFiles[field['name']]!.remove(file);
-                            });
-                          },
-                        ),
-                        onTap: () => _viewFile(widget.context, file),
+                    ReactiveTextField(
+                      formControlName: commentControlName,
+                      decoration: InputDecoration(
+                        labelText: 'Add a comment',
+                        hintText: 'Type your comment here...',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                       ),
-                    )).toList(),
+                      maxLines: 3,
+                    ),
                   ],
                 ],
               );
