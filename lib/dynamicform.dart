@@ -16,10 +16,12 @@ class DynamicForm extends StatefulWidget {
   final Color buttonTextColor;
   final double fieldSpacing;
   final bool showOneByOne;
+  final BuildContext context;
 
   DynamicForm({
     required this.formJson,
     required this.onSubmit,
+    required this.context,
     this.primaryColor = const Color(0xFF4BA7D1),
     this.buttonTextColor = Colors.white,
     this.fieldSpacing = 20.0,
@@ -44,7 +46,7 @@ class _DynamicFormState extends State<DynamicForm> {
 
   Future<void> _showFilePickerOptions(String questionName, String questionLabel) async {
     showModalBottomSheet(
-      context: context,
+      context: widget.context,
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
@@ -169,7 +171,7 @@ class _DynamicFormState extends State<DynamicForm> {
     } catch (e) {
       print('Error in _pickFile: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(widget.context).showSnackBar(
           SnackBar(
             content: Text('Error selecting file. Please try again.'),
             duration: Duration(seconds: 2),
@@ -235,7 +237,7 @@ class _DynamicFormState extends State<DynamicForm> {
         } catch (e) {
           print('Error reading image: $e');
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(widget.context).showSnackBar(
               SnackBar(
                 content: Text('Error processing image. Please try again.'),
                 duration: Duration(seconds: 2),
@@ -247,7 +249,7 @@ class _DynamicFormState extends State<DynamicForm> {
     } catch (e) {
       print('Error in _captureImage: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(widget.context).showSnackBar(
           SnackBar(
             content: Text('Error capturing image. Please try again.'),
             duration: Duration(seconds: 2),
@@ -257,7 +259,7 @@ class _DynamicFormState extends State<DynamicForm> {
     }
   }
 
-  void _submitForm() {
+  void _submitForm(contaxt) {
     if (controller.form.valid) {
       controller.onSubmit(controller.form.value, controller.uploadedFiles);
     } else {
@@ -276,7 +278,7 @@ class _DynamicFormState extends State<DynamicForm> {
         if (errorIndex != -1) {
           controller.form.focus(widget.formJson[errorIndex]['name']);
           
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(widget.context).showSnackBar(
             SnackBar(
               content: Text('Please fill in all required fields'),
               duration: Duration(seconds: 2),
@@ -332,7 +334,7 @@ class _DynamicFormState extends State<DynamicForm> {
       }
     } catch (e) {
       print('Error in _viewFile: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(widget.context).showSnackBar(
         SnackBar(
           content: Text('Error viewing file. Please try again.'),
           duration: Duration(seconds: 2),
@@ -622,7 +624,7 @@ class _DynamicFormState extends State<DynamicForm> {
                             });
                           },
                         ),
-                        onTap: () => _viewFile(context, file),
+                        onTap: () => _viewFile(widget.context, file),
                       ),
                     )).toList(),
                   ],
@@ -684,7 +686,7 @@ class _DynamicFormState extends State<DynamicForm> {
           IconButton(
             onPressed: () {
               setState(() {
-                controller.currentQuestionIndex--;  // This will move back one question
+                controller.currentQuestionIndex--;
               });
             },
             icon: Icon(Icons.arrow_back_ios),
@@ -698,10 +700,10 @@ class _DynamicFormState extends State<DynamicForm> {
           ElevatedButton(
             onPressed: () {
               if (controller.form.valid) {
-                controller.submitForm(context);
+                controller.submitForm(widget.context);
               } else {
                 controller.form.markAllAsTouched();
-                ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.of(widget.context).showSnackBar(
                   SnackBar(
                     content: Text('Please check all required fields'),
                     duration: Duration(seconds: 2),
@@ -719,8 +721,8 @@ class _DynamicFormState extends State<DynamicForm> {
         else
           IconButton(
             onPressed: () {
-              if (controller.validateAndProceed(context)) {
-                setState(() {});  // Trigger rebuild with new question index
+              if (controller.validateAndProceed(widget.context)) {
+                setState(() {});
               }
             },
             icon: Icon(Icons.arrow_forward_ios),
@@ -734,7 +736,7 @@ class _DynamicFormState extends State<DynamicForm> {
   Widget _buildSubmitButton(Color buttonColor) {
     return ElevatedButton(
       child: Text('Submit'),
-      onPressed: _submitForm,
+      onPressed: () => _submitForm(widget.context),
       style: ElevatedButton.styleFrom(
         backgroundColor: buttonColor,
         foregroundColor: widget.buttonTextColor,
