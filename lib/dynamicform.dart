@@ -520,12 +520,25 @@ class _DynamicFormState extends State<DynamicForm> {
         break;
 
       case 'input':
-        formField = ReactiveTextField(
+        formField = ReactiveValueListenableBuilder<String>(
           formControlName: field['name'],
-          keyboardType: field['inputType'] == 'number'
-              ? TextInputType.number
-              : TextInputType.text,
-          decoration: InputDecoration(labelText: field['label']),
+          builder: (context, control, child) {
+            // Clear the field immediately when the value matches the field type
+            if (control.value != null && 
+                control.value.toString().toLowerCase() == field['inputType']?.toString().toLowerCase()) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                controller.form.control(field['name']).value = '';
+              });
+            }
+            
+            return ReactiveTextField(
+              formControlName: field['name'],
+              keyboardType: field['inputType'] == 'number'
+                  ? TextInputType.number
+                  : TextInputType.text,
+              decoration: InputDecoration(labelText: field['label']),
+            );
+          },
         );
         break;
 
