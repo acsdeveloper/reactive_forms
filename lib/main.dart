@@ -16,6 +16,14 @@ final List<Map<String, dynamic>> formJson = [
     'hasComments': true
   },
   {
+    'name': 'cleaning_storage_233',
+    'type': 'file',
+    'label': 'Is there a place to store cleaning chemicals?',
+    'validators': ['required'],
+    'hasAttachments': true,
+    'hasComments': true
+  },
+  {
     'name': 'pest_control',
     'type': 'radio',
     'label': 'Is there evidence of pest infestation?',

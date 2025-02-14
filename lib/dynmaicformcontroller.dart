@@ -90,11 +90,13 @@ class DynamicFormController {
     final field = formJson[currentQuestionIndex];
     final currentFieldName = field['name'];
     final currentControl = form.control(currentFieldName);
-    
+    final type = field['type'];
+    if (type != 'file') {
     if (_hasValidationError(field, currentControl, currentFieldName)) {
       String errorMessage = _getErrorMessage(field, currentControl);
       _showErrorSnackBar(context, errorMessage);
       return false;
+    }
     }
 
     currentQuestionIndex++;
@@ -148,6 +150,43 @@ class DynamicFormController {
       SnackBar(
         content: Text(message),
         duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void showDropdownBottomSheet(BuildContext context, Map<String, dynamic> field) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              field['label'] ?? 'Select an option',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 16),
+            ...List<Widget>.from(
+              (field['options'] as List).map((option) => 
+                ListTile(
+                  title: Text(option['label']),
+                  onTap: () {
+                    form.control(field['name']).value = option['value'];
+                    Navigator.pop(context);
+                  },
+                  trailing: form.control(field['name']).value == option['value']
+                    ? const Icon(Icons.check, color: Colors.blue)
+                    : null,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

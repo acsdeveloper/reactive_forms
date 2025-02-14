@@ -519,15 +519,48 @@ class _DynamicFormState extends State<DynamicForm> {
         formField = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ReactiveDropdownField<String>(
-              formControlName: field['name'],
-              items: (field['options'] as List<dynamic>).map<DropdownMenuItem<String>>((option) {
-                return DropdownMenuItem<String>(
-                  value: option.toString(),
-                  child: Text(option.toString()),
+            InkWell(
+              onTap: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+                  ),
+                  builder: (context) => _DropdownSearch(
+                    options: field['options'] as List<dynamic>,
+                    selectedValue: controller.form.control(field['name']).value,
+                    onSelect: (value) {
+                      controller.form.control(field['name']).value = value;
+                      Navigator.pop(context);
+                    },
+                    primaryColor: widget.primaryColor,
+                  ),
                 );
-              }).toList(),
-             
+              },
+              child: ReactiveValueListenableBuilder<String>(
+                formControlName: field['name'],
+                builder: (context, control, child) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: ListTile(
+                      title: Text(
+                        control.value ?? 'Select an option',
+                        style: TextStyle(
+                          color: control.value == null ? Colors.grey.shade600 : Colors.black,
+                          fontSize: 16,
+                        ),
+                      ),
+                      trailing: Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  );
+                },
+              ),
             ),
             // Handle sub-questions for dropdown
             ReactiveValueListenableBuilder(
@@ -575,6 +608,95 @@ class _DynamicFormState extends State<DynamicForm> {
              
             );
           },
+        );
+        break;
+
+      case 'file':
+        formField = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => _handleAttachmentButtonPress(field['name']),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  textStyle: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.cloud_upload_outlined, size: 22),
+                    SizedBox(width: 12),
+                    Text('Upload Files'),
+                  ],
+                ),
+              ),
+            ),
+            if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
+              SizedBox(height: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: controller.uploadedFiles[field['name']]!.map((file) {
+                  return Card(
+                    elevation: 0,
+                    margin: EdgeInsets.only(bottom: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    child: ListTile(
+                      leading: Icon(
+                        _getFileIcon(file['fileType']),
+                        color: Colors.black,
+                      ),
+                      title: Text(
+                        file['fileName'] ?? 'Unnamed file',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.visibility_outlined),
+                            onPressed: () => _viewFile(context, file),
+                            color: Colors.black87,
+                            iconSize: 20,
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.delete_outline),
+                            onPressed: () {
+                              setState(() {
+                                controller.uploadedFiles[field['name']]!.remove(file);
+                              });
+                            },
+                            color: Colors.red.shade400,
+                            iconSize: 20,
+                          ),
+                        ],
+                      ),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
         );
         break;
 
@@ -830,5 +952,100 @@ class _DynamicFormState extends State<DynamicForm> {
         minimumSize: Size(double.infinity, 50),
       ),
     );
+  }
+
+  void _handleAttachmentButtonPress(String questionName) {
+    _showFilePickerOptions(questionName, '');
+  }
+}
+
+class _DropdownSearch extends StatefulWidget {
+  final List<dynamic> options;
+  final String? selectedValue;
+  final Function(String) onSelect;
+  final Color? primaryColor;
+
+  const _DropdownSearch({
+    required this.options,
+    required this.selectedValue,
+    required this.onSelect,
+    this.primaryColor,
+  });
+
+  @override
+  _DropdownSearchState createState() => _DropdownSearchState();
+}
+
+class _DropdownSearchState extends State<_DropdownSearch> {
+  late List<dynamic> filteredOptions;
+  final TextEditingController searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    filteredOptions = List.from(widget.options);
+  }
+
+  void _filterOptions(String query) {
+    setState(() {
+      filteredOptions = widget.options
+          .where((option) => option.toString().toLowerCase().contains(query.toLowerCase()))
+          .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.5,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: TextField(
+                controller: searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search...',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onChanged: _filterOptions,
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                itemCount: filteredOptions.length,
+                itemBuilder: (context, index) {
+                  final option = filteredOptions[index];
+                  return ListTile(
+                    title: Text(option.toString()),
+                    onTap: () => widget.onSelect(option.toString()),
+                    trailing: widget.selectedValue == option.toString()
+                      ? Icon(Icons.check, color: widget.primaryColor)
+                      : null,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
   }
 }
