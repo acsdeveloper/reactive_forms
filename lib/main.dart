@@ -154,6 +154,7 @@ class KitchenInspectionScreen extends StatelessWidget {
       body: Padding(
         padding: EdgeInsets.all(16.0),
         child: DynamicForm(
+          
           context: context,
           showOneByOne: true,
           primaryColor: Colors.black,

@@ -293,10 +293,21 @@ class _DynamicFormState extends State<DynamicForm> {
     try {
       if (file['file'] is Uint8List) {
         if (kIsWeb) {
-          // Create blob URL for web viewing
+          // Web-specific file viewing
           final blob = html.Blob([file['file']]);
           final url = html.Url.createObjectUrlFromBlob(blob);
-          html.window.open(url, '_blank');
+          
+          // Check if it's an image type
+          if (file['fileType'] == 'image' || (file['mimeType'] ?? '').startsWith('image/')) {
+            // Open image in new tab
+            html.window.open(url, '_blank');
+          } else {
+            // Trigger download for non-image files
+            final anchor = html.AnchorElement()
+              ..href = url
+              ..download = file['fileName'] ?? 'download'
+              ..click();
+          }
           html.Url.revokeObjectUrl(url);
         } else {
           // Mobile viewing
@@ -305,7 +316,7 @@ class _DynamicFormState extends State<DynamicForm> {
             MaterialPageRoute(
               builder: (_) => Scaffold(
                 appBar: AppBar(
-                  title: Text(file['fileName'] ?? 'Image Preview'),
+                  title: Text(file['fileName'] ?? 'File Preview'),
                   backgroundColor: widget.primaryColor ?? Colors.black,
                 ),
                 body: SafeArea(
@@ -313,16 +324,31 @@ class _DynamicFormState extends State<DynamicForm> {
                     child: SingleChildScrollView(
                       child: Padding(
                         padding: EdgeInsets.all(16.0),
-                        child: Image.memory(
-                          file['file'],
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            print('Error loading image: $error');
-                            return Center(
-                              child: Text('Error loading image'),
-                            );
-                          },
-                        ),
+                        child: file['fileType'] == 'image' || (file['mimeType'] ?? '').startsWith('image/')
+                            ? Image.memory(
+                                file['file'],
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  print('Error loading image: $error');
+                                  return Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.error_outline, size: 48, color: Colors.red),
+                                      SizedBox(height: 16),
+                                      Text('Error loading image'),
+                                    ],
+                                  );
+                                },
+                              )
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(_getFileIcon(file['fileType']), size: 48),
+                                  SizedBox(height: 16),
+                                  Text(file['fileName'] ?? 'File'),
+                                  Text('This file type cannot be previewed'),
+                                ],
+                              ),
                       ),
                     ),
                   ),
@@ -334,7 +360,7 @@ class _DynamicFormState extends State<DynamicForm> {
       }
     } catch (e) {
       print('Error in _viewFile: $e');
-      ScaffoldMessenger.of(widget.context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error viewing file. Please try again.'),
           duration: Duration(seconds: 2),
@@ -638,8 +664,45 @@ class _DynamicFormState extends State<DynamicForm> {
                       ),
                     ),
                   ),
-                  if (field['hasComments'] == true) ...[
+                  if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
                     SizedBox(height: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: controller.uploadedFiles[field['name']]!.map((file) {
+                        return Card(
+                          margin: EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: Icon(_getFileIcon(file['fileType'])),
+                            title: Text(
+                              file['fileName'] ?? 'Unnamed file',
+                              style: TextStyle(fontSize: 14),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.visibility),
+                                  onPressed: () => _viewFile(context, file),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.delete),
+                                  onPressed: () {
+                                    setState(() {
+                                      controller.uploadedFiles[field['name']]!.remove(file);
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                  if (field['hasComments'] == true) ...[
+                    SizedBox(height: widget.fieldSpacing),
                     ReactiveTextField(
                       formControlName: commentControlName,
                       decoration: InputDecoration(
