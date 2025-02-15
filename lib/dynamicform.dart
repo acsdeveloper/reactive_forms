@@ -723,7 +723,7 @@ class _DynamicFormState extends State<DynamicForm> {
       
       if (result != null && result.files.isNotEmpty) {
         setState(() {
-          controller.uploadedFiles[fieldName]!.clear();
+        controller.uploadedFiles[fieldName] ??= [];
           
           for (var file in result.files) {
             if (file.bytes != null) {
