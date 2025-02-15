@@ -140,6 +140,20 @@ final List<Map<String, dynamic>> formJson = [
   
 
   },
+  {
+    "name" :"question_5",
+    "type" : "number",
+    "label" : "what is fridge temp ",
+    "validators" : ["required"],
+    "hasAttachments" : true,
+    "requireAttachmentsOn" : "",
+    "showAttachmentsOn" : "",
+    "disableAttachmentsOn" : "",
+    'min': 18,
+    'max': 100,
+    'allowNegatives': false,
+    'allowedDecimals': 0
+    }
   
 ];
 

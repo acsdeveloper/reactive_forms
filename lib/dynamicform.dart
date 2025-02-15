@@ -12,7 +12,7 @@ import 'dynmaicformcontroller.dart';
 
 class DynamicForm extends StatefulWidget {
   final List<Map<String, dynamic>> formJson;
-  final void Function(Map<String, dynamic>, Map<String, List<Map<String, dynamic>>> uploadedFiles) onSubmit;
+  final  Function(Map<String, dynamic>, Map<String, List<Map<String, dynamic>>> uploadedFiles) onSubmit;
   final Color primaryColor;
   final Color buttonTextColor;
   final double fieldSpacing;
@@ -292,9 +292,69 @@ class _DynamicFormState extends State<DynamicForm> {
           ],
         );
         break;
-
-    
-    
+      case 'file':
+        formField = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: () => _showFilePickerOptions(field['name'], field['label']),
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: widget.primaryColor,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.upload_file_rounded,
+                      color: widget.buttonTextColor,
+                      size: 24,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Upload Files',
+                      style: widget.fontFamily.copyWith(color: Colors.white),
+                    )
+                  ],
+                ),
+              ),
+            ),
+            if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
+              SizedBox(height: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: controller.uploadedFiles[field['name']]!.map((file) {
+                  return Card(
+                    margin: EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      onTap: () => _viewFile(context, file),
+                      leading: Icon(_getFileIcon(file['fileType'])),
+                      title: Text(
+                        file['fileName'] ?? 'Unnamed file',
+                        style: widget.fontFamily,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: IconButton(
+                        icon: Icon(Icons.delete),
+                        color: const Color.fromARGB(255, 199, 86, 86),
+                        onPressed: () {
+                          setState(() {
+                            controller.uploadedFiles[field['name']]!.remove(file);
+                          });
+                        },
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
+        );
+        break;
        
       default:
         formField = SizedBox.shrink();
@@ -323,73 +383,71 @@ class _DynamicFormState extends State<DynamicForm> {
         ],
         formField,
         SizedBox(height: widget.fieldSpacing),
-        if (field['hasAttachments'] == true)
-          ReactiveValueListenableBuilder<String>(
-            formControlName: field['name'],
-            builder: (context, value, child) {
-              final showAttachments = value.value != null &&
-                  (field['showAttachmentsOn'] == null || value.value == field['showAttachmentsOn']);
-              
-              if (!showAttachments) return SizedBox.shrink();
+        if (field['hasAttachments'] == true && field['type'] != 'file')
+          field['type'] == 'number' 
+            ? ReactiveValueListenableBuilder<num>(
+                formControlName: field['name'],
+                builder: (context, value, child) {
+                  final showAttachments = value.value != null &&
+                      (field['showAttachmentsOn'] == null || value.value == field['showAttachmentsOn']);
+                  
+                  if (!showAttachments) return SizedBox.shrink();
 
-              // Initialize the comment control if it doesn't exist and if comments are enabled
-              final commentControlName = '${field['name']}_comment';
-              if (field['hasComments'] == true && !controller.form.contains(commentControlName)) {
-                controller.form.addAll({
-                  commentControlName: FormControl<String>(value: ''),
-                });
-              }
+                  // Initialize the comment control if it doesn't exist and if comments are enabled
+                  final commentControlName = '${field['name']}_comment';
+                  if (field['hasComments'] == true && !controller.form.contains(commentControlName)) {
+                    controller.form.addAll({
+                      commentControlName: FormControl<String>(value: ''),
+                    });
+                  }
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(height: 16),
-                  InkWell(
-                    onTap: () => _showFilePickerOptions(field['name'], field['label']),
-                    child: Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: widget.primaryColor,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.upload_file_rounded,
-                            color: widget.buttonTextColor,
-                            size: 24,
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(height: 16),
+                      InkWell(
+                        onTap: () => _showFilePickerOptions(field['name'], field['label']),
+                        child: Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: widget.primaryColor,
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          SizedBox(width: 8),
-                          Text(
-                            'Upload Files',
-                            style: widget.fontFamily.copyWith(color: Colors.white),
-                          )
-                        ],
+                          padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.upload_file_rounded,
+                                color: widget.buttonTextColor,
+                                size: 24,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Upload Files',
+                                style: widget.fontFamily.copyWith(color: Colors.white),
+                              )
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
-                    SizedBox(height: 16),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: controller.uploadedFiles[field['name']]!.map((file) {
-                        return Card(
-                          margin: EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            onTap: () => _viewFile(context, file),
-                            leading: Icon(_getFileIcon(file['fileType'])),
-                            title: Text(
-                              file['fileName'] ?? 'Unnamed file',
-                              style: widget.fontFamily,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
+                      if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
+                        SizedBox(height: 16),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: controller.uploadedFiles[field['name']]!.map((file) {
+                            return Card(
+                              margin: EdgeInsets.only(bottom: 8),
+                              child: ListTile(
+                                onTap: () => _viewFile(context, file),
+                                leading: Icon(_getFileIcon(file['fileType'])),
+                                title: Text(
+                                  file['fileName'] ?? 'Unnamed file',
+                                  style: widget.fontFamily,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                trailing: IconButton(
                                   icon: Icon(Icons.delete),
                                   color: const Color.fromARGB(255, 199, 86, 86),
                                   onPressed: () {
@@ -398,33 +456,89 @@ class _DynamicFormState extends State<DynamicForm> {
                                     });
                                   },
                                 ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                  if (field['hasComments'] == true) ...[
-                    SizedBox(height: widget.fieldSpacing),
-                    ReactiveTextField(
-                      formControlName: commentControlName,
-                      decoration: InputDecoration(
-                        labelText: 'Add a comment',
-                       
-                        border: OutlineInputBorder(),
-                       labelStyle: widget.fontFamily,
-                       hintStyle: widget.fontFamily,
-                       hoverColor: widget.buttonTextColor,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
+                  );
+                },
+              )
+            : ReactiveValueListenableBuilder<String>(
+                formControlName: field['name'],
+                builder: (context, value, child) {
+                  final showAttachments = value.value != null && 
+                      (field['showAttachmentsOn'] is List 
+                          ? (field['showAttachmentsOn'] as List).contains(value.value)
+                          : value.value == field['showAttachmentsOn']);
+                  
+                  if (!showAttachments) return SizedBox.shrink();
 
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(height: 16),
+                      InkWell(
+                        onTap: () => _showFilePickerOptions(field['name'], field['label']),
+                        child: Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: widget.primaryColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.upload_file_rounded,
+                                color: widget.buttonTextColor,
+                                size: 24,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Upload Files',
+                                style: widget.fontFamily.copyWith(color: Colors.white),
+                              )
+                            ],
+                          ),
+                        ),
                       ),
-                      maxLines: 3,
-                    ),
-                  ],
-                ],
-              );
-            },
-          ),
+                      if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
+                        SizedBox(height: 16),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: controller.uploadedFiles[field['name']]!.map((file) {
+                            return Card(
+                              margin: EdgeInsets.only(bottom: 8),
+                              child: ListTile(
+                                onTap: () => _viewFile(context, file),
+                                leading: Icon(_getFileIcon(file['fileType'])),
+                                title: Text(
+                                  file['fileName'] ?? 'Unnamed file',
+                                  style: widget.fontFamily,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                trailing: IconButton(
+                                  icon: Icon(Icons.delete),
+                                  color: const Color.fromARGB(255, 199, 86, 86),
+                                  onPressed: () {
+                                    setState(() {
+                                      controller.uploadedFiles[field['name']]!.remove(file);
+                                    });
+                                  },
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
+                  );
+                },
+              ),
         if (field['hasComments'] == true)
           ReactiveValueListenableBuilder<String>(
             formControlName: field['name'],
@@ -613,11 +727,11 @@ class _DynamicFormState extends State<DynamicForm> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: buttonColor,
-              foregroundColor: widget.buttonTextColor,
+              backgroundColor: widget.fileUploadButtonColor,
+              foregroundColor: widget.fileUploadButtonTextColor,
               padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
             ),
-            child: Text('Submit',style: widget.fontFamily),
+            child: Text('Submit',style: widget.fontFamily.copyWith(color:widget.fileUploadButtonTextColor)),
           )
         else
           IconButton(
