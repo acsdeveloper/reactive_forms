@@ -127,7 +127,20 @@ final List<Map<String, dynamic>> formJson = [
     'disableAttachmentsOn': 'Yes',
     'hasComments': true
 
-  }
+  },
+    {
+    'name': '10210298',
+    'label': 'Are handwashing facilities available?',
+    'type': 'number',
+    'validators': ['required'],
+    'min': 18,
+    'max': 100,
+    'allowNegatives': false,
+    'allowedDecimals': 0
+  
+
+  },
+  
 ];
 
 void main() async {
@@ -162,7 +175,7 @@ class KitchenInspectionScreen extends StatelessWidget {
       body: Padding(
         padding: EdgeInsets.all(16.0),
         child: DynamicForm(
-          
+          fontFamily: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           context: context,
           showOneByOne: true,
           primaryColor: Colors.black,

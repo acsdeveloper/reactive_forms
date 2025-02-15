@@ -18,48 +18,99 @@ class DynamicFormController {
   }
 
   void _initializeForm() {
-    final controls = <String, AbstractControl>{};
+    Map<String, AbstractControl<dynamic>> controls = {};
     
-    void addFieldControls(Map<String, dynamic> field) {
-      controls[field['name']] = FormControl<String>(
-        validators: _getValidators(field['validators']),
-      );
+    // Initialize form controls and uploadedFiles
+    for (var field in formJson) {
+      final fieldName = field['name'];
       
-      if (field['hasComments'] == true) {
-        controls['${field['name']}_comment'] = FormControl<String>();
-      }
-      
-      if (field['subQuestions'] != null) {
-        (field['subQuestions'] as Map<String, dynamic>).forEach((answer, subQuestions) {
-          if (subQuestions is List) {
-            for (var subField in subQuestions) {
-              if (subField is Map<String, dynamic>) {
-                addFieldControls(subField);
+      // Initialize file upload fields
+      if (field['type'] == 'file') {
+        uploadedFiles[fieldName] = []; // Initialize empty list for file uploads
+        controls[fieldName] = FormControl<String>(value: '');
+      } else if (field['type'] == 'number') {
+        // Special handling for number fields
+        controls[fieldName] = FormControl<num>(
+          value: null,
+          validators: _getValidators(field['validators'], field),
+        );
+      } else {
+        // Initialize form controls for non-file fields
+        controls[fieldName] = FormControl<String>(
+          value: '',
+          validators: _getValidators(field['validators'], field),
+        );
+        
+        if (field['hasComments'] == true) {
+          controls['${fieldName}_comment'] = FormControl<String>();
+        }
+        
+        if (field['subQuestions'] != null) {
+          (field['subQuestions'] as Map<String, dynamic>).forEach((answer, subQuestions) {
+            if (subQuestions is List) {
+              for (var subField in subQuestions) {
+                if (subField is Map<String, dynamic>) {
+                  controls[subField['name']] = FormControl<String>(
+                    validators: _getValidators(subField['validators'], subField),
+                  );
+                }
               }
             }
-          }
-        });
+          });
+        }
       }
-      
-      uploadedFiles[field['name']] = [];
     }
-
-    for (var field in formJson) {
-      addFieldControls(field);
-    }
-
+    
     form = FormGroup(controls);
   }
 
-  List<Validator<dynamic>> _getValidators(List<dynamic>? validators) {
-    if (validators == null) return [];
-    return validators.where((v) => v == 'required')
-        .map((v) => Validators.required)
-        .toList();
+  List<Validator<dynamic>> _getValidators(List<dynamic>? validators, Map<String, dynamic>? field) {
+    List<Validator<dynamic>> validatorsList = [];
+    
+    if (validators == null) return validatorsList;
+
+    // Add required validator if present
+    if (validators.contains('required')) {
+      validatorsList.add(Validators.required);
+    }
+
+    // Add min/max validators for number fields
+    if (field?['type'] == 'number') {
+      if (field?['min'] != null) {
+        validatorsList.add(Validators.min(field!['min']));
+      }
+      if (field?['max'] != null) {
+        validatorsList.add(Validators.max(field!['max']));
+      }
+    }
+
+    return validatorsList;
   }
 
   void submitForm(BuildContext context) {
-    if (form.valid) {
+    bool isValid = true;
+    
+    // Check each field's validation
+    for (var field in formJson) {
+      final fieldName = field['name'];
+      final control = form.control(fieldName);
+      
+      // If field is file type, check uploaded files
+      if (field['type'] == 'file') {
+        if (field['validators']?.contains('required') == true) {
+          isValid = isValid && (uploadedFiles[fieldName]?.isNotEmpty ?? false);
+        }
+        continue; // Skip further validation for file fields
+      }
+      
+      // For non-file fields, check form control validity
+      if (!control.valid && field['validators']?.contains('required') == true) {
+        isValid = false;
+        break;
+      }
+    }
+
+    if (isValid) {
       onSubmit(form.value, uploadedFiles);
     } else {
       form.markAllAsTouched();
@@ -89,14 +140,26 @@ class DynamicFormController {
   bool validateAndProceed(BuildContext context) {
     final field = formJson[currentQuestionIndex];
     final currentFieldName = field['name'];
+    
+    // Special handling for file type fields
+    if (field['type'] == 'file') {
+      // Check if file upload is required and no files are uploaded
+      if (field['validators']?.contains('required') == true && 
+          (uploadedFiles[currentFieldName]?.isEmpty ?? true)) {
+        _showErrorSnackBar(context, 'Please upload required files');
+        return false;
+      }
+      // If file is not required or files are uploaded, proceed
+      currentQuestionIndex++;
+      return true;
+    }
+
+    // For non-file fields, use existing validation
     final currentControl = form.control(currentFieldName);
-    final type = field['type'];
-    if (type != 'file') {
     if (_hasValidationError(field, currentControl, currentFieldName)) {
       String errorMessage = _getErrorMessage(field, currentControl);
       _showErrorSnackBar(context, errorMessage);
       return false;
-    }
     }
 
     currentQuestionIndex++;

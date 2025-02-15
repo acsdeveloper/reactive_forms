@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
 import 'package:universal_html/html.dart' as html;
+import 'package:flutter/services.dart';
 
 import 'dynmaicformcontroller.dart';
 
@@ -17,6 +18,9 @@ class DynamicForm extends StatefulWidget {
   final double fieldSpacing;
   final bool showOneByOne;
   final BuildContext context;
+  final TextStyle fontFamily;
+  final Color fileUploadButtonColor;
+  final Color fileUploadButtonTextColor;
 
   DynamicForm({
     required this.formJson,
@@ -26,6 +30,9 @@ class DynamicForm extends StatefulWidget {
     this.buttonTextColor = Colors.white,
     this.fieldSpacing = 20.0,
     this.showOneByOne = false,
+    required this.fontFamily,
+    this.fileUploadButtonColor = Colors.black,
+    this.fileUploadButtonTextColor = Colors.white,
   });
 
   @override
@@ -44,360 +51,42 @@ class _DynamicFormState extends State<DynamicForm> {
     );
   }
 
-  Future<void> _showFilePickerOptions(String questionName, String questionLabel) async {
-    showModalBottomSheet(
-      context: widget.context,
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
-      ),
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!kIsWeb) ...[
-                ListTile(
-                  leading: Icon(Icons.camera_alt_outlined),
-                  title: Text('Camera'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _captureImage(questionName, questionLabel);
-                  },
-                ),
-                Divider(height: 0.5),
-              ],
-              ListTile(
-                leading: Icon(Icons.photo_outlined),
-                title: Text('Gallery'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickFile(questionName, questionLabel, type: FileType.image);
-                },
-              ),
-              Divider(height: 0.5),
-              ListTile(
-                leading: Icon(Icons.file_copy_outlined),
-                title: Text('Files'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickFile(questionName, questionLabel, type: FileType.any);
-                },
-              ),
-              Divider(height: 0.5),
-              ListTile(
-                title: Center(child: Text('Cancel')),
-                onTap: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _pickFile(String questionName, String questionLabel, {FileType type = FileType.any, bool allowMultiple = false}) async {
-    try {
-      if (kIsWeb) {
-        // Web-specific file picking
-        final input = html.FileUploadInputElement()
-          ..multiple = allowMultiple;
-        
-        // Set accept attribute based on type
-        if (type == FileType.image) {
-          input.accept = 'image/*';
-        }
-        
-        input.click();
-
-        await input.onChange.first;
-        if (input.files!.isNotEmpty) {
-          setState(() {
-            if (!allowMultiple) {
-              controller.uploadedFiles[questionName]!.clear();
-            }
-
-            for (var file in input.files!) {
-              final reader = html.FileReader();
-              reader.readAsArrayBuffer(file);
-              reader.onLoadEnd.listen((event) {
-                if (reader.result != null) {
-                  final bytes = (reader.result as List<int>).cast<int>();
-                  setState(() {
-                    controller.uploadedFiles[questionName]!.add({
-                      'question_name': questionName,
-                      'question_label': questionLabel,
-                      'file': Uint8List.fromList(bytes),
-                      'fileName': file.name,
-                      'fileType': _getFileType(file.name),
-                      'mimeType': file.type,
-                    });
-                  });
-                }
-              });
-            }
-          });
-        }
-      } else {
-        // Mobile file picking
-        FilePickerResult? result = await FilePicker.platform.pickFiles(
-          allowMultiple: allowMultiple,
-          type: type,
-          withData: true,
-          allowCompression: true,
-        );
-        
-        if (result != null && result.files.isNotEmpty) {
-          setState(() {
-            if (!allowMultiple) {
-              controller.uploadedFiles[questionName]!.clear();
-            }
-            
-            for (var file in result.files) {
-              if (file.bytes != null) {
-                controller.uploadedFiles[questionName]!.add({
-                  'question_name': questionName,
-                  'question_label': questionLabel,
-                  'file': file.bytes,
-                  'fileName': file.name,
-                  'fileType': _getFileType(file.name),
-                  'mimeType': file.extension != null ? 'application/${file.extension}' : 'application/octet-stream',
-                });
-              }
-            }
-          });
-        }
-      }
-    } catch (e) {
-      print('Error in _pickFile: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(widget.context).showSnackBar(
-          SnackBar(
-            content: Text('Error selecting file. Please try again.'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    }
-  }
-
-  String _getFileType(String fileName) {
-    final extension = fileName.toLowerCase().split('.').last;
-    switch (extension) {
-      case 'pdf':
-        return 'pdf';
-      case 'doc':
-      case 'docx':
-        return 'document';
-      case 'xls':
-      case 'xlsx':
-        return 'spreadsheet';
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
-        return 'image';
-      default:
-        return 'jpg';
-    }
-  }
-
-  Future<void> _captureImage(String questionName, String questionLabel) async {
-    if (kIsWeb) {
-      await _pickFile(questionName, questionLabel);
-      return;
-    }
-
-    try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 50,
-        maxWidth: 1200,
-        maxHeight: 1200,
-      );
-      
-      if (image != null) {
-        try {
-          final bytes = await image.readAsBytes();
-          
-          if (mounted) {
-            setState(() {
-              controller.uploadedFiles[questionName]!.clear();
-              controller.uploadedFiles[questionName]!.add({
-                'question_name': questionName,
-                'question_label': questionLabel,
-                'file': bytes,
-                'fileName': image.name,
-                'fileType': 'image',
-                'mimeType': 'image/jpeg',
-              });
-            });
-          }
-        } catch (e) {
-          print('Error reading image: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(widget.context).showSnackBar(
-              SnackBar(
-                content: Text('Error processing image. Please try again.'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
-        }
-      }
-    } catch (e) {
-      print('Error in _captureImage: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(widget.context).showSnackBar(
-          SnackBar(
-            content: Text('Error capturing image. Please try again.'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    }
-  }
-
-  void _submitForm(contaxt) {
-    if (controller.form.valid) {
-      controller.onSubmit(controller.form.value, controller.uploadedFiles);
-    } else {
-      controller.form.markAllAsTouched();
-      
-      // Find first error and navigate to it
-      if (widget.showOneByOne) {
-        int errorIndex = widget.formJson.indexWhere((field) {
-          final control = controller.form.control(field['name']);
-          if (field['validators']?.contains('required') == true && 
-              (control.value == null || control.value.toString().isEmpty)) {
-            return true;
-          }
-          return false;
-        });
-        if (errorIndex != -1) {
-          controller.form.focus(widget.formJson[errorIndex]['name']);
-          
-          ScaffoldMessenger.of(widget.context).showSnackBar(
-            SnackBar(
-              content: Text('Please fill in all required fields'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  void _viewFile(BuildContext context, Map<String, dynamic> file) {
-    try {
-      if (file['file'] is Uint8List) {
-        if (kIsWeb) {
-          // Web-specific file viewing
-          final blob = html.Blob([file['file']]);
-          final url = html.Url.createObjectUrlFromBlob(blob);
-          
-          // Check if it's an image type
-          if (file['fileType'] == 'image' || (file['mimeType'] ?? '').startsWith('image/')) {
-            // Open image in new tab
-            html.window.open(url, '_blank');
-          } else {
-            // Trigger download for non-image files
-            final anchor = html.AnchorElement()
-              ..href = url
-              ..download = file['fileName'] ?? 'download'
-              ..click();
-          }
-          html.Url.revokeObjectUrl(url);
-        } else {
-          // Mobile viewing
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => Scaffold(
-                appBar: AppBar(
-                  title: Text(file['fileName'] ?? 'File Preview'),
-                  backgroundColor: widget.primaryColor ?? Colors.black,
-                ),
-                body: SafeArea(
-                  child: Center(
-                    child: SingleChildScrollView(
-                      child: Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: file['fileType'] == 'image' || (file['mimeType'] ?? '').startsWith('image/')
-                            ? Image.memory(
-                                file['file'],
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) {
-                                  print('Error loading image: $error');
-                                  return Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.error_outline, size: 48, color: Colors.red),
-                                      SizedBox(height: 16),
-                                      Text('Error loading image'),
-                                    ],
-                                  );
-                                },
-                              )
-                            : Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(_getFileIcon(file['fileType']), size: 48),
-                                  SizedBox(height: 16),
-                                  Text(file['fileName'] ?? 'File'),
-                                  Text('This file type cannot be previewed'),
-                                ],
-                              ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('Error in _viewFile: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error viewing file. Please try again.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final buttonColor = widget.primaryColor ?? Colors.black;
     
-    return ReactiveForm(
-      formGroup: controller.form,
-      child: Scaffold(
-        body: SingleChildScrollView(
-          key: ValueKey('form_${controller.currentQuestionIndex}'),
-          child: Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (widget.showOneByOne) ..._buildOneByOneFields(),
-                if (!widget.showOneByOne) ..._buildAllFields(),
-                SizedBox(height: 80),
-              ],
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(
+          fontFamily: widget.fontFamily.fontFamily,
+        ),
+      ),
+      child: ReactiveForm(
+        formGroup: controller.form,
+        child: Scaffold(
+          body: SingleChildScrollView(
+            key: ValueKey('form_${controller.currentQuestionIndex}'),
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (widget.showOneByOne) ..._buildOneByOneFields(),
+                  if (!widget.showOneByOne) ..._buildAllFields(),
+                  const SizedBox(height: 80),
+                ],
+              ),
             ),
           ),
+          bottomNavigationBar: _buildBottomNavigation(buttonColor),
         ),
-        bottomNavigationBar: _buildBottomNavigation(buttonColor),
       ),
     );
   }
 
   Widget _buildBottomNavigation(Color buttonColor) {
     return Padding(
-      padding: EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(16.0),
       child: widget.showOneByOne
           ? _buildStepNavigation(buttonColor)
           : _buildSubmitButton(buttonColor),
@@ -408,7 +97,7 @@ class _DynamicFormState extends State<DynamicForm> {
     return widget.formJson.map((field) => Column(
       children: [
         _buildField(field),
-        Divider(height: 32, thickness: 1),
+        const Divider(height: 32, thickness: 1),
       ],
     )).toList();
   }
@@ -429,13 +118,9 @@ class _DynamicFormState extends State<DynamicForm> {
           children: [
             Text(
               'Question ${controller.currentQuestionIndex + 1}',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: widget.primaryColor ?? Colors.black,
-              ),
+              style: widget.fontFamily.copyWith(fontWeight: FontWeight.bold),
             ),
-            Container(
+            SizedBox(
               width: 100,
               height: 6,
               child: ClipRRect(
@@ -456,7 +141,7 @@ class _DynamicFormState extends State<DynamicForm> {
         key: ValueKey(controller.currentQuestionIndex),
         child: _buildField(field),
       ),
-      SizedBox(height: 20),
+      const SizedBox(height: 20),
     ];
   }
 
@@ -467,51 +152,24 @@ class _DynamicFormState extends State<DynamicForm> {
       case 'radio':
         formField = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Column(
-              children: (field['options'] as List<dynamic>).map<Widget>((option) {
-                return Container(
-                  padding: EdgeInsets.zero,
-                  margin: EdgeInsets.symmetric(vertical: 4.0),
-                  child: Transform.translate(
-                    offset: Offset(-12, 0),
-                    child: ReactiveRadioListTile<String>(
-                      formControlName: field['name'],
-                      value: option.toString(),
-                      title: Text(
-                        option.toString(),
-                        style: TextStyle(fontSize: 16),
-                      ),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+          children: (field['options'] as List<dynamic>).map<Widget>((option) {
+            return Container(
+              padding: EdgeInsets.zero,
+              margin: EdgeInsets.symmetric(vertical: 4.0),
+              child: Transform.translate(
+                offset: Offset(-12, 0),
+                child: ReactiveRadioListTile<String>(
+                  formControlName: field['name'],
+                  value: option.toString(),
+                  title: Text(
+                    option.toString(),
+                    style: widget.fontFamily
                   ),
-                );
-              }).toList(),
-            ),
-            // Handle sub-questions
-            ReactiveValueListenableBuilder(
-              formControlName: field['name'],
-              builder: (context, control, child) {
-                if (control.value != null && 
-                    field['subQuestions'] != null && 
-                    field['subQuestions'][control.value] != null) {
-                  return Padding(
-                    padding: EdgeInsets.only(left: 20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: (field['subQuestions'][control.value] as List)
-                          .map<Widget>((subField) => Padding(
-                                padding: EdgeInsets.only(top: 16.0),
-                                child: _buildField(subField),
-                              ))
-                          .toList(),
-                    ),
-                  );
-                }
-                return SizedBox.shrink();
-              },
-            ),
-          ],
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            );
+          }).toList(),
         );
         break;
 
@@ -528,6 +186,7 @@ class _DynamicFormState extends State<DynamicForm> {
                     borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
                   ),
                   builder: (context) => _DropdownSearch(
+                    fontFamily: widget.fontFamily,
                     options: field['options'] as List<dynamic>,
                     selectedValue: controller.form.control(field['name']).value,
                     onSelect: (value) {
@@ -549,10 +208,7 @@ class _DynamicFormState extends State<DynamicForm> {
                     child: ListTile(
                       title: Text(
                         control.value ?? 'Select an option',
-                        style: TextStyle(
-                          color: control.value == null ? Colors.grey.shade600 : Colors.black,
-                          fontSize: 16,
-                        ),
+                        style: widget.fontFamily,
                       ),
                       trailing: Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
                       contentPadding: EdgeInsets.symmetric(horizontal: 12),
@@ -610,96 +266,24 @@ class _DynamicFormState extends State<DynamicForm> {
           },
         );
         break;
-
-      case 'file':
-        formField = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _handleAttachmentButtonPress(field['name']),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  textStyle: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.cloud_upload_outlined, size: 22),
-                    SizedBox(width: 12),
-                    Text('Upload Files'),
-                  ],
-                ),
-              ),
-            ),
-            if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
-              SizedBox(height: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: controller.uploadedFiles[field['name']]!.map((file) {
-                  return Card(
-                    elevation: 0,
-                    margin: EdgeInsets.only(bottom: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    child: ListTile(
-                      leading: Icon(
-                        _getFileIcon(file['fileType']),
-                        color: Colors.black,
-                      ),
-                      title: Text(
-                        file['fileName'] ?? 'Unnamed file',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.visibility_outlined),
-                            onPressed: () => _viewFile(context, file),
-                            color: Colors.black87,
-                            iconSize: 20,
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.delete_outline),
-                            onPressed: () {
-                              setState(() {
-                                controller.uploadedFiles[field['name']]!.remove(file);
-                              });
-                            },
-                            color: Colors.red.shade400,
-                            iconSize: 20,
-                          ),
-                        ],
-                      ),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ],
+      case 'number':
+        formField = ReactiveTextField<num>(
+          formControlName: field['name'],
+          keyboardType: TextInputType.number,
+          valueAccessor: NumValueAccessor(),
+          decoration: InputDecoration(
+            labelText: field['label'],
+            hintText: 'Enter a number',
+            labelStyle: widget.fontFamily,
+            hintStyle: widget.fontFamily,
+            errorStyle: widget.fontFamily.copyWith(color: Colors.red),
+          ),
         );
         break;
 
+    
+    
+       
       default:
         formField = SizedBox.shrink();
     }
@@ -712,26 +296,18 @@ class _DynamicFormState extends State<DynamicForm> {
             padding: EdgeInsets.zero,
             child: Text(
               field['label'],
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
-              ),
+              style: widget.fontFamily,
             ),
           ),
           if (field['validators']?.contains('required') == true)
             Container(
               padding: EdgeInsets.only(top: 4.0),
               child: Text(
-                '* Required',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.red,
-                  fontStyle: FontStyle.italic,
-                ),
+                '*',
+                style: widget.fontFamily.copyWith(color: const Color.fromARGB(255, 222, 75, 64)),
               ),
             ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
         ],
         formField,
         SizedBox(height: widget.fieldSpacing),
@@ -776,12 +352,8 @@ class _DynamicFormState extends State<DynamicForm> {
                           SizedBox(width: 8),
                           Text(
                             'Upload Files',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: widget.buttonTextColor,
-                            ),
-                          ),
+                            style: widget.fontFamily.copyWith(color: Colors.white),
+                          )
                         ],
                       ),
                     ),
@@ -794,10 +366,11 @@ class _DynamicFormState extends State<DynamicForm> {
                         return Card(
                           margin: EdgeInsets.only(bottom: 8),
                           child: ListTile(
+                            onTap: () => _viewFile(context, file),
                             leading: Icon(_getFileIcon(file['fileType'])),
                             title: Text(
                               file['fileName'] ?? 'Unnamed file',
-                              style: TextStyle(fontSize: 14),
+                              style: widget.fontFamily,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -805,11 +378,8 @@ class _DynamicFormState extends State<DynamicForm> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  icon: Icon(Icons.visibility),
-                                  onPressed: () => _viewFile(context, file),
-                                ),
-                                IconButton(
                                   icon: Icon(Icons.delete),
+                                  color: const Color.fromARGB(255, 199, 86, 86),
                                   onPressed: () {
                                     setState(() {
                                       controller.uploadedFiles[field['name']]!.remove(file);
@@ -829,9 +399,12 @@ class _DynamicFormState extends State<DynamicForm> {
                       formControlName: commentControlName,
                       decoration: InputDecoration(
                         labelText: 'Add a comment',
-                        hintText: 'Type your comment here...',
+                       
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                       labelStyle: widget.fontFamily,
+                       hintStyle: widget.fontFamily,
+                       hoverColor: widget.buttonTextColor,
+
                       ),
                       maxLines: 3,
                     ),
@@ -859,12 +432,14 @@ class _DynamicFormState extends State<DynamicForm> {
                           decoration: InputDecoration(
                             labelText: field['commentLabel'] ?? 'Comments',
                             hintText: field['commentHint'] ?? 'Enter your comments here',
+                            labelStyle: widget.fontFamily,
+                            hintStyle: widget.fontFamily,
                           ),
                           maxLines: 3,
                         ),
                       ],
                     )
-                  : SizedBox.shrink();
+                  : const SizedBox.shrink();
             },
           ),
       ],
@@ -883,6 +458,86 @@ class _DynamicFormState extends State<DynamicForm> {
         return Icons.image;
       default:
         return Icons.insert_drive_file;
+    }
+  }
+
+  void _viewFile(BuildContext context, Map<String, dynamic> file) {
+    try {
+      if (file['file'] is Uint8List) {
+        if (kIsWeb) {
+          // Web-specific file viewing
+          final blob = html.Blob([file['file']]);
+          final url = html.Url.createObjectUrlFromBlob(blob);
+          
+          // Check if it's an image type
+          if (file['fileType'] == 'image' || (file['mimeType'] ?? '').startsWith('image/')) {
+            // Open image in new tab
+            html.window.open(url, '_blank');
+          } else {
+            // Trigger download for non-image files
+            final anchor = html.AnchorElement()
+              ..href = url
+              ..download = file['fileName'] ?? 'download'
+              ..click();
+          }
+          html.Url.revokeObjectUrl(url);
+        } else {
+          // Mobile viewing
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => Scaffold(
+                appBar: AppBar(
+                  title: Text(file['fileName'] ?? 'File Preview',style: widget.fontFamily),
+                  backgroundColor: widget.primaryColor ?? Colors.black,
+                ),
+                body: SafeArea(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: file['fileType'] == 'image' || (file['mimeType'] ?? '').startsWith('image/')
+                            ? Image.memory(
+                                file['file'],
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  print('Error loading image: $error');
+                                  return Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.error_outline, size: 48, color: Colors.red),
+                                      SizedBox(height: 16),
+                                      Text('Error loading image',style: widget.fontFamily),
+                                    ],
+                                  );
+                                },
+                              )
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(_getFileIcon(file['fileType']), size: 48),
+                                  SizedBox(height: 16),
+                                  Text(file['fileName'] ?? 'File',style: widget.fontFamily),
+                                  Text('This file type cannot be previewed',style: widget.fontFamily),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error in _viewFile: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error viewing file. Please try again.',style: widget.fontFamily),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -907,14 +562,40 @@ class _DynamicFormState extends State<DynamicForm> {
         if (controller.currentQuestionIndex == widget.formJson.length - 1)
           ElevatedButton(
             onPressed: () {
-              if (controller.form.valid) {
+              bool isValid = true;
+              
+              // Check each field's validation
+              for (var field in widget.formJson) {
+                final fieldName = field['name'];
+                final control = controller.form.control(fieldName);
+                
+                // If field has file upload and files are present, consider it valid
+                if (field['type'] == 'file') {
+                  if (field['validators']?.contains('required') == true) {
+                    // Check if there are uploaded files for this field
+                    isValid = isValid && (controller.uploadedFiles[fieldName]?.isNotEmpty ?? false);
+                  }
+                  continue; // Skip further validation for file fields
+                }
+                
+                // For non-file fields, check form control validity
+                if (control != null && !control.valid) {
+                  isValid = false;
+                  break;
+                }
+              }
+
+              if (isValid) {
                 controller.submitForm(widget.context);
               } else {
                 controller.form.markAllAsTouched();
                 ScaffoldMessenger.of(widget.context).showSnackBar(
                   SnackBar(
-                    content: Text('Please check all required fields'),
-                    duration: Duration(seconds: 2),
+                    content: Text(
+                      'Please check all required fields',
+                      style: widget.fontFamily,
+                    ),
+                    duration: const Duration(seconds: 2),
                   ),
                 );
               }
@@ -922,9 +603,9 @@ class _DynamicFormState extends State<DynamicForm> {
             style: ElevatedButton.styleFrom(
               backgroundColor: buttonColor,
               foregroundColor: widget.buttonTextColor,
-              padding: EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
             ),
-            child: Text('Submit'),
+            child: Text('Submit',style: widget.fontFamily),
           )
         else
           IconButton(
@@ -943,19 +624,107 @@ class _DynamicFormState extends State<DynamicForm> {
 
   Widget _buildSubmitButton(Color buttonColor) {
     return ElevatedButton(
-      child: Text('Submit'),
+      child: Text('Submit',style: widget.fontFamily),
       onPressed: () => _submitForm(widget.context),
       style: ElevatedButton.styleFrom(
         backgroundColor: buttonColor,
         foregroundColor: widget.buttonTextColor,
-        padding: EdgeInsets.symmetric(vertical: 16),
-        minimumSize: Size(double.infinity, 50),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        minimumSize: const Size(double.infinity, 50),
       ),
     );
   }
 
-  void _handleAttachmentButtonPress(String questionName) {
-    _showFilePickerOptions(questionName, '');
+  void _submitForm(contaxt) {
+    if (controller.form.valid) {
+      controller.onSubmit(controller.form.value, controller.uploadedFiles);
+    } else {
+      controller.form.markAllAsTouched();
+      
+      // Find first error and navigate to it
+      if (widget.showOneByOne) {
+        int errorIndex = widget.formJson.indexWhere((field) {
+          final control = controller.form.control(field['name']);
+          if (field['validators']?.contains('required') == true && 
+              (control.value == null || control.value.toString().isEmpty)) {
+            return true;
+          }
+          return false;
+        });
+        if (errorIndex != -1) {
+          controller.form.focus(widget.formJson[errorIndex]['name']);
+          
+          ScaffoldMessenger.of(widget.context).showSnackBar(
+            SnackBar(
+              content: Text('Please fill in all required fields',style: widget.fontFamily),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  String _getFileType(String fileName) {
+    final extension = fileName.split('.').last.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return 'pdf';
+      case 'doc':
+      case 'docx':
+        return 'document';
+      case 'xls':
+      case 'xlsx':
+        return 'spreadsheet';
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+        return 'image';
+      default:
+        return 'other';
+    }
+  }
+
+  void _showFilePickerOptions(String fieldName, String fieldLabel) async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withData: true,
+        allowCompression: true,
+      );
+      
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          controller.uploadedFiles[fieldName]!.clear();
+          
+          for (var file in result.files) {
+            if (file.bytes != null) {
+              controller.uploadedFiles[fieldName]!.add({
+                'question_name': fieldName,
+                'question_label': fieldLabel,
+                'file': file.bytes,
+                'fileName': file.name,
+                'fileType': _getFileType(file.name),
+                'mimeType': file.extension != null ? 'application/${file.extension}' : 'application/octet-stream',
+              });
+            }
+          }
+        });
+      }
+    } catch (e) {
+      print('Error in file upload: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error selecting file. Please try again.',
+            style:widget.fontFamily,
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 }
 
@@ -964,12 +733,14 @@ class _DropdownSearch extends StatefulWidget {
   final String? selectedValue;
   final Function(String) onSelect;
   final Color? primaryColor;
+  final TextStyle fontFamily;
 
   const _DropdownSearch({
     required this.options,
     required this.selectedValue,
     required this.onSelect,
     this.primaryColor,
+    required this.fontFamily,
   });
 
   @override
@@ -1010,6 +781,7 @@ class _DropdownSearchState extends State<_DropdownSearch> {
             Container(
               padding: const EdgeInsets.all(16),
               child: TextField(
+                style: widget.fontFamily,
                 controller: searchController,
                 decoration: InputDecoration(
                   hintText: 'Search...',
@@ -1047,5 +819,18 @@ class _DropdownSearchState extends State<_DropdownSearch> {
   void dispose() {
     searchController.dispose();
     super.dispose();
+  }
+}
+
+class NumValueAccessor extends ControlValueAccessor<num, String> {
+  @override
+  String modelToViewValue(num? modelValue) {
+    return modelValue?.toString() ?? '';
+  }
+
+  @override
+  num? viewToModelValue(String? viewValue) {
+    if (viewValue == null || viewValue.isEmpty) return null;
+    return num.tryParse(viewValue);
   }
 }
