@@ -271,13 +271,25 @@ class _DynamicFormState extends State<DynamicForm> {
           formControlName: field['name'],
           keyboardType: TextInputType.number,
           valueAccessor: NumValueAccessor(),
+          validationMessages: {
+            'required': (error) => 'This field is required',
+            'min': (error) => 'Value must be at least ${field['min']}',
+            'max': (error) => 'Value must be at most ${field['max']}',
+          },
           decoration: InputDecoration(
-            labelText: field['label'],
-            hintText: 'Enter a number',
+            hintText: 'Enter a number' + 
+              (field['min'] != null || field['max'] != null ? ' (' : '') +
+              (field['min'] != null ? 'min: ${field['min']}' : '') +
+              (field['min'] != null && field['max'] != null ? ', ' : '') +
+              (field['max'] != null ? 'max: ${field['max']}' : '') +
+              (field['min'] != null || field['max'] != null ? ')' : ''),
             labelStyle: widget.fontFamily,
             hintStyle: widget.fontFamily,
             errorStyle: widget.fontFamily.copyWith(color: Colors.red),
           ),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9.-]')), // Allow numbers, decimal point, and minus sign
+          ],
         );
         break;
 
