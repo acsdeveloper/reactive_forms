@@ -53,7 +53,7 @@ class _DynamicFormState extends State<DynamicForm> {
 
   @override
   Widget build(BuildContext context) {
-    final buttonColor = widget.primaryColor ?? Colors.black;
+    final buttonColor = widget.primaryColor;
     
     return Theme(
       data: Theme.of(context).copyWith(
