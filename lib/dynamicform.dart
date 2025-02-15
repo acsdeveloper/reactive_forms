@@ -636,7 +636,7 @@ class _DynamicFormState extends State<DynamicForm> {
 
   Widget _buildSubmitButton(Color buttonColor) {
     return ElevatedButton(
-      child: Text('Submit',style: widget.fontFamily),
+      child: Text('Submit',style: widget.fontFamily.copyWith(color:buttonColor)),
       onPressed: () => _submitForm(widget.context),
       style: ElevatedButton.styleFrom(
         backgroundColor: buttonColor,
