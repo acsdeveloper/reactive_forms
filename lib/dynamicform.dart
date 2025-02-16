@@ -41,6 +41,7 @@ class DynamicForm extends StatefulWidget {
 
 class _DynamicFormState extends State<DynamicForm> {
   late DynamicFormController controller;
+  late BuildContext dialogContext;
 
   @override
   void initState() {
@@ -207,7 +208,7 @@ class _DynamicFormState extends State<DynamicForm> {
                         ),
                       ),
                       if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
-                        SizedBox(height: 16),
+                        SizedBox(height:40),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: controller.uploadedFiles[field['name']]!.map((file) {
@@ -227,7 +228,8 @@ class _DynamicFormState extends State<DynamicForm> {
                                   color: const Color.fromARGB(255, 199, 86, 86),
                                   onPressed: () {
                                     setState(() {
-                                      controller.uploadedFiles[field['name']]!.remove(file);
+                                      // Clear the entire array for this field
+                                      controller.uploadedFiles[field['name']] = [];
                                     });
                                   },
                                 ),
@@ -345,7 +347,7 @@ class _DynamicFormState extends State<DynamicForm> {
                         ),
                       ),
                       if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
-                        SizedBox(height: 16),
+                        SizedBox(height: 8),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: controller.uploadedFiles[field['name']]!.map((file) {
@@ -365,7 +367,8 @@ class _DynamicFormState extends State<DynamicForm> {
                                   color: const Color.fromARGB(255, 199, 86, 86),
                                   onPressed: () {
                                     setState(() {
-                                      controller.uploadedFiles[field['name']]!.remove(file);
+                                      // Clear the entire array for this field
+                                      controller.uploadedFiles[field['name']] = [];
                                     });
                                   },
                                 ),
@@ -467,7 +470,7 @@ class _DynamicFormState extends State<DynamicForm> {
                 ),
               ),
               if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
-                SizedBox(height: 16),
+                SizedBox(height: 8),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: controller.uploadedFiles[field['name']]!.map((file) {
@@ -487,7 +490,8 @@ class _DynamicFormState extends State<DynamicForm> {
                           color: const Color.fromARGB(255, 199, 86, 86),
                           onPressed: () {
                             setState(() {
-                              controller.uploadedFiles[field['name']]!.remove(file);
+                              // Clear the entire array for this field
+                              controller.uploadedFiles[field['name']] = [];
                             });
                           },
                         ),
@@ -545,7 +549,7 @@ class _DynamicFormState extends State<DynamicForm> {
               ),
             ),
             if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
-              SizedBox(height: 16),
+              SizedBox(height: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: controller.uploadedFiles[field['name']]!.map((file) {
@@ -565,7 +569,8 @@ class _DynamicFormState extends State<DynamicForm> {
                         color: const Color.fromARGB(255, 199, 86, 86),
                         onPressed: () {
                           setState(() {
-                            controller.uploadedFiles[field['name']]!.remove(file);
+                            // Clear the entire array for this field
+                            controller.uploadedFiles[field['name']] = [];
                           });
                         },
                       ),
@@ -849,45 +854,232 @@ class _DynamicFormState extends State<DynamicForm> {
     }
   }
 
-  void _showFilePickerOptions(String fieldName, String fieldLabel) async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-        allowMultiple: false,
-        withData: true,
-        allowCompression: true,
-      );
-      
-      if (result != null && result.files.isNotEmpty) {
-        setState(() {
-        controller.uploadedFiles[fieldName] ??= [];
-          
-          for (var file in result.files) {
-            if (file.bytes != null) {
-              controller.uploadedFiles[fieldName]!.add({
-                'question_name': fieldName,
-                'question_label': fieldLabel,
-                'file': file.bytes,
-                'fileName': file.name,
-                'fileType': _getFileType(file.name),
-                'mimeType': file.extension != null ? 'application/${file.extension}' : 'application/octet-stream',
-              });
-            }
-          }
-        });
-      }
-    } catch (e) {
-      print('Error in file upload: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error selecting file. Please try again.',
-            style:widget.fontFamily,
-          ),
-          duration: Duration(seconds: 2),
-        ),
+  void _showFilePickerOptions(String fieldName, String fieldLabel) {
+    final int maxFileSize = 5 * 1024 * 1024; // 5MB
+
+    // Loading overlay function
+    void showLoadingDialog(BuildContext context) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          dialogContext = context;
+          return Center(
+            child: Container(
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(widget.primaryColor),
+                  ),
+                  SizedBox(height: 16),
+                  Text('Processing file...', style: widget.fontFamily),
+                ],
+              ),
+            ),
+          );
+        },
       );
     }
+
+    // Helper function to safely close loading dialog
+    void hideLoadingDialog() {
+      if (dialogContext != null) {
+        try {
+          Navigator.of(dialogContext).pop();
+        } catch (e) {
+          print('Error closing dialog: $e');
+        }
+      }
+    }
+
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: Icon(
+                  Icons.description_outlined,
+                  size: 24,
+                ),
+                title: Text('Choose File', style: widget.fontFamily),
+                onTap: () async {
+                  Navigator.pop(context);
+                  try {
+                    showLoadingDialog(context);
+                    FilePickerResult? result = await FilePicker.platform.pickFiles(
+                      type: FileType.any,
+                      allowMultiple: false,
+                      withData: true,
+                      allowCompression: true,
+                    );
+                    
+                    hideLoadingDialog();
+                    
+                    if (result != null && result.files.isNotEmpty) {
+                      if ((result.files.first.bytes?.length ?? 0) > maxFileSize) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('File size must be less than 5MB',
+                                style: widget.fontFamily),
+                            duration: Duration(seconds: 2),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      setState(() {
+                        controller.uploadedFiles[fieldName] = [{
+                          'question_name': fieldName,
+                          'question_label': fieldLabel,
+                          'file': result.files.first.bytes,
+                          'fileName': result.files.first.name,
+                          'fileType': _getFileType(result.files.first.name),
+                          'mimeType': result.files.first.extension != null 
+                            ? 'application/${result.files.first.extension}' 
+                            : 'application/octet-stream',
+                        }];
+                      });
+                    }
+                  } catch (e) {
+                    hideLoadingDialog();
+                    print('Error picking file: $e');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error selecting file. Please try again.',
+                            style: widget.fontFamily),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  Icons.collections_outlined,
+                  size: 24,
+                ),
+                title: Text('Choose from Gallery', style: widget.fontFamily),
+                onTap: () async {
+                  Navigator.pop(context);
+                  try {
+                    showLoadingDialog(context);
+                    final ImagePicker picker = ImagePicker();
+                    final XFile? image = await picker.pickImage(
+                      source: ImageSource.gallery,
+                      imageQuality: 80,
+                    );
+                    
+                    hideLoadingDialog();
+                    
+                    if (image != null) {
+                      final bytes = await image.readAsBytes();
+                      if (bytes.length > maxFileSize) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('File size must be less than 5MB',
+                                style: widget.fontFamily),
+                            duration: Duration(seconds: 2),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      setState(() {
+                        controller.uploadedFiles[fieldName] = [{
+                          'question_name': fieldName,
+                          'question_label': fieldLabel,
+                          'file': bytes,
+                          'fileName': image.name,
+                          'fileType': 'image',
+                          'mimeType': 'image/${image.name.split('.').last}',
+                        }];
+                      });
+                    }
+                  } catch (e) {
+                    hideLoadingDialog();
+                    print('Error picking image from gallery: $e');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error selecting image. Please try again.',
+                            style: widget.fontFamily),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
+              ),
+              if (!kIsWeb)
+                ListTile(
+                  leading: Icon(
+                    Icons.photo_camera_outlined,
+                    size: 24,
+                  ),
+                  title: Text('Take Photo', style: widget.fontFamily),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    try {
+                      showLoadingDialog(context);
+                      final ImagePicker picker = ImagePicker();
+                      final XFile? photo = await picker.pickImage(
+                        source: ImageSource.camera,
+                        imageQuality: 80,
+                      );
+                      
+                      hideLoadingDialog();
+                      
+                      if (photo != null) {
+                        final bytes = await photo.readAsBytes();
+                        if (bytes.length > maxFileSize) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('File size must be less than 5MB',
+                                  style: widget.fontFamily),
+                              duration: Duration(seconds: 2),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+
+                        setState(() {
+                          controller.uploadedFiles[fieldName] = [{
+                            'question_name': fieldName,
+                            'question_label': fieldLabel,
+                            'file': bytes,
+                            'fileName': photo.name,
+                            'fileType': 'image',
+                            'mimeType': 'image/${photo.name.split('.').last}',
+                          }];
+                        });
+                      }
+                    } catch (e) {
+                      hideLoadingDialog();
+                      print('Error taking photo: $e');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error taking photo. Please try again.',
+                              style: widget.fontFamily),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
