@@ -167,6 +167,16 @@ You can add sub-questions that appear based on the parent question's answer:
 }
 }
 
+
+## Tips and Best Practices
+
+1. **Form Validation**: Always include appropriate validators for required fields
+2. **File Uploads**: Consider file size limits and supported file types
+3. **Sub-questions**: Use them to create dynamic, context-aware forms
+4. **Comments**: Enable comments for fields that might need additional explanation
+5. **Step Navigation**: Use `showOneByOne: true` for complex forms
+
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
