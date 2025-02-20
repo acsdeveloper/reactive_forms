@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
+import 'package:reactiveform/string_constants.dart';
 
 
 class DynamicFormController {
@@ -129,8 +131,8 @@ class DynamicFormController {
       currentQuestionIndex = errorIndex;
       
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please fill in all required fields'),
+       const SnackBar(
+          content: Text(StringConstants.fillAllFields),
           duration: Duration(seconds: 2),
         ),
       );
@@ -146,7 +148,7 @@ class DynamicFormController {
       // Check if file upload is required and no files are uploaded
       if (field['validators']?.contains('required') == true && 
           (uploadedFiles[currentFieldName]?.isEmpty ?? true)) {
-        _showErrorSnackBar(context, 'Please upload required files');
+        _showErrorSnackBar(context, StringConstants.uploadRequiredFiles);
         return false;
       }
       // If file is not required or files are uploaded, proceed
@@ -197,15 +199,15 @@ class DynamicFormController {
     if (field['validators']?.contains('required') == true && 
         (control.value == null || control.value.toString().isEmpty)) {
       return field['type'] == 'radio' 
-          ? 'Please select an option'
-          : 'Please answer this question';
+          ? StringConstants.pleaseSelectAnOption
+          : StringConstants.pleaseAnswerThisQuestion;
     }
     
     if (field['requireAttachmentsOn'] == control.value) {
-      return 'Please upload required files';
+      return StringConstants.uploadRequiredFiles;
     }
     
-    return 'Please answer all required sub-questions';
+    return StringConstants.pleaseAnswerAllRequiredSubQuestions;
   }
 
   void _showErrorSnackBar(BuildContext context, String message) {
@@ -230,7 +232,7 @@ class DynamicFormController {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              field['label'] ?? 'Select an option',
+              field['label'] ?? StringConstants.selectOption,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 16),
@@ -252,5 +254,14 @@ class DynamicFormController {
         ),
       ),
     );
+  }
+
+
+void dispose() {
+    form.dispose(); // Dispose the ReactiveForm
+    // Dispose of any other resources held by the controller
+    if (kDebugMode) {
+      print('DynamicFormController disposed');
+    }
   }
 }

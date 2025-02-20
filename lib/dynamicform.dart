@@ -1,18 +1,18 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
+import 'package:flutter/foundation.dart' show Uint8List, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
+import 'package:reactiveform/constants.dart';
+import 'package:reactiveform/string_constants.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:flutter/services.dart';
 
 import 'dynmaicformcontroller.dart';
 
-
-
 class DynamicForm extends StatefulWidget {
   final List<Map<String, dynamic>> formJson;
-  final  Function(Map<String, dynamic>, Map<String, List<Map<String, dynamic>>> uploadedFiles) onSubmit;
+  final Function(Map<String, dynamic>, Map<String, List<Map<String, dynamic>>> uploadedFiles) onSubmit;
   final Color primaryColor;
   final Color buttonTextColor;
   final double fieldSpacing;
@@ -22,7 +22,7 @@ class DynamicForm extends StatefulWidget {
   final Color fileUploadButtonColor;
   final Color fileUploadButtonTextColor;
 
-  DynamicForm({
+  const DynamicForm({
     required this.formJson,
     required this.onSubmit,
     required this.context,
@@ -33,15 +33,18 @@ class DynamicForm extends StatefulWidget {
     required this.fontFamily,
     this.fileUploadButtonColor = Colors.black,
     this.fileUploadButtonTextColor = Colors.white,
-  });
+    Key? key,
+  }) : super(key: key);
 
   @override
-  _DynamicFormState createState() => _DynamicFormState();
+  State<DynamicForm> createState() => _DynamicFormState();
 }
 
 class _DynamicFormState extends State<DynamicForm> {
   late DynamicFormController controller;
   late BuildContext dialogContext;
+  static const _maxFileSize = 5 * 1024 * 1024; // 5MB
+  static const double _iconSize = 24.0;
 
   @override
   void initState() {
@@ -53,9 +56,15 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final buttonColor = widget.primaryColor;
-    
+
     return Theme(
       data: Theme.of(context).copyWith(
         textTheme: Theme.of(context).textTheme.apply(
@@ -66,17 +75,15 @@ class _DynamicFormState extends State<DynamicForm> {
         formGroup: controller.form,
         child: Scaffold(
           body: SingleChildScrollView(
-            key: ValueKey('form_${controller.currentQuestionIndex}'),
-            child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.showOneByOne) ..._buildOneByOneFields(),
-                  if (!widget.showOneByOne) ..._buildAllFields(),
-                  const SizedBox(height: 80),
-                ],
-              ),
+            key: ValueKey('${StringConstants.form}${controller.currentQuestionIndex}'),
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (widget.showOneByOne) ..._buildOneByOneFields(),
+                if (!widget.showOneByOne) ..._buildAllFields(),
+                const SizedBox(height: 80),
+              ],
             ),
           ),
           bottomNavigationBar: _buildBottomNavigation(buttonColor),
@@ -109,16 +116,15 @@ class _DynamicFormState extends State<DynamicForm> {
     }
 
     final field = widget.formJson[controller.currentQuestionIndex];
-    final isLastQuestion = controller.currentQuestionIndex == widget.formJson.length - 1;
 
     return [
       Padding(
-        padding: EdgeInsets.only(bottom: 16.0),
+        padding: const EdgeInsets.only(bottom: 16.0),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Question ${controller.currentQuestionIndex + 1}',
+              '${StringConstants.questionNumber} ${controller.currentQuestionIndex + 1}',
               style: widget.fontFamily.copyWith(fontWeight: FontWeight.bold),
             ),
             SizedBox(
@@ -130,7 +136,7 @@ class _DynamicFormState extends State<DynamicForm> {
                   value: (controller.currentQuestionIndex + 1) / widget.formJson.length,
                   backgroundColor: Colors.grey[200],
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    widget.primaryColor ?? Colors.black,
+                    widget.primaryColor,
                   ),
                 ),
               ),
@@ -138,7 +144,7 @@ class _DynamicFormState extends State<DynamicForm> {
           ],
         ),
       ),
-      Container(
+      KeyedSubtree(
         key: ValueKey(controller.currentQuestionIndex),
         child: _buildField(field),
       ),
@@ -147,446 +153,17 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   Widget _buildField(Map<String, dynamic> field) {
-    Widget formField;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildQuestionLabel(field), // Add the question label here
+        _buildFormField(field),
+        SizedBox(height: widget.fieldSpacing),
+      ],
+    );
+  }
 
-    switch (field['type']) {
-      case 'radio':
-        formField = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: (field['options'] as List<dynamic>).map<Widget>((option) {
-                return Container(
-                  padding: EdgeInsets.zero,
-                  margin: EdgeInsets.symmetric(vertical: 4.0),
-                  child: Transform.translate(
-                    offset: Offset(-12, 0),
-                    child: ReactiveRadioListTile<String>(
-                      formControlName: field['name'],
-                      value: option.toString(),
-                      title: Text(
-                        option.toString(),
-                        style: widget.fontFamily
-                      ),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            // Add file upload section for radio with showAttachmentsOn condition
-            if (field['hasAttachments'] == true)
-              ReactiveValueListenableBuilder(
-                formControlName: field['name'],
-                builder: (context, control, child) {
-                  final showAttachments = field['showAttachmentsOn'] == null ||
-                      control.value == field['showAttachmentsOn'];
-                  
-                  if (!showAttachments) return SizedBox.shrink();
-                  
-                  return Column(
-                    children: [
-                      SizedBox(height: 16),
-                      InkWell(
-                        onTap: () => _showFilePickerOptions(field['name'], field['label']),
-                        child: Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: widget.primaryColor,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.upload_file_rounded, color: widget.buttonTextColor, size: 24),
-                              SizedBox(width: 8),
-                              Text('Upload Files', style: widget.fontFamily.copyWith(color: Colors.white)),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
-                        SizedBox(height:40),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: controller.uploadedFiles[field['name']]!.map((file) {
-                            return Card(
-                              margin: EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                onTap: () => _viewFile(context, file),
-                                leading: Icon(_getFileIcon(file['fileType'])),
-                                title: Text(
-                                  file['fileName'] ?? 'Unnamed file',
-                                  style: widget.fontFamily,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: IconButton(
-                                  icon: Icon(Icons.delete),
-                                  color: const Color.fromARGB(255, 199, 86, 86),
-                                  onPressed: () {
-                                    setState(() {
-                                      // Clear the entire array for this field
-                                      controller.uploadedFiles[field['name']] = [];
-                                    });
-                                  },
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ],
-                  );
-                },
-              ),
-          ],
-        );
-        break;
-
-      case 'dropdown':
-        formField = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              onTap: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
-                  ),
-                  builder: (context) => _DropdownSearch(
-                    fontFamily: widget.fontFamily,
-                    options: field['options'] as List<dynamic>,
-                    selectedValue: controller.form.control(field['name']).value,
-                    onSelect: (value) {
-                      controller.form.control(field['name']).value = value;
-                      Navigator.pop(context);
-                    },
-                    primaryColor: widget.primaryColor,
-                  ),
-                );
-              },
-              child: ReactiveValueListenableBuilder<String>(
-                formControlName: field['name'],
-                builder: (context, control, child) {
-                  return Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade400),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: ListTile(
-                      title: Text(
-                        control.value ?? 'Select an option',
-                        style: widget.fontFamily,
-                      ),
-                      trailing: Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  );
-                },
-              ),
-            ),
-            // Handle sub-questions for dropdown
-            ReactiveValueListenableBuilder(
-              formControlName: field['name'],
-              builder: (context, control, child) {
-                if (control.value != null && 
-                    field['subQuestions'] != null && 
-                    field['subQuestions'][control.value] != null) {
-                  return Padding(
-                    padding: EdgeInsets.only(left: 20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: (field['subQuestions'][control.value] as List)
-                          .map<Widget>((subField) => Padding(
-                                padding: EdgeInsets.only(top: 16.0),
-                                child: _buildField(subField),
-                              ))
-                          .toList(),
-                    ),
-                  );
-                }
-                return SizedBox.shrink();
-              },
-            ),
-            // Add file upload section for dropdown with showAttachmentsOn condition
-            if (field['hasAttachments'] == true)
-              ReactiveValueListenableBuilder(
-                formControlName: field['name'],
-                builder: (context, control, child) {
-                  final showAttachments = field['showAttachmentsOn'] == null ||
-                      control.value == field['showAttachmentsOn'];
-                  
-                  if (!showAttachments) return SizedBox.shrink();
-                  
-                  return Column(
-                    children: [
-                      SizedBox(height: 16),
-                      InkWell(
-                        onTap: () => _showFilePickerOptions(field['name'], field['label']),
-                        child: Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: widget.primaryColor,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.upload_file_rounded, color: widget.buttonTextColor, size: 24),
-                              SizedBox(width: 8),
-                              Text('Upload Files', style: widget.fontFamily.copyWith(color: Colors.white)),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
-                        SizedBox(height: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: controller.uploadedFiles[field['name']]!.map((file) {
-                            return Card(
-                              margin: EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                onTap: () => _viewFile(context, file),
-                                leading: Icon(_getFileIcon(file['fileType'])),
-                                title: Text(
-                                  file['fileName'] ?? 'Unnamed file',
-                                  style: widget.fontFamily,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: IconButton(
-                                  icon: Icon(Icons.delete),
-                                  color: const Color.fromARGB(255, 199, 86, 86),
-                                  onPressed: () {
-                                    setState(() {
-                                      // Clear the entire array for this field
-                                      controller.uploadedFiles[field['name']] = [];
-                                    });
-                                  },
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ],
-                  );
-                },
-              ),
-          ],
-        );
-        break;
-
-      case 'input':
-        formField = ReactiveValueListenableBuilder<String>(
-          formControlName: field['name'],
-          builder: (context, control, child) {
-            if (control.value != null && 
-                control.value.toString().toLowerCase() == field['inputType']?.toString().toLowerCase()) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                controller.form.control(field['name']).value = '';
-              });
-            }
-            
-            return ReactiveTextField(
-              formControlName: field['name'],
-              keyboardType: field['inputType'] == 'number'
-                  ? TextInputType.number
-                  : TextInputType.text,
-             
-            );
-          },
-        );
-        break;
-      case 'number':
-        formField = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ReactiveTextField<num>(
-              formControlName: field['name'],
-              keyboardType: TextInputType.number,
-              valueAccessor: NumValueAccessor(),
-              validationMessages: {
-                'required': (error) => 'This field is required',
-                'min': (error) => 'Value must be at least ${field['min']}',
-                'max': (error) => 'Value must be at most ${field['max']}',
-              },
-              inputFormatters: [
-                if (field['allowNegatives'] == false)
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
-                if (field['allowNegatives'] != false)
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.-]')),
-                if (field['allowedDecimals'] == 0)
-                  FilteringTextInputFormatter.digitsOnly,
-              ],
-              decoration: InputDecoration(
-                labelText: field['label'],
-                hintText: 'Enter a number' + 
-                  (field['min'] != null || field['max'] != null ? ' (' : '') +
-                  (field['min'] != null ? 'min: ${field['min']}' : '') +
-                  (field['min'] != null && field['max'] != null ? ', ' : '') +
-                  (field['max'] != null ? 'max: ${field['max']}' : '') +
-                  (field['min'] != null || field['max'] != null ? ')' : ''),
-                labelStyle: widget.fontFamily,
-                hintStyle: widget.fontFamily,
-                errorStyle: widget.fontFamily.copyWith(color: Colors.red),
-              ),
-            ),
-            // File upload section
-            if (field['hasAttachments'] == true) ...[
-              SizedBox(height: 16),
-              InkWell(
-                onTap: () => _showFilePickerOptions(field['name'], field['label']),
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: widget.primaryColor,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.upload_file_rounded,
-                        color: widget.buttonTextColor,
-                        size: 24,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Upload Files',
-                        style: widget.fontFamily.copyWith(color: Colors.white),
-                      )
-                    ],
-                  ),
-                ),
-              ),
-              if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
-                SizedBox(height: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: controller.uploadedFiles[field['name']]!.map((file) {
-                    return Card(
-                      margin: EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        onTap: () => _viewFile(context, file),
-                        leading: Icon(_getFileIcon(file['fileType'])),
-                        title: Text(
-                          file['fileName'] ?? 'Unnamed file',
-                          style: widget.fontFamily,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: IconButton(
-                          icon: Icon(Icons.delete),
-                          color: const Color.fromARGB(255, 199, 86, 86),
-                          onPressed: () {
-                            setState(() {
-                              // Clear the entire array for this field
-                              controller.uploadedFiles[field['name']] = [];
-                            });
-                          },
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ],
-            // Comments section
-            if (field['hasComments'] == true) ...[
-              SizedBox(height: 16),
-              ReactiveTextField(
-                formControlName: '${field['name']}_comment',
-                decoration: InputDecoration(
-                  labelText: field['commentLabel'] ?? 'Comments',
-                  hintText: field['commentHint'] ?? 'Enter your comments here',
-                  labelStyle: widget.fontFamily,
-                  hintStyle: widget.fontFamily,
-                ),
-                maxLines: 3,
-              ),
-            ],
-          ],
-        );
-        break;
-      case 'file':
-        formField = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              onTap: () => _showFilePickerOptions(field['name'], field['label']),
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: widget.primaryColor,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.upload_file_rounded,
-                      color: widget.buttonTextColor,
-                      size: 24,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      'Upload Files',
-                      style: widget.fontFamily.copyWith(color: Colors.white),
-                    )
-                  ],
-                ),
-              ),
-            ),
-            if (controller.uploadedFiles[field['name']]?.isNotEmpty ?? false) ...[
-              SizedBox(height: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: controller.uploadedFiles[field['name']]!.map((file) {
-                  return Card(
-                    margin: EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      onTap: () => _viewFile(context, file),
-                      leading: Icon(_getFileIcon(file['fileType'])),
-                      title: Text(
-                        file['fileName'] ?? 'Unnamed file',
-                        style: widget.fontFamily,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: IconButton(
-                        icon: Icon(Icons.delete),
-                        color: const Color.fromARGB(255, 199, 86, 86),
-                        onPressed: () {
-                          setState(() {
-                            // Clear the entire array for this field
-                            controller.uploadedFiles[field['name']] = [];
-                          });
-                        },
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ],
-        );
-        break;
-       
-      default:
-        formField = SizedBox.shrink();
-    }
-
+  Widget _buildQuestionLabel(Map<String, dynamic> field) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -600,7 +177,7 @@ class _DynamicFormState extends State<DynamicForm> {
           ),
           if (field['validators']?.contains('required') == true)
             Container(
-              padding: EdgeInsets.only(top: 4.0),
+              padding: const EdgeInsets.only(top: 4.0),
               child: Text(
                 '*',
                 style: widget.fontFamily.copyWith(color: const Color.fromARGB(255, 222, 75, 64)),
@@ -608,105 +185,294 @@ class _DynamicFormState extends State<DynamicForm> {
             ),
           const SizedBox(height: 8),
         ],
-        formField,
-        SizedBox(height: widget.fieldSpacing),
       ],
     );
   }
 
-  IconData _getFileIcon(String fileType) {
-    switch (fileType) {
-      case 'pdf':
-        return Icons.picture_as_pdf;
-      case 'document':
-        return Icons.description;
-      case 'spreadsheet':
-        return Icons.table_chart;
-      case 'image':
-        return Icons.image;
+  Widget _buildFormField(Map<String, dynamic> field) {
+    final fieldType = field['type'];
+
+    switch (fieldType) {
+      case FieldType.radio:
+        return _buildRadioField(field);
+      case FieldType.dropdown:
+        return _buildDropdownField(field);
+      case FieldType.text:
+        return _buildTextField(field);
+      case FieldType.number:
+        return _buildNumberField(field);
+      case FieldType.file:
+        return _buildFileField(field);
       default:
-        return Icons.insert_drive_file;
+        return const SizedBox.shrink();
     }
   }
 
-  void _viewFile(BuildContext context, Map<String, dynamic> file) {
-    try {
-      if (file['file'] is Uint8List) {
-        if (kIsWeb) {
-          // Web-specific file viewing
-          final blob = html.Blob([file['file']]);
-          final url = html.Url.createObjectUrlFromBlob(blob);
-          
-          // Check if it's an image type
-          if (file['fileType'] == 'image' || (file['mimeType'] ?? '').startsWith('image/')) {
-            // Open image in new tab
-            html.window.open(url, '_blank');
-          } else {
-            // Trigger download for non-image files
-            final anchor = html.AnchorElement()
-              ..href = url
-              ..download = file['fileName'] ?? 'download'
-              ..click();
-          }
-          html.Url.revokeObjectUrl(url);
-        } else {
-          // Mobile viewing
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => Scaffold(
-                appBar: AppBar(
-                  title: Text(file['fileName'] ?? 'File Preview',style: widget.fontFamily),
-                  backgroundColor: widget.primaryColor ?? Colors.black,
-                ),
-                body: SafeArea(
-                  child: Center(
-                    child: SingleChildScrollView(
-                      child: Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: file['fileType'] == 'image' || (file['mimeType'] ?? '').startsWith('image/')
-                            ? Image.memory(
-                                file['file'],
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) {
-                                  print('Error loading image: $error');
-                                  return Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.error_outline, size: 48, color: Colors.red),
-                                      SizedBox(height: 16),
-                                      Text('Error loading image',style: widget.fontFamily),
-                                    ],
-                                  );
-                                },
-                              )
-                            : Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(_getFileIcon(file['fileType']), size: 48),
-                                  SizedBox(height: 16),
-                                  Text(file['fileName'] ?? 'File',style: widget.fontFamily),
-                                  Text('This file type cannot be previewed',style: widget.fontFamily),
-                                ],
-                              ),
-                      ),
-                    ),
+  Widget _buildRadioField(Map<String, dynamic> field) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: (field['options'] as List<dynamic>).map<Widget>((option) {
+            return Container(
+              padding: EdgeInsets.zero,
+              margin: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Transform.translate(
+                offset: const Offset(-12, 0),
+                child: ReactiveRadioListTile<String>(
+                  formControlName: field['name'],
+                  value: option.toString(),
+                  title: Text(
+                    option.toString(),
+                    style: widget.fontFamily
                   ),
+                  contentPadding: EdgeInsets.zero,
                 ),
               ),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('Error in _viewFile: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error viewing file. Please try again.',style: widget.fontFamily),
-          duration: Duration(seconds: 2),
+            );
+          }).toList(),
         ),
-      );
-    }
+        if (field['hasAttachments'] == true)
+          ReactiveValueListenableBuilder(
+            formControlName: field['name'],
+            builder: (context, control, child) {
+              final showAttachments = field['showAttachmentsOn'] == null ||
+                  control.value == field['showAttachmentsOn'];
+
+              if (!showAttachments) return const SizedBox.shrink();
+
+              return Column(
+                children: [
+                  const SizedBox(height: 16),
+                  FileUploadWidget(
+                    fieldName: field['name'],
+                    fieldLabel: field['label'],
+                    primaryColor: widget.primaryColor,
+                    fontFamily: widget.fontFamily,
+                    buttonTextColor: widget.buttonTextColor,
+                    onFilesUploaded: (files) {
+                      setState(() {
+                        controller.uploadedFiles[field['name']] = files;
+                      });
+                    },
+                    uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+                    onRemoveUploadedFile: (file) {
+                      setState(() {
+                        controller.uploadedFiles[field['name']]!.remove(file);
+                      });
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDropdownField(Map<String, dynamic> field) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+              ),
+              builder: (context) => _DropdownSearch(
+                fontFamily: widget.fontFamily,
+                options: field['options'] as List<dynamic>,
+                selectedValue: controller.form.control(field['name']).value,
+                onSelect: (value) {
+                  controller.form.control(field['name']).value = value;
+                  Navigator.pop(context);
+                },
+                primaryColor: widget.primaryColor,
+              ),
+            );
+          },
+          child: ReactiveValueListenableBuilder<String>(
+            formControlName: field['name'],
+            builder: (context, control, child) {
+              return Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: ListTile(
+                  title: Text(
+                    control.value ?? StringConstants.selectOption,
+                    style: widget.fontFamily,
+                  ),
+                  trailing: Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  visualDensity: VisualDensity.compact,
+                ),
+              );
+            },
+          ),
+        ),
+        ReactiveValueListenableBuilder(
+          formControlName: field['name'],
+          builder: (context, control, child) {
+            if (control.value != null &&
+                field['subQuestions'] != null &&
+                field['subQuestions'][control.value] != null) {
+              return Padding(
+                padding: const EdgeInsets.only(left: 20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: (field['subQuestions'][control.value] as List)
+                      .map<Widget>((subField) => Padding(
+                            padding:const EdgeInsets.only(top: 16.0),
+                            child: _buildField(subField),
+                          ))
+                      .toList(),
+                ),
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+        if (field['hasAttachments'] == true)
+          ReactiveValueListenableBuilder(
+            formControlName: field['name'],
+            builder: (context, control, child) {
+              final showAttachments = field['showAttachmentsOn'] == null ||
+                  control.value == field['showAttachmentsOn'];
+
+              if (!showAttachments) return const SizedBox.shrink();
+
+              return Column(
+                children: [
+                  const SizedBox(height: 16),
+                  FileUploadWidget(
+                    fieldName: field['name'],
+                    fieldLabel: field['label'],
+                    primaryColor: widget.primaryColor,
+                    fontFamily: widget.fontFamily,
+                    buttonTextColor: widget.buttonTextColor,
+                    onFilesUploaded: (files) {
+                      setState(() {
+                        controller.uploadedFiles[field['name']] = files;
+                      });
+                    },
+                    uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+                    onRemoveUploadedFile: (file) {
+                      setState(() {
+                        controller.uploadedFiles[field['name']]!.remove(file);
+                      });
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTextField(Map<String, dynamic> field) {
+    return ReactiveValueListenableBuilder<String>(
+      formControlName: field['name'],
+      builder: (context, control, child) {
+        if (control.value != null &&
+            control.value.toString().toLowerCase() == field['inputType']?.toString().toLowerCase()) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            controller.form.control(field['name']).value = '';
+          });
+        }
+
+        return ReactiveTextField(
+          formControlName: field['name'],
+          keyboardType: field['inputType'] == 'number'
+              ? TextInputType.number
+              : TextInputType.text,
+        );
+      },
+    );
+  }
+
+  Widget _buildNumberField(Map<String, dynamic> field) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ReactiveTextField<num>(
+          formControlName: field['name'],
+          keyboardType: TextInputType.number,
+          valueAccessor: NumValueAccessor(),
+          validationMessages: {
+            'required': (error) => StringConstants.requiredField,
+            'min': (error) => '${StringConstants.valueMustBeAtLeast} ${field['min']}',
+            'max': (error) => '${StringConstants.valueMustBeLessThanOrEqualTo} ${field['max']}',
+          },
+          inputFormatters: [
+            if (field['allowNegatives'] == false)
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+            if (field['allowNegatives'] != false)
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9.-]')),
+            if (field['allowedDecimals'] == 0)
+              FilteringTextInputFormatter.digitsOnly,
+          ],
+          decoration: InputDecoration(
+            labelText: field['label'],
+            hintText: StringConstants.enterANumber +
+              (field['min'] != null || field['max'] != null ? ' (' : '') +
+              (field['min'] != null ? 'min: ${field['min']}' : '') +
+              (field['min'] != null && field['max'] != null ? ', ' : '') +
+              (field['max'] != null ? 'max: ${field['max']}' : '') +
+              (field['min'] != null || field['max'] != null ? ')' : ''),
+            labelStyle: widget.fontFamily,
+            hintStyle: widget.fontFamily,
+            errorStyle: widget.fontFamily.copyWith(color: Colors.red),
+          ),
+        ),
+        // Comments section
+        if (field['hasComments'] == true) ...[
+          const SizedBox(height: 16),
+          ReactiveTextField(
+            formControlName: '${field['name']}_comment',
+            decoration: InputDecoration(
+              labelText: field['commentLabel'] ?? StringConstants.comments,
+              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
+              labelStyle: widget.fontFamily,
+              hintStyle: widget.fontFamily,
+            ),
+            maxLines: 3,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFileField(Map<String, dynamic> field) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FileUploadWidget(
+          fieldName: field['name'],
+          fieldLabel: field['label'],
+          primaryColor: widget.primaryColor,
+          fontFamily: widget.fontFamily,
+          buttonTextColor: widget.buttonTextColor,
+          onFilesUploaded: (files) {
+            setState(() {
+              controller.uploadedFiles[field['name']] = files;
+            });
+          },
+          uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+          onRemoveUploadedFile: (file) {
+            setState(() {
+              controller.uploadedFiles[field['name']]!.remove(file);
+            });
+          },
+        ),
+      ],
+    );
   }
 
   Widget _buildStepNavigation(Color buttonColor) {
@@ -720,23 +486,23 @@ class _DynamicFormState extends State<DynamicForm> {
                 controller.currentQuestionIndex--;
               });
             },
-            icon: Icon(Icons.arrow_back_ios),
+            icon: const Icon(Icons.arrow_back_ios),
             color: buttonColor,
             iconSize: 30,
           )
         else
-          SizedBox(width: 48),
-        
+          const SizedBox(width: 48),
+
         if (controller.currentQuestionIndex == widget.formJson.length - 1)
           ElevatedButton(
             onPressed: () {
               bool isValid = true;
-              
+
               // Check each field's validation
               for (var field in widget.formJson) {
                 final fieldName = field['name'];
                 final control = controller.form.control(fieldName);
-                
+
                 // If field has file upload and files are present, consider it valid
                 if (field['type'] == 'file') {
                   if (field['validators']?.contains('required') == true) {
@@ -745,7 +511,7 @@ class _DynamicFormState extends State<DynamicForm> {
                   }
                   continue; // Skip further validation for file fields
                 }
-                
+
                 // For non-file fields, check form control validity
                 if (control != null && !control.valid) {
                   isValid = false;
@@ -760,7 +526,7 @@ class _DynamicFormState extends State<DynamicForm> {
                 ScaffoldMessenger.of(widget.context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      'Please check all required fields',
+                      StringConstants.pleaseCheckAllRequiredFields,
                       style: widget.fontFamily,
                     ),
                     duration: const Duration(seconds: 2),
@@ -773,7 +539,7 @@ class _DynamicFormState extends State<DynamicForm> {
               foregroundColor: widget.fileUploadButtonTextColor,
               padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
             ),
-            child: Text('Submit',style: widget.fontFamily.copyWith(color:widget.fileUploadButtonTextColor)),
+            child: Text(StringConstants.submit,style: widget.fontFamily.copyWith(color:widget.fileUploadButtonTextColor)),
           )
         else
           IconButton(
@@ -782,7 +548,7 @@ class _DynamicFormState extends State<DynamicForm> {
                 setState(() {});
               }
             },
-            icon: Icon(Icons.arrow_forward_ios),
+            icon: const Icon(Icons.arrow_forward_ios),
             color: buttonColor,
             iconSize: 30,
           ),
@@ -792,28 +558,28 @@ class _DynamicFormState extends State<DynamicForm> {
 
   Widget _buildSubmitButton(Color buttonColor) {
     return ElevatedButton(
-      child: Text('Submit',style: widget.fontFamily.copyWith(color:buttonColor)),
-      onPressed: () => _submitForm(widget.context),
+      onPressed: () => _submitForm(context),
       style: ElevatedButton.styleFrom(
         backgroundColor: buttonColor,
         foregroundColor: widget.buttonTextColor,
         padding: const EdgeInsets.symmetric(vertical: 16),
         minimumSize: const Size(double.infinity, 50),
       ),
+      child: Text(StringConstants.submit,style: widget.fontFamily.copyWith(color:widget.buttonTextColor)),
     );
   }
 
-  void _submitForm(contaxt) {
+  void _submitForm(BuildContext context) {
     if (controller.form.valid) {
-      controller.onSubmit(controller.form.value, controller.uploadedFiles);
+      widget.onSubmit(controller.form.value, controller.uploadedFiles);
     } else {
       controller.form.markAllAsTouched();
-      
+
       // Find first error and navigate to it
       if (widget.showOneByOne) {
         int errorIndex = widget.formJson.indexWhere((field) {
           final control = controller.form.control(field['name']);
-          if (field['validators']?.contains('required') == true && 
+          if (field['validators']?.contains('required') == true &&
               (control.value == null || control.value.toString().isEmpty)) {
             return true;
           }
@@ -821,11 +587,11 @@ class _DynamicFormState extends State<DynamicForm> {
         });
         if (errorIndex != -1) {
           controller.form.focus(widget.formJson[errorIndex]['name']);
-          
-          ScaffoldMessenger.of(widget.context).showSnackBar(
+
+          ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Please fill in all required fields',style: widget.fontFamily),
-              duration: Duration(seconds: 2),
+              content: Text(StringConstants.pleaseFillInAllRequiredFields,style: widget.fontFamily),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
@@ -836,250 +602,22 @@ class _DynamicFormState extends State<DynamicForm> {
   String _getFileType(String fileName) {
     final extension = fileName.split('.').last.toLowerCase();
     switch (extension) {
-      case 'pdf':
+      case FileTypes.pdf:
         return 'pdf';
-      case 'doc':
-      case 'docx':
+      case FileTypes.doc:
+      case FileTypes.docx:
         return 'document';
-      case 'xls':
-      case 'xlsx':
+      case FileTypes.xls:
+      case FileTypes.xlsx:
         return 'spreadsheet';
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
+      case FileTypes.jpg:
+      case FileTypes.jpeg:
+      case FileTypes.png:
+      case FileTypes.gif:
         return 'image';
       default:
-        return 'other';
+        return FileTypes.any;
     }
-  }
-
-  void _showFilePickerOptions(String fieldName, String fieldLabel) {
-    final int maxFileSize = 5 * 1024 * 1024; // 5MB
-
-    // Loading overlay function
-    void showLoadingDialog(BuildContext context) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext context) {
-          dialogContext = context;
-          return Center(
-            child: Container(
-              padding: EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(widget.primaryColor),
-                  ),
-                  SizedBox(height: 16),
-                  Text('Processing file...', style: widget.fontFamily),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-    }
-
-    // Helper function to safely close loading dialog
-    void hideLoadingDialog() {
-      if (dialogContext != null) {
-        try {
-          Navigator.of(dialogContext).pop();
-        } catch (e) {
-          print('Error closing dialog: $e');
-        }
-      }
-    }
-
-    showModalBottomSheet(
-      context: context,
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Wrap(
-            children: <Widget>[
-              ListTile(
-                leading: Icon(
-                  Icons.description_outlined,
-                  size: 24,
-                ),
-                title: Text('Choose File', style: widget.fontFamily),
-                onTap: () async {
-                  Navigator.pop(context);
-                  try {
-                    showLoadingDialog(context);
-                    FilePickerResult? result = await FilePicker.platform.pickFiles(
-                      type: FileType.any,
-                      allowMultiple: false,
-                      withData: true,
-                      allowCompression: true,
-                    );
-                    
-                    hideLoadingDialog();
-                    
-                    if (result != null && result.files.isNotEmpty) {
-                      if ((result.files.first.bytes?.length ?? 0) > maxFileSize) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('File size must be less than 5MB',
-                                style: widget.fontFamily),
-                            duration: Duration(seconds: 2),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                        return;
-                      }
-
-                      setState(() {
-                        controller.uploadedFiles[fieldName] = [{
-                          'question_name': fieldName,
-                          'question_label': fieldLabel,
-                          'file': result.files.first.bytes,
-                          'fileName': result.files.first.name,
-                          'fileType': _getFileType(result.files.first.name),
-                          'mimeType': result.files.first.extension != null 
-                            ? 'application/${result.files.first.extension}' 
-                            : 'application/octet-stream',
-                        }];
-                      });
-                    }
-                  } catch (e) {
-                    hideLoadingDialog();
-                    print('Error picking file: $e');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error selecting file. Please try again.',
-                            style: widget.fontFamily),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  Icons.collections_outlined,
-                  size: 24,
-                ),
-                title: Text('Choose from Gallery', style: widget.fontFamily),
-                onTap: () async {
-                  Navigator.pop(context);
-                  try {
-                    showLoadingDialog(context);
-                    final ImagePicker picker = ImagePicker();
-                    final XFile? image = await picker.pickImage(
-                      source: ImageSource.gallery,
-                      imageQuality: 80,
-                    );
-                    
-                    hideLoadingDialog();
-                    
-                    if (image != null) {
-                      final bytes = await image.readAsBytes();
-                      if (bytes.length > maxFileSize) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('File size must be less than 5MB',
-                                style: widget.fontFamily),
-                            duration: Duration(seconds: 2),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                        return;
-                      }
-
-                      setState(() {
-                        controller.uploadedFiles[fieldName] = [{
-                          'question_name': fieldName,
-                          'question_label': fieldLabel,
-                          'file': bytes,
-                          'fileName': image.name,
-                          'fileType': 'image',
-                          'mimeType': 'image/${image.name.split('.').last}',
-                        }];
-                      });
-                    }
-                  } catch (e) {
-                    hideLoadingDialog();
-                    print('Error picking image from gallery: $e');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error selecting image. Please try again.',
-                            style: widget.fontFamily),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                },
-              ),
-              if (!kIsWeb)
-                ListTile(
-                  leading: Icon(
-                    Icons.photo_camera_outlined,
-                    size: 24,
-                  ),
-                  title: Text('Take Photo', style: widget.fontFamily),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    try {
-                      showLoadingDialog(context);
-                      final ImagePicker picker = ImagePicker();
-                      final XFile? photo = await picker.pickImage(
-                        source: ImageSource.camera,
-                        imageQuality: 80,
-                      );
-                      
-                      hideLoadingDialog();
-                      
-                      if (photo != null) {
-                        final bytes = await photo.readAsBytes();
-                        if (bytes.length > maxFileSize) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('File size must be less than 5MB',
-                                  style: widget.fontFamily),
-                              duration: Duration(seconds: 2),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                          return;
-                        }
-
-                        setState(() {
-                          controller.uploadedFiles[fieldName] = [{
-                            'question_name': fieldName,
-                            'question_label': fieldLabel,
-                            'file': bytes,
-                            'fileName': photo.name,
-                            'fileType': 'image',
-                            'mimeType': 'image/${photo.name.split('.').last}',
-                          }];
-                        });
-                      }
-                    } catch (e) {
-                      hideLoadingDialog();
-                      print('Error taking photo: $e');
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error taking photo. Please try again.',
-                              style: widget.fontFamily),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
-                ),
-            ],
-          ),
-        );
-      },
-    );
   }
 }
 
@@ -1096,10 +634,11 @@ class _DropdownSearch extends StatefulWidget {
     required this.onSelect,
     this.primaryColor,
     required this.fontFamily,
-  });
+    Key? key,
+  }) : super(key: key);
 
   @override
-  _DropdownSearchState createState() => _DropdownSearchState();
+  State<_DropdownSearch> createState() => _DropdownSearchState();
 }
 
 class _DropdownSearchState extends State<_DropdownSearch> {
@@ -1112,6 +651,12 @@ class _DropdownSearchState extends State<_DropdownSearch> {
     filteredOptions = List.from(widget.options);
   }
 
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
   void _filterOptions(String query) {
     setState(() {
       filteredOptions = widget.options
@@ -1122,7 +667,7 @@ class _DropdownSearchState extends State<_DropdownSearch> {
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
+        return DraggableScrollableSheet(
       initialChildSize: 0.7,
       minChildSize: 0.5,
       maxChildSize: 0.9,
@@ -1139,8 +684,8 @@ class _DropdownSearchState extends State<_DropdownSearch> {
                 style: widget.fontFamily,
                 controller: searchController,
                 decoration: InputDecoration(
-                  hintText: 'Search...',
-                  prefixIcon: Icon(Icons.search),
+                  hintText: StringConstants.search,
+                  prefixIcon: const Icon(Icons.search),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -1169,12 +714,6 @@ class _DropdownSearchState extends State<_DropdownSearch> {
       ),
     );
   }
-
-  @override
-  void dispose() {
-    searchController.dispose();
-    super.dispose();
-  }
 }
 
 class NumValueAccessor extends ControlValueAccessor<num, String> {
@@ -1187,5 +726,381 @@ class NumValueAccessor extends ControlValueAccessor<num, String> {
   num? viewToModelValue(String? viewValue) {
     if (viewValue == null || viewValue.isEmpty) return null;
     return num.tryParse(viewValue);
+  }
+}
+
+// Reusable FileUploadWidget
+class FileUploadWidget extends StatefulWidget {
+  final String fieldName;
+  final String fieldLabel;
+  final Function(List<Map<String, dynamic>> files) onFilesUploaded;
+  final Color primaryColor;
+  final TextStyle fontFamily;
+  final Color buttonTextColor;
+  final List<Map<String, dynamic>> uploadedFiles;
+  final Function(Map<String, dynamic>) onRemoveUploadedFile;
+
+  const FileUploadWidget({
+    Key? key,
+    required this.fieldName,
+    required this.fieldLabel,
+    required this.onFilesUploaded,
+    required this.primaryColor,
+    required this.fontFamily,
+    required this.buttonTextColor,
+    required this.uploadedFiles,
+    required this.onRemoveUploadedFile,
+  }) : super(key: key);
+
+  @override
+  _FileUploadWidgetState createState() => _FileUploadWidgetState();
+}
+
+class _FileUploadWidgetState extends State<FileUploadWidget> {
+  Future<void> _pickAndUploadFile(BuildContext context) async {
+    BuildContext? loadingContext;
+
+    void showLoadingDialog(BuildContext context) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          loadingContext = context;
+          return Center(
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(widget.primaryColor),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(StringConstants.processingFilePleaseWait, style: widget.fontFamily),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    void hideLoadingDialog() {
+      if (loadingContext != null) {
+        try {
+          Navigator.of(loadingContext!).pop();
+        } catch (e) {
+          if (kDebugMode) {
+            print('Error closing dialog: $e');
+          }
+        } finally {
+          loadingContext = null;
+        }
+      }
+    }
+
+
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(
+                  Icons.description_outlined,
+                  size: _DynamicFormState._iconSize,
+                ),
+                title: Text(StringConstants.chooseFile, style: widget.fontFamily),
+                onTap: () async {
+                  Navigator.pop(context);
+                  FilePickerResult? result;
+                  try {
+                    showLoadingDialog(context);
+                    result = await FilePicker.platform.pickFiles(
+                      type: FileType.any, // Allow all file types
+                      allowMultiple: false,
+                      withData: true,
+                      allowCompression: true,
+                    );
+
+                    if (result != null && result.files.isNotEmpty) {
+                      if ((result.files.first.bytes?.length ?? 0) > _DynamicFormState._maxFileSize) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(StringConstants.fileSizeMustBeLessThan5MB,
+                                style: widget.fontFamily),
+                            duration: const Duration(seconds: 2),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      final newFile = {
+                        'question_name': widget.fieldName,
+                        'question_label': widget.fieldLabel,
+                        'file': result.files.first.bytes,
+                        'fileName': result.files.first.name,
+                        'fileType': _getFileType(result.files.first.name),
+                        'mimeType': result.files.first.extension != null
+                            ? 'application/${result.files.first.extension}'
+                            : 'application/octet-stream',
+                      };
+
+                      widget.onFilesUploaded([...widget.uploadedFiles, newFile]);
+                    }
+                  } catch (e) {
+                    if (kDebugMode) {
+                      print('Error picking file: $e');
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(StringConstants.errorSelectingFilePleaseTryAgain,
+                            style: widget.fontFamily),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  } finally {
+                    hideLoadingDialog();
+                    result = null;
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.collections_outlined,
+                  size: _DynamicFormState._iconSize,
+                ),
+                title: Text(StringConstants.chooseFromGallery, style: widget.fontFamily),
+                onTap: () async {
+                  Navigator.pop(context);
+                  XFile? image;
+                  try {
+                    showLoadingDialog(context);
+                    final ImagePicker picker = ImagePicker();
+                    image = await picker.pickImage(
+                      source: ImageSource.gallery,
+                      imageQuality: 80,
+                    );
+
+                    if (image != null) {
+                      final bytes = await image.readAsBytes();
+                      if (bytes.length > _DynamicFormState._maxFileSize) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(StringConstants.fileSizeMustBeLessThan5MB,
+                                style: widget.fontFamily),
+                            duration: const Duration(seconds: 2),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      final newFile = {
+                        'question_name': widget.fieldName,
+                        'question_label': widget.fieldLabel,
+                        'file': bytes,
+                        'fileName': image.name,
+                        'fileType': 'image',
+                        'mimeType': 'image/${image.name.split('.').last}',
+                      };
+                      widget.onFilesUploaded([...widget.uploadedFiles, newFile]);
+
+                    }
+                  } catch (e) {
+                    if (kDebugMode) {
+                      print('Error picking image from gallery: $e');
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(StringConstants.errorSelectingImagePleaseTryAgain,
+                            style: widget.fontFamily),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  } finally {
+                    hideLoadingDialog();
+                    image = null;
+                  }
+                },
+              ),
+              if (!kIsWeb)
+                ListTile(
+                  leading: const Icon(
+                    Icons.photo_camera_outlined,
+                    size: _DynamicFormState._iconSize,
+                  ),
+                  title: Text(StringConstants.takePhoto, style: widget.fontFamily),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    XFile? photo;
+                    try {
+                      showLoadingDialog(context);
+                      final ImagePicker picker = ImagePicker();
+                      photo = await picker.pickImage(
+                        source: ImageSource.camera,
+                        imageQuality: 80,
+                      );
+
+                      if (photo != null) {
+                        final bytes = await photo.readAsBytes();
+                        if (bytes.length > _DynamicFormState._maxFileSize) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(StringConstants.fileSizeMustBeLessThan5MB,
+                                  style: widget.fontFamily),
+                            duration: const Duration(seconds: 2),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+                      final newFile = {
+                        'question_name': widget.fieldName,
+                        'question_label': widget.fieldLabel,
+                        'file': bytes,
+                        'fileName': photo.name,
+                        'fileType': 'image',
+                        'mimeType': 'image/${photo.name.split('.').last}',
+                      };
+                      widget.onFilesUploaded([...widget.uploadedFiles, newFile]);
+                    }
+                  } catch (e) {
+                    if (kDebugMode) {
+                      print('Error taking photo: $e');
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(StringConstants.errorTakingPhotoPleaseTryAgain,
+                            style: widget.fontFamily),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  } finally {
+                    hideLoadingDialog();
+                    photo = null;
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _getFileType(String fileName) {
+    final extension = fileName.split('.').last.toLowerCase();
+    switch (extension) {
+      case FileTypes.pdf:
+        return 'pdf';
+      case FileTypes.doc:
+      case FileTypes.docx:
+        return 'document';
+      case FileTypes.xls:
+      case FileTypes.xlsx:
+        return 'spreadsheet';
+      case FileTypes.jpg:
+      case FileTypes.jpeg:
+      case FileTypes.png:
+      case FileTypes.gif:
+        return 'image';
+      default:
+        return FileTypes.any;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          height: 60,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: widget.primaryColor,
+              foregroundColor: widget.buttonTextColor,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () => _pickAndUploadFile(context),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.upload_file_rounded, 
+                  color: widget.buttonTextColor, 
+                  size: 32,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  StringConstants.uploadFiles, 
+                  style: widget.fontFamily.copyWith(
+                    color: widget.buttonTextColor,
+                    fontSize: 18,
+                  )
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (widget.uploadedFiles.isNotEmpty) ...[
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: widget.uploadedFiles.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final file = widget.uploadedFiles[index];
+              return Card(
+                margin: EdgeInsets.zero,
+                elevation: 1,
+                child: ListTile(
+                  leading: Icon(_getFileIcon(file['fileType'])),
+                  title: Text(
+                    file['fileName'],
+                    style: widget.fontFamily,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: () => widget.onRemoveUploadedFile(file),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+IconData _getFileIcon(String fileType) {
+  switch (fileType) {
+    case FileTypes.pdf:
+      return Icons.picture_as_pdf;
+    case FileTypes.doc:
+      return Icons.description;
+    case FileTypes.xls:
+      return Icons.table_chart;
+    case FileTypes.image:
+      return Icons.image;
+    default:
+      return Icons.insert_drive_file;
   }
 }

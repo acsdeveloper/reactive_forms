@@ -64,7 +64,7 @@ final List<Map<String, dynamic>> formJson = [
   },
   {
     'name': 'food_storage',
-    'type': 'input',
+    'type': 'text',
     'inputType': 'number',
     'label': 'Current freezer temperature (°F)?',
     'validators': ['required', 'number']
@@ -109,7 +109,7 @@ final List<Map<String, dynamic>> formJson = [
   },
   {
     'name': 'maintenance_issues',
-    'type': 'input',
+    'type': 'text',
     'inputType': 'text',
     'label': 'List any maintenance issues:',
     'validators': ['required'],
