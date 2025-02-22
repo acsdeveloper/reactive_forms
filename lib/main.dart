@@ -44,7 +44,7 @@ final List<Map<String, dynamic>> formJson = [
         },
         {
           'name': 'pest_location',
-          'type': 'input',
+          'type': 'text',
           'inputType': 'text',
           'label': 'Where was the pest evidence found?',
           'validators': ['required'],
@@ -135,9 +135,7 @@ final List<Map<String, dynamic>> formJson = [
     'validators': ['required'],
     'min': 18,
     'max': 100,
-    'allowNegatives': false,
-    'allowedDecimals': 0
-  
+    
 
   },
   {
@@ -151,8 +149,7 @@ final List<Map<String, dynamic>> formJson = [
     "disableAttachmentsOn" : "",
     'min': 18,
     'max': 100,
-    'allowNegatives': false,
-    'allowedDecimals': 0
+   
     }
   
 ];

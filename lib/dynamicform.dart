@@ -1,14 +1,12 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter/foundation.dart' show Uint8List, kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show  kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
 import 'package:reactiveform/constants.dart';
 import 'package:reactiveform/string_constants.dart';
-import 'package:universal_html/html.dart' as html;
 import 'package:flutter/services.dart';
-
-import 'dynmaicformcontroller.dart';
+import 'dynamicformcontroller.dart';
 
 class DynamicForm extends StatefulWidget {
   final List<Map<String, dynamic>> formJson;
