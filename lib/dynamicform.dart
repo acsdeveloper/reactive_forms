@@ -417,7 +417,6 @@ class _DynamicFormState extends State<DynamicForm> {
               FilteringTextInputFormatter.digitsOnly,
           ],
           decoration: InputDecoration(
-            labelText: field['label'],
             hintText: StringConstants.enterANumber +
               (field['min'] != null || field['max'] != null ? ' (' : '') +
               (field['min'] != null ? 'min: ${field['min']}' : '') +

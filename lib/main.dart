@@ -21,7 +21,10 @@ final List<Map<String, dynamic>> formJson = [
     'label': 'Is there a place to store cleaning chemicals?',
     'validators': ['required'],
     'hasAttachments': true,
-    'hasComments': true
+    'requireAttachmentsOn': '',
+    'showAttachmentsOn': '',
+    'disableAttachmentsOn': '',
+    // 'hasComments': true
   },
   {
     'name': 'pest_control',
@@ -110,7 +113,7 @@ final List<Map<String, dynamic>> formJson = [
   {
     'name': 'maintenance_issues',
     'type': 'text',
-    'inputType': 'text',
+    // 'inputType': 'text',
     'label': 'List any maintenance issues:',
     'validators': ['required'],
     'hasComments': true
