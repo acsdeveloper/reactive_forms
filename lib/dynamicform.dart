@@ -495,40 +495,28 @@ class _DynamicFormState extends State<DynamicForm> {
             errorStyle: widget.fontFamily.copyWith(color: Colors.red),
           ),
         ),
-         if (field['hasAttachments'] == true)
-          ReactiveValueListenableBuilder(
-            formControlName: field['name'],
-            builder: (context, control, child) {
-              final showAttachments = field['showAttachmentsOn'] == null ||
-                  control.value == field['showAttachmentsOn'];
-
-              if (!showAttachments) return const SizedBox.shrink();
-
-              return Column(
-                children: [
-                  const SizedBox(height: 16),
-                  FileUploadWidget(
-                    fieldName: field['name'],
-                    fieldLabel: field['label'],
-                    primaryColor: widget.primaryColor,
-                    fontFamily: widget.fontFamily,
-                    buttonTextColor: widget.buttonTextColor,
-                    onFilesUploaded: (files) {
-                      setState(() {
-                        controller.uploadedFiles[field['name']] = files;
-                      });
-                    },
-                    uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
-                    onRemoveUploadedFile: (file) {
-                      setState(() {
-                        controller.uploadedFiles[field['name']]!.remove(file);
-                      });
-                    },
-                  ),
-                ],
-              );
+        if (field['hasAttachments'] == true || field['attachmentsRequired'] == true) ...[
+          const SizedBox(height: 16),
+          FileUploadWidget(
+            fieldName: field['name'],
+            fieldLabel: field['label'],
+            primaryColor: widget.primaryColor,
+            fontFamily: widget.fontFamily,
+            buttonTextColor: widget.buttonTextColor,
+            onFilesUploaded: (files) {
+              setState(() {
+                controller.uploadedFiles[field['name']] = files;
+              });
             },
+            uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+            onRemoveUploadedFile: (file) {
+              setState(() {
+                controller.uploadedFiles[field['name']]!.remove(file);
+              });
+            },
+            isRequired: field['attachmentsRequired'] == true,
           ),
+        ],
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
           ReactiveTextField(
@@ -850,6 +838,7 @@ class FileUploadWidget extends StatefulWidget {
   final Color buttonTextColor;
   final List<Map<String, dynamic>> uploadedFiles;
   final Function(Map<String, dynamic>) onRemoveUploadedFile;
+  final bool isRequired;
 
   const FileUploadWidget({
     Key? key,
@@ -861,6 +850,7 @@ class FileUploadWidget extends StatefulWidget {
     required this.buttonTextColor,
     required this.uploadedFiles,
     required this.onRemoveUploadedFile,
+    this.isRequired = false,
   }) : super(key: key);
 
   @override
