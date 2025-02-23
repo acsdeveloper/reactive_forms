@@ -2,7 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dynamicform.dart';
 
-final List<Map<String, dynamic>> formJson = [
+final List<Map<String, dynamic>> formJson = [{
+  "name" : "question_1",
+  "type" : "text",
+  "label" : "What is the recommended temperature for storing perishable foods in a refrigerator?",
+  "options":"",
+  "validators" :['required'],
+  "hasAttachments" : true,
+  "showAttachmentsOn" : "",
+  "disableAttachmentsOn" :"",
+  "attachmentsRequired" : true
+},
   {
     'name': 'cleaning_storage',
     'type': 'radio',

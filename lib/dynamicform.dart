@@ -154,7 +154,7 @@ class _DynamicFormState extends State<DynamicForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildQuestionLabel(field), // Add the question label here
+        _buildQuestionLabel(field),
         _buildFormField(field),
         SizedBox(height: widget.fieldSpacing),
       ],
@@ -231,6 +231,7 @@ class _DynamicFormState extends State<DynamicForm> {
             );
           }).toList(),
         ),
+       
         if (field['hasAttachments'] == true)
           ReactiveValueListenableBuilder(
             formControlName: field['name'],
@@ -265,6 +266,19 @@ class _DynamicFormState extends State<DynamicForm> {
               );
             },
           ),
+         if (field['hasComments'] == true) ...[
+          const SizedBox(height: 16),
+          ReactiveTextField(
+            formControlName: '${field['name']}_comment',
+            decoration: InputDecoration(
+              labelText: field['commentLabel'] ?? StringConstants.comments,
+              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
+              labelStyle: widget.fontFamily,
+              hintStyle: widget.fontFamily,
+            ),
+            maxLines: 3,
+          ),
+        ],
       ],
     );
   }
@@ -314,6 +328,7 @@ class _DynamicFormState extends State<DynamicForm> {
             },
           ),
         ),
+       
         ReactiveValueListenableBuilder(
           formControlName: field['name'],
           builder: (context, control, child) {
@@ -370,28 +385,80 @@ class _DynamicFormState extends State<DynamicForm> {
               );
             },
           ),
+           if (field['hasComments'] == true) ...[
+          const SizedBox(height: 16),
+          ReactiveTextField(
+            formControlName: '${field['name']}_comment',
+            decoration: InputDecoration(
+              labelText: field['commentLabel'] ?? StringConstants.comments,
+              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
+              labelStyle: widget.fontFamily,
+              hintStyle: widget.fontFamily,
+            ),
+            maxLines: 3,
+          ),
+        ],
       ],
     );
   }
 
   Widget _buildTextField(Map<String, dynamic> field) {
-    return ReactiveValueListenableBuilder<String>(
-      formControlName: field['name'],
-      builder: (context, control, child) {
-        if (control.value != null &&
-            control.value.toString().toLowerCase() == field['inputType']?.toString().toLowerCase()) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            controller.form.control(field['name']).value = '';
-          });
-        }
-
-        return ReactiveTextField(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ReactiveValueListenableBuilder<String>(
           formControlName: field['name'],
-          keyboardType: field['inputType'] == 'number'
-              ? TextInputType.number
-              : TextInputType.text,
-        );
-      },
+          builder: (context, control, child) {
+            if (control.value != null &&
+                control.value.toString().toLowerCase() == field['inputType']?.toString().toLowerCase()) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                controller.form.control(field['name']).value = '';
+              });
+            }
+
+            return ReactiveTextField(
+              formControlName: field['name'],
+              keyboardType: field['inputType'] == 'number'
+                  ? TextInputType.number
+                  : TextInputType.text,
+            );
+          },
+        ),
+        if (field['hasComments'] == true) ...[
+          const SizedBox(height: 16),
+          ReactiveTextField(
+            formControlName: '${field['name']}_comment',
+            decoration: InputDecoration(
+              labelText: field['commentLabel'] ?? StringConstants.comments,
+              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
+              labelStyle: widget.fontFamily,
+              hintStyle: widget.fontFamily,
+            ),
+            maxLines: 3,
+          ),
+        ],
+        if (field['hasAttachments'] == true) ...[
+          const SizedBox(height: 16),
+          FileUploadWidget(
+            fieldName: field['name'],
+            fieldLabel: field['label'],
+            primaryColor: widget.primaryColor,
+            fontFamily: widget.fontFamily,
+            buttonTextColor: widget.buttonTextColor,
+            onFilesUploaded: (files) {
+              setState(() {
+                controller.uploadedFiles[field['name']] = files;
+              });
+            },
+            uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+            onRemoveUploadedFile: (file) {
+              setState(() {
+                controller.uploadedFiles[field['name']]!.remove(file);
+              });
+            },
+          ),
+        ],
+      ],
     );
   }
 
@@ -428,7 +495,40 @@ class _DynamicFormState extends State<DynamicForm> {
             errorStyle: widget.fontFamily.copyWith(color: Colors.red),
           ),
         ),
-        // Comments section
+         if (field['hasAttachments'] == true)
+          ReactiveValueListenableBuilder(
+            formControlName: field['name'],
+            builder: (context, control, child) {
+              final showAttachments = field['showAttachmentsOn'] == null ||
+                  control.value == field['showAttachmentsOn'];
+
+              if (!showAttachments) return const SizedBox.shrink();
+
+              return Column(
+                children: [
+                  const SizedBox(height: 16),
+                  FileUploadWidget(
+                    fieldName: field['name'],
+                    fieldLabel: field['label'],
+                    primaryColor: widget.primaryColor,
+                    fontFamily: widget.fontFamily,
+                    buttonTextColor: widget.buttonTextColor,
+                    onFilesUploaded: (files) {
+                      setState(() {
+                        controller.uploadedFiles[field['name']] = files;
+                      });
+                    },
+                    uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+                    onRemoveUploadedFile: (file) {
+                      setState(() {
+                        controller.uploadedFiles[field['name']]!.remove(file);
+                      });
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
           ReactiveTextField(
@@ -468,6 +568,20 @@ class _DynamicFormState extends State<DynamicForm> {
             });
           },
         ),
+        
+        if (field['hasComments'] == true) ...[
+          const SizedBox(height: 16),
+          ReactiveTextField(
+            formControlName: '${field['name']}_comment',
+            decoration: InputDecoration(
+              labelText: field['commentLabel'] ?? StringConstants.comments,
+              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
+              labelStyle: widget.fontFamily,
+              hintStyle: widget.fontFamily,
+            ),
+            maxLines: 3,
+          ),
+        ],
       ],
     );
   }
