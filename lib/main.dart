@@ -251,7 +251,7 @@ class KitchenInspectionScreen extends StatelessWidget {
           fontFamily: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           context: context,
           showOneByOne: true,
-          primaryColor: AppColors.primary,
+          primaryColor: Colors.black,
           formJson: formJson, 
           onSubmit: (formData, attachments) {
             print(formData);

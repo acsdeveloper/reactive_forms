@@ -89,4 +89,8 @@ class StringConstants {
   static const String pleaseUploadRequiredFiles = 'Please upload required files';
   static const String isRequired = 'is required';
   static const String fileIsRequired = 'File is required';
+
+  static var enterText="Enter text";
+
+  static var numberRequired="Please enter a valid number";
 } 
