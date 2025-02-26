@@ -1166,7 +1166,7 @@ class _DropdownSearchState extends State<_DropdownSearch> {
                 itemBuilder: (context, index) {
                   final option = filteredOptions[index];
                   return ListTile(
-                    title: Text(option.toString()),
+                    title: Text(option.toString(),style: widget.fontFamily,),
                     onTap: () => widget.onSelect(option.toString()),
                     trailing: widget.selectedValue == option.toString()
                       ? Icon(Icons.check, color: widget.primaryColor)
