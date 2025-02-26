@@ -1,15 +1,20 @@
+
+import 'constants/localization.dart';
+
 class StringConstants {
+  static final Map<String, String> _strings = AppLocalizations.en;
+
   // Form Messages
-  static const String requiredFieldError = 'This field is required';
-  static const String checkRequiredFields = 'Please check all required fields';
-  static const String fillRequiredFields = 'Please fill in all required fields';
-  static const String question = 'Question';
+  static String get requiredFieldError => _strings['requiredFieldError']!;
+  static String get checkRequiredFields => _strings['checkRequiredFields']!;
+  static String get fillRequiredFields => _strings['fillRequiredFields']!;
+  static String get question => _strings['question']!;
 
   // File Upload
-  static const String uploadFiles = 'Upload Files';
-  static const String chooseFile = 'Choose File';
-  static const String chooseFromGallery = 'Choose from Gallery';
-  static const String takePhoto = 'Take Photo';
+  static String get uploadFiles => _strings['uploadFiles']!;
+  static String get chooseFile => _strings['chooseFile']!;
+  static String get chooseFromGallery => _strings['chooseFromGallery']!;
+  static String get takePhoto => _strings['takePhoto']!;
   static const String processingFile = 'Processing file...';
   static const String unnamedFile = 'Unnamed file';
   static const String filePreview = 'File Preview';

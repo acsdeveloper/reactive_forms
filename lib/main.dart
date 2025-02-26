@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:reactiveform/constants/colors.dart';
 import 'dynamicform.dart';
 import 'package:flutter/foundation.dart';
 
@@ -12,7 +13,7 @@ final List<Map<String, dynamic>> formJson = [
 //     'min': 18,
 //     'max': 100,
 //     'hasAttachments': true,
-//     'attachmentsRequired': true
+//     'attachmentsRequired': true,
     
 
 //   },
@@ -250,7 +251,7 @@ class KitchenInspectionScreen extends StatelessWidget {
           fontFamily: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           context: context,
           showOneByOne: true,
-          primaryColor: Colors.black,
+          primaryColor: AppColors.primary,
           formJson: formJson, 
           onSubmit: (formData, attachments) {
             print(formData);

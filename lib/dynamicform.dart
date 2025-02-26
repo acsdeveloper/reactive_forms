@@ -7,6 +7,7 @@ import 'package:reactiveform/constants.dart';
 import 'package:reactiveform/string_constants.dart';
 import 'package:flutter/services.dart';
 import 'dynamicformcontroller.dart';
+import 'package:reactiveform/constants/colors.dart';
 
 class DynamicForm extends StatefulWidget {
   final List<Map<String, dynamic>> formJson;
@@ -24,13 +25,13 @@ class DynamicForm extends StatefulWidget {
     required this.formJson,
     required this.onSubmit,
     required this.context,
-    this.primaryColor = const Color(0xFF4BA7D1),
-    this.buttonTextColor = Colors.white,
+    this.primaryColor = AppColors.primary,
+    this.buttonTextColor = AppColors.buttonText,
     this.fieldSpacing = 20.0,
     this.showOneByOne = false,
     required this.fontFamily,
-    this.fileUploadButtonColor = Colors.black,
-    this.fileUploadButtonTextColor = Colors.white,
+    this.fileUploadButtonColor = AppColors.fileUploadButton,
+    this.fileUploadButtonTextColor = AppColors.fileUploadButtonText,
     Key? key,
   }) : super(key: key);
 
