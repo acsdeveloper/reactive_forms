@@ -36,6 +36,19 @@ class DynamicFormController {
           value: null,
           validators: _getValidators(field['validators'], field),
         );
+      } else if (field['type'] == 'radio') {
+        // Set default Yes/No options for radio type if no options provided
+        if (field['options'] == null || (field['options'] as List).isEmpty) {
+          field['options'] = ['Yes', 'No'];
+        }
+        controls[fieldName] = FormControl<String>(
+          value: '',
+          validators: _getValidators(field['validators'], field),
+        );
+        
+        if (field['hasComments'] == true) {
+          controls['${fieldName}_comment'] = FormControl<String>();
+        }
       } else {
         // Initialize form controls for non-file fields
         controls[fieldName] = FormControl<String>(
@@ -152,7 +165,9 @@ class DynamicFormController {
         return false;
       }
       // If file is not required or files are uploaded, proceed
-      currentQuestionIndex++;
+      if (currentQuestionIndex < formJson.length - 1) {
+        currentQuestionIndex++;
+      }
       return true;
     }
 
@@ -164,7 +179,9 @@ class DynamicFormController {
       return false;
     }
 
-    currentQuestionIndex++;
+    if (currentQuestionIndex < formJson.length - 1) {
+      currentQuestionIndex++;
+    }
     return true;
   }
 

@@ -81,4 +81,7 @@ class StringConstants {
   static const String form ="form_"; 
   static const String pdf = 'pdf';
   static const String doc = 'doc';
+  static const String pleaseUploadRequiredFiles = 'Please upload required files';
+  static const String isRequired = 'is required';
+  static const String fileIsRequired = 'File is required';
 } 
