@@ -32,6 +32,10 @@ final List<Map<String, dynamic>> formJson = [
   "name": "question1iio",
   "type": "radio",
   "label": "Do you have a car?",
+  'hasComments': true,
+  'commentRequired': true,
+
+
 
 
 },
@@ -251,7 +255,7 @@ class KitchenInspectionScreen extends StatelessWidget {
           fontFamily: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           context: context,
           showOneByOne: true,
-          primaryColor: AppColors.primary,
+          primaryColor: AppColors.fileUploadButton,
           formJson: formJson, 
           onSubmit: (formData, attachments) {
             print(formData);

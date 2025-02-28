@@ -25,7 +25,7 @@ class DynamicForm extends StatefulWidget {
     required this.formJson,
     required this.onSubmit,
     required this.context,
-    this.primaryColor = AppColors.primary,
+    this.primaryColor = AppColors.fileUploadButton,
     this.buttonTextColor = AppColors.buttonText,
     this.fieldSpacing = 20.0,
     this.showOneByOne = false,
@@ -46,6 +46,7 @@ class _DynamicFormState extends State<DynamicForm> {
   static const double _iconSize = 24.0;
   List<int> questionSequence = [0];
   Set<String> visitedQuestions = {};
+  Map<String, String> fieldErrors = {};
 
   @override
   void initState() {
@@ -187,53 +188,40 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   Widget _buildField(Map<String, dynamic> field) {
-    final control = controller.form.control(field['name']);
-  
-
-    switch (field['type']) {
-      case 'option':
-      
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (field['options'] != null)
-              ...field['options'].map<Widget>((option) => 
-                RadioListTile<String>(
-                  title: Text(option.toString(), style: widget.fontFamily),
-                  value: option.toString(),
-                  groupValue: control.value,
-                  activeColor: widget.primaryColor,
-                  onChanged: (value) {
-                  
-                    setState(() {
-                      control.value = value;
-                    });
-                  },
-                ),
-              ).toList(),
-            if (control.touched && control.hasErrors)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Text(
-                  control.errors.toString(),
-                  style: TextStyle(color: Colors.red[700], fontSize: 12),
-                ),
-              ),
-          ],
-        );
-      case FieldType.radio:
-        return _buildRadioField(field);
-      case FieldType.dropdown:
-        return _buildDropdownField(field);
-      case FieldType.text:
-        return _buildTextField(field);
-      case FieldType.number:
-        return _buildNumberField(field);
-      case FieldType.file:
-        return _buildFileField(field);
-      default:
-        return const SizedBox.shrink();
+    Widget buildFieldWidget() {
+      switch (field['type']) {
+        case FieldType.radio:
+          return _buildRadioField(field);
+        case FieldType.dropdown:
+          return _buildDropdownField(field);
+        case FieldType.text:
+          return _buildTextField(field);
+        case FieldType.number:
+          return _buildNumberField(field);
+        case FieldType.file:
+          return _buildFileField(field);
+        default:
+          return const SizedBox.shrink();
+      }
     }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        buildFieldWidget(),
+        if (_getFieldError(field['name']) != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4.0, left: 12.0, bottom: 8.0),
+            child: Text(
+              _getFieldError(field['name'])!,
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 12,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _buildQuestionHeader(Map<String, dynamic> field) {
@@ -302,6 +290,46 @@ class _DynamicFormState extends State<DynamicForm> {
           }).toList(),
         ),
        
+        if (field['hasComments'] == true)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ReactiveTextField(
+                formControlName: '${field['name']}_comment',
+                decoration: InputDecoration(
+                  labelText: field['commentRequired'] == true 
+                      ? 'Comment *' 
+                      : 'Comment',
+                  hintText: 'Enter your comment',
+                  labelStyle: TextStyle(
+                    color: _getFieldError('${field['name']}_comment') != null 
+                        ? Colors.red 
+                        : null,
+                  ),
+                ),
+                onChanged: (control) {
+                  if (field['commentRequired'] == true) {
+                    if (control.value == null || control.value.toString().trim().isEmpty) {
+                      _setFieldError('${field['name']}_comment', 'Comment is required');
+                    } else {
+                      _setFieldError('${field['name']}_comment', null);
+                    }
+                  }
+                },
+              ),
+              if (_getFieldError('${field['name']}_comment') != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0, left: 12.0, bottom: 8.0),
+                  child: Text(
+                    _getFieldError('${field['name']}_comment')!,
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         if (field['hasAttachments'] == true)
           ReactiveValueListenableBuilder(
             formControlName: field['name'],
@@ -409,19 +437,6 @@ class _DynamicFormState extends State<DynamicForm> {
               return const SizedBox.shrink();
             },
           ),
-         if (field['hasComments'] == true) ...[
-          const SizedBox(height: 16),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              labelText: field['commentLabel'] ?? StringConstants.comments,
-              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-            ),
-            maxLines: 3,
-          ),
-        ],
       ],
     );
   }
@@ -710,7 +725,34 @@ class _DynamicFormState extends State<DynamicForm> {
             hintStyle: widget.fontFamily,
             errorStyle: widget.fontFamily.copyWith(color: Colors.red),
           ),
+          onChanged: (control) {
+            if (control.value != null && control.value.toString().isNotEmpty) {
+              final numValue = num.tryParse(control.value.toString());
+              if (numValue == null) {
+                _setFieldError(field['name'], 'Please enter a valid number');
+              } else if (field['min'] != null && numValue < field['min']) {
+                _setFieldError(field['name'], 'Value must be at least ${field['min']}');
+              } else if (field['max'] != null && numValue > field['max']) {
+                _setFieldError(field['name'], 'Value must not exceed ${field['max']}');
+              } else {
+                _setFieldError(field['name'], null);
+              }
+            } else {
+              _setFieldError(field['name'], null);
+            }
+          },
         ),
+        if (_getFieldError(field['name']) != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4.0, left: 12.0, bottom: 8.0),
+            child: Text(
+              _getFieldError(field['name'])!,
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 12,
+              ),
+            ),
+          ),
         if (field['hasAttachments'] == true || field['attachmentsRequired'] == true) ...[
           const SizedBox(height: 16),
           Row(
@@ -823,29 +865,64 @@ class _DynamicFormState extends State<DynamicForm> {
             );
           },
         ),
-        
-        if (field['hasComments'] == true) ...[
-          const SizedBox(height: 16),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              labelText: field['commentLabel'] ?? StringConstants.comments,
-              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-            ),
-            maxLines: 3,
-          ),
-        ],
       ],
     );
   }
 
   Widget _buildStepNavigation(Color buttonColor) {
     final isLastQuestion = controller.currentQuestionIndex >= widget.formJson.length - 1;
-    
-    return isLastQuestion 
-        ? _buildSubmitButton(buttonColor)  // Show submit button on last question
+
+    bool _validateNumberField(Map<String, dynamic> field) {
+      final control = controller.form.control(field['name']);
+      if (control.value == null || control.value.toString().isEmpty) {
+        return true; // Skip validation if empty (required check will handle this)
+      }
+
+      final numValue = num.tryParse(control.value.toString());
+      if (numValue == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Please enter a valid number for ${field['label']}',
+              style: widget.fontFamily,
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return false;
+      }
+
+      if (field['min'] != null && numValue < field['min']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${field['label']} must be at least ${field['min']}',
+              style: widget.fontFamily,
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return false;
+      }
+
+      if (field['max'] != null && numValue > field['max']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${field['label']} must not exceed ${field['max']}',
+              style: widget.fontFamily,
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return false;
+      }
+
+      return true;
+    }
+
+    return isLastQuestion
+        ? _buildSubmitButton(buttonColor)
         : Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -853,11 +930,11 @@ class _DynamicFormState extends State<DynamicForm> {
                 IconButton(
                   onPressed: () {
                     setState(() {
-                      final currentField = widget.formJson[controller.currentQuestionIndex];
+                      final currentField =
+                          widget.formJson[controller.currentQuestionIndex];
                       if (currentField['prevQuestion'] != null) {
-                        final prevIndex = widget.formJson.indexWhere(
-                          (question) => question['name'] == currentField['prevQuestion']
-                        );
+                        final prevIndex = widget.formJson.indexWhere((question) =>
+                            question['name'] == currentField['prevQuestion']);
                         if (prevIndex != -1) {
                           visitedQuestions.remove(currentField['name']);
                           updateQuestionSequence(prevIndex);
@@ -876,42 +953,72 @@ class _DynamicFormState extends State<DynamicForm> {
                 )
               else
                 const SizedBox(width: 48),
-
               IconButton(
                 onPressed: () {
-                  final currentField = widget.formJson[controller.currentQuestionIndex];
+                  final currentField =
+                      widget.formJson[controller.currentQuestionIndex];
                   bool isValid = true;
                   bool hasRequiredFiles = true;
 
                   // Validation checks
                   if (currentField['required'] == true) {
                     final control = controller.form.control(currentField['name']);
-                    
-                    if (currentField['type'] == 'file') {
-                      hasRequiredFiles = control.value != null && 
-                                       control.value.toString().isNotEmpty && 
-                                       control.value != 'null';
-                      
+                    isValid =
+                        control.value != null && control.value.toString().isNotEmpty;
+
+                    if (!isValid) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            '${currentField['label']} ${StringConstants.isRequired}',
+                            style: widget.fontFamily,
+                          ),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                      return;
+                    }
+                  }
+
+                  // Number field validation
+                  if (currentField['type'] == 'number' && isValid) {
+                    isValid = _validateNumberField(currentField);
+                    if (!isValid) return;
+                  }
+
+                  // Check for required file uploads for both radio and dropdown types
+                  if ((currentField['type'] == 'radio' ||
+                          currentField['type'] == 'dropdown') &&
+                      currentField['requireAttachmentsOn'] != null) {
+                    final control = controller.form.control(currentField['name']);
+                    final selectedValue = control.value;
+
+                    // Convert requireAttachmentsOn to List
+                    List<dynamic> requiredOptions =
+                        currentField['requireAttachmentsOn'] is List
+                            ? currentField['requireAttachmentsOn']
+                            : [currentField['requireAttachmentsOn']];
+
+                    List<dynamic> disabledOptions =
+                        currentField['disableAttachmentsOn'] is List
+                            ? currentField['disableAttachmentsOn']
+                            : currentField['disableAttachmentsOn'] != null
+                                ? [currentField['disableAttachmentsOn']]
+                                : [];
+
+                    // Check if the selected value requires attachments
+                    if (requiredOptions.contains(selectedValue) &&
+                        !disabledOptions.contains(selectedValue)) {
+                      // Check if files are uploaded
+                      hasRequiredFiles =
+                          controller.uploadedFiles[currentField['name']]?.isNotEmpty ??
+                              false;
+
                       if (!hasRequiredFiles) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              '${currentField['label']} ${StringConstants.isRequired}',
-                              style: widget.fontFamily,
-                            ),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                        return;
-                      }
-                    } else {
-                      isValid = control.value != null && control.value.toString().isNotEmpty;
-                      
-                      if (!isValid) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              '${currentField['label']} ${StringConstants.isRequired}',
+                              StringConstants.fileIsRequired,
                               style: widget.fontFamily,
                             ),
                             duration: const Duration(seconds: 2),
@@ -922,6 +1029,17 @@ class _DynamicFormState extends State<DynamicForm> {
                     }
                   }
 
+                  // Comment validation for radio
+                  if (currentField['type'] == 'radio' && 
+                      currentField['commentRequired'] == true) {
+                    final commentControl = controller.form.control('${currentField['name']}_comment');
+                    if (commentControl.value == null || 
+                        commentControl.value.toString().trim().isEmpty) {
+                      _setFieldError('${currentField['name']}_comment', 'Comment is required');
+                      return;
+                    }
+                  }
+
                   if (isValid && hasRequiredFiles) {
                     setState(() {
                       final control = controller.form.control(currentField['name']);
@@ -929,42 +1047,45 @@ class _DynamicFormState extends State<DynamicForm> {
 
                       if (currentField['branching'] != null &&
                           currentField['branching'][control.value] != null) {
-                        final targetQuestionName = currentField['branching'][control.value];
-                        
+                        final targetQuestionName =
+                            currentField['branching'][control.value];
+
                         if (visitedQuestions.contains(targetQuestionName)) {
                           int nextIndex = widget.formJson.indexWhere(
-                            (question) => !visitedQuestions.contains(question['name']),
-                            controller.currentQuestionIndex + 1
-                          );
-                          
+                              (question) =>
+                                  !visitedQuestions.contains(question['name']),
+                              controller.currentQuestionIndex + 1);
+
                           if (nextIndex != -1) {
                             updateQuestionSequence(nextIndex);
                             controller.currentQuestionIndex = nextIndex;
                           } else {
-                            controller.currentQuestionIndex = widget.formJson.length - 1;
+                            controller.currentQuestionIndex =
+                                widget.formJson.length - 1;
                           }
                         } else {
                           final targetIndex = widget.formJson.indexWhere(
-                            (question) => question['name'] == targetQuestionName
-                          );
-                          
+                              (question) => question['name'] == targetQuestionName);
+
                           if (targetIndex != -1) {
-                            widget.formJson[targetIndex]['prevQuestion'] = currentField['name'];
+                            widget.formJson[targetIndex]['prevQuestion'] =
+                                currentField['name'];
                             updateQuestionSequence(targetIndex);
                             controller.currentQuestionIndex = targetIndex;
                           }
                         }
                       } else {
                         int nextIndex = widget.formJson.indexWhere(
-                          (question) => !visitedQuestions.contains(question['name']),
-                          controller.currentQuestionIndex + 1
-                        );
-                        
+                            (question) =>
+                                !visitedQuestions.contains(question['name']),
+                            controller.currentQuestionIndex + 1);
+
                         if (nextIndex != -1) {
                           updateQuestionSequence(nextIndex);
                           controller.currentQuestionIndex = nextIndex;
                         } else {
-                          controller.currentQuestionIndex = widget.formJson.length - 1;
+                          controller.currentQuestionIndex =
+                              widget.formJson.length - 1;
                         }
                       }
                     });
@@ -979,46 +1100,135 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   Widget _buildSubmitButton(Color buttonColor) {
-    return ElevatedButton(
-      onPressed: () => _submitForm(context),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: buttonColor,
-        foregroundColor: widget.buttonTextColor,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        minimumSize: const Size(double.infinity, 50),
-      ),
-      child: Text(StringConstants.submit,style: widget.fontFamily.copyWith(color:widget.buttonTextColor)),
-    );
-  }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        IconButton(
+          onPressed: () {
+            setState(() {
+              final currentField = widget.formJson[controller.currentQuestionIndex];
+              if (currentField['prevQuestion'] != null) {
+                final prevIndex = widget.formJson.indexWhere(
+                  (question) => question['name'] == currentField['prevQuestion']
+                );
+                if (prevIndex != -1) {
+                  visitedQuestions.remove(currentField['name']);
+                  updateQuestionSequence(prevIndex);
+                  controller.currentQuestionIndex = prevIndex;
+                }
+              } else {
+                visitedQuestions.remove(currentField['name']);
+                updateQuestionSequence(controller.currentQuestionIndex - 1);
+                controller.currentQuestionIndex--;
+              }
+            });
+          },
+          icon: const Icon(Icons.arrow_back_ios),
+          color: buttonColor,
+          iconSize: 30,
+        ),
+        const Spacer(), // This will push the submit button to the right
+        ElevatedButton(
+          onPressed: () {
+            bool isValid = true;
+            
+            // Clear all previous errors
+            fieldErrors.clear();
 
-  void _submitForm(BuildContext context) {
-    if (controller.form.valid) {
-      widget.onSubmit(controller.form.value, controller.uploadedFiles);
-    } else {
-      controller.form.markAllAsTouched();
+            // Validate all fields
+            for (var field in widget.formJson) {
+              // Existing validation
+              if (field['required'] == true) {
+                final control = controller.form.control(field['name']);
+                if (control.value == null || control.value.toString().isEmpty) {
+                  _setFieldError(field['name'], '${field['label']} is required');
+                  isValid = false;
+                  continue;
+                }
+              }
 
-      // Find first error and navigate to it
-      if (widget.showOneByOne) {
-        int errorIndex = widget.formJson.indexWhere((field) {
-          final control = controller.form.control(field['name']);
-          if (field['validators']?.contains('required') == true &&
-              (control.value == null || control.value.toString().isEmpty)) {
-            return true;
-          }
-          return false;
-        });
-        if (errorIndex != -1) {
-          controller.form.focus(widget.formJson[errorIndex]['name']);
+              // Comment validation for radio
+              if (field['type'] == 'radio' && field['commentRequired'] == true) {
+                final commentControl = controller.form.control('${field['name']}_comment');
+                if (commentControl.value == null || 
+                    commentControl.value.toString().trim().isEmpty) {
+                  _setFieldError('${field['name']}_comment', 'Comment is required');
+                  isValid = false;
+                  continue;
+                }
+              }
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(StringConstants.pleaseFillInAllRequiredFields,style: widget.fontFamily),
-              duration: const Duration(seconds: 2),
+              // Validate number fields
+              if (field['type'] == 'number') {
+                final control = controller.form.control(field['name']);
+                if (control.value != null && control.value.toString().isNotEmpty) {
+                  final numValue = num.tryParse(control.value.toString());
+                  if (numValue == null) {
+                    isValid = false;
+                    _setFieldError(field['name'], 'Please enter a valid number for ${field['label']}');
+                    break;
+                  }
+
+                  if (field['min'] != null && numValue < field['min']) {
+                    isValid = false;
+                    _setFieldError(field['name'], '${field['label']} must be at least ${field['min']}');
+                    break;
+                  }
+
+                  if (field['max'] != null && numValue > field['max']) {
+                    isValid = false;
+                    _setFieldError(field['name'], '${field['label']} must not exceed ${field['max']}');
+                    break;
+                  }
+                }
+              }
+
+              // Check for required file uploads
+              if ((field['type'] == 'radio' || field['type'] == 'dropdown') &&
+                  field['requireAttachmentsOn'] != null) {
+                final control = controller.form.control(field['name']);
+                final selectedValue = control.value;
+
+                List<dynamic> requiredOptions = field['requireAttachmentsOn'] is List
+                    ? field['requireAttachmentsOn']
+                    : [field['requireAttachmentsOn']];
+
+                List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
+                    ? field['disableAttachmentsOn']
+                    : field['disableAttachmentsOn'] != null
+                        ? [field['disableAttachmentsOn']]
+                        : [];
+
+                if (requiredOptions.contains(selectedValue) &&
+                    !disabledOptions.contains(selectedValue)) {
+                  if (!(controller.uploadedFiles[field['name']]?.isNotEmpty ?? false)) {
+                    isValid = false;
+                    _setFieldError(field['name'], StringConstants.fileIsRequired);
+                    break;
+                  }
+                }
+              }
+            }
+
+            if (isValid) {
+              widget.onSubmit?.call(controller.form.value, controller.uploadedFiles);
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: buttonColor,
+            foregroundColor: widget.buttonTextColor,
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          ),
+          child: Text(
+            StringConstants.submit,
+            style: widget.fontFamily.copyWith(
+              color: Colors.white,
+              fontSize: 16,
             ),
-          );
-        }
-      }
-    }
+          ),
+        ),
+      ],
+    );
   }
 
   String _getFileType(String fileName) {
@@ -1085,6 +1295,20 @@ class _DynamicFormState extends State<DynamicForm> {
       // Moving backward
       questionSequence.removeLast();
     }
+  }
+
+  void _setFieldError(String fieldName, String? error) {
+    setState(() {
+      if (error == null) {
+        fieldErrors.remove(fieldName);
+      } else {
+        fieldErrors[fieldName] = error;
+      }
+    });
+  }
+
+  String? _getFieldError(String fieldName) {
+    return fieldErrors[fieldName];
   }
 }
 
@@ -1455,9 +1679,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     hideLoadingDialog();
                     photo = null;
                   }
-                },
-              ),
-            ],
+                
+      })],
           ),
         );
       },
