@@ -841,41 +841,61 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   Widget _buildStepNavigation(Color buttonColor) {
-    final isLastQuestion = controller.currentQuestionIndex >= widget.formJson.length - 1;
-    
-    return isLastQuestion 
-        ? _buildSubmitButton(buttonColor)  // Show submit button on last question
-        : Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (controller.currentQuestionIndex > 0)
-                IconButton(
-                  onPressed: () {
-                    setState(() {
-                      final currentField = widget.formJson[controller.currentQuestionIndex];
-                      if (currentField['prevQuestion'] != null) {
-                        final prevIndex = widget.formJson.indexWhere(
-                          (question) => question['name'] == currentField['prevQuestion']
-                        );
-                        if (prevIndex != -1) {
-                          visitedQuestions.remove(currentField['name']);
-                          updateQuestionSequence(prevIndex);
-                          controller.currentQuestionIndex = prevIndex;
-                        }
-                      } else {
-                        visitedQuestions.remove(currentField['name']);
-                        updateQuestionSequence(controller.currentQuestionIndex - 1);
-                        controller.currentQuestionIndex--;
-                      }
-                    });
-                  },
-                  icon: const Icon(Icons.arrow_back_ios),
-                  color: buttonColor,
-                  iconSize: 30,
-                )
-              else
-                const SizedBox(width: 48),
+    // Use StreamBuilder instead of ValueListenableBuilder
+    return StreamBuilder(
+      stream: controller.form.control(widget.formJson[controller.currentQuestionIndex]['name']).valueChanges,
+      builder: (context, snapshot) {
+        final isLastQuestion = controller.currentQuestionIndex >= widget.formJson.length - 1;
+        final shouldShowSubmit = controller.shouldShowSubmitButton();
 
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            if (controller.currentQuestionIndex > 0)
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    final currentField = widget.formJson[controller.currentQuestionIndex];
+                    if (currentField['prevQuestion'] != null) {
+                      final prevIndex = widget.formJson.indexWhere(
+                        (question) => question['name'] == currentField['prevQuestion']
+                      );
+                      if (prevIndex != -1) {
+                        visitedQuestions.remove(currentField['name']);
+                        updateQuestionSequence(prevIndex);
+                        controller.currentQuestionIndex = prevIndex;
+                      }
+                    } else {
+                      visitedQuestions.remove(currentField['name']);
+                      updateQuestionSequence(controller.currentQuestionIndex - 1);
+                      controller.currentQuestionIndex--;
+                    }
+                  });
+                },
+                icon: const Icon(Icons.arrow_back_ios),
+                color: buttonColor,
+                iconSize: 30,
+              )
+            else
+              const SizedBox(width: 48),
+
+            if (shouldShowSubmit || isLastQuestion)
+              ElevatedButton(
+                onPressed: () => _submitForm(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: buttonColor,
+                  foregroundColor: widget.buttonTextColor,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                child: Text(
+                  StringConstants.submit,
+                  style: widget.fontFamily.copyWith(
+                    color: widget.buttonTextColor,
+                    fontSize: 16,
+                  ),
+                ),
+              )
+            else
               IconButton(
                 onPressed: () {
                   final currentField = widget.formJson[controller.currentQuestionIndex];
@@ -973,8 +993,10 @@ class _DynamicFormState extends State<DynamicForm> {
                 color: buttonColor,
                 iconSize: 30,
               ),
-            ],
-          );
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildSubmitButton(Color buttonColor) {
@@ -1084,6 +1106,65 @@ class _DynamicFormState extends State<DynamicForm> {
       // Moving backward
       questionSequence.removeLast();
     }
+  }
+
+  Widget _buildNavigationButtons() {
+    bool showSubmit = shouldShowSubmitButton();
+    print('Should show submit button: $showSubmit');
+    print('Current question index: $controller.currentQuestionIndex');
+    print('Current form value: ${controller.form.control(widget.formJson[controller.currentQuestionIndex]['name']).value}');
+    
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        if (controller.currentQuestionIndex > 0)
+          IconButton(
+            onPressed: () {
+              setState(() {
+                final currentField = widget.formJson[controller.currentQuestionIndex];
+                if (currentField['prevQuestion'] != null) {
+                  final prevIndex = widget.formJson.indexWhere(
+                    (question) => question['name'] == currentField['prevQuestion']
+                  );
+                  if (prevIndex != -1) {
+                    visitedQuestions.remove(currentField['name']);
+                    updateQuestionSequence(prevIndex);
+                    controller.currentQuestionIndex = prevIndex;
+                  }
+                } else {
+                  visitedQuestions.remove(currentField['name']);
+                  updateQuestionSequence(controller.currentQuestionIndex - 1);
+                  controller.currentQuestionIndex--;
+                }
+              });
+            },
+            icon: const Icon(Icons.arrow_back_ios),
+            color: widget.primaryColor,
+            iconSize: 30,
+          ),
+        ElevatedButton(
+          onPressed: () {
+            if (showSubmit) {
+              _submitForm(context);
+            } else {
+              validateAndProceed(context);
+            }
+          },
+          child: Text(showSubmit ? 'Submit' : 'Next'),
+        ),
+      ],
+    );
+  }
+
+  bool shouldShowSubmitButton() {
+    // Implement the logic to determine if the submit button should be shown
+    // This is a placeholder and should be replaced with the actual implementation
+    return false; // Placeholder return, actual implementation needed
+  }
+
+  void validateAndProceed(BuildContext context) {
+    // Implement the logic to validate and proceed to the next question
+    // This is a placeholder and should be replaced with the actual implementation
   }
 }
 

@@ -27,6 +27,7 @@ final List<Map<String, dynamic>> formJson = [
 //   "disableAttachmentsOn" :"",
 //   "attachmentsRequired" : true
 // },
+
 {
   "name": "question1iio",
   "type": "radio",
@@ -35,13 +36,36 @@ final List<Map<String, dynamic>> formJson = [
 
 },
 {
+    "name": "question_1",
+    "type": "radio",
+    "label": "What is the dog s name?",
+    
+    "required": true,
+    "hasAttachments": false,
+    "disableAttachmentsOn": "NO",
+    "requireAttachmentsOn": "YES",
+    "hasSubQuestions": false,
+    "min": "",
+    "max": "",
+    "hasComments": false,
+    "commentRequired": false,
+     "branching": {
+     "Yes": "car_details",
+     "No": "question1"
+
+     
+      },
+   
+    "subQuestionsId": ""
+  },
+{
   "name": "question1",
   "type": "radio",
   "label": "Do you have a car?",
   "options": ["Yes", "No"],
   "branching": {
     "Yes": "car_details",
-    "No": "transportation"
+   "No": "end"
   }
 },
 {

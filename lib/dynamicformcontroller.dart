@@ -179,10 +179,42 @@ class DynamicFormController {
       return false;
     }
 
-    if (currentQuestionIndex < formJson.length - 1) {
+    // Find next question index based on branching logic
+    int nextIndex = _findNextQuestionIndex(currentQuestionIndex, currentControl.value);
+    if (nextIndex == -2) {  // Special code indicating we should show submit button
+      return true;  // Return true but don't increment currentQuestionIndex
+    } else if (nextIndex != -1) {
+      currentQuestionIndex = nextIndex;
+    } else if (currentQuestionIndex < formJson.length - 1) {
       currentQuestionIndex++;
     }
     return true;
+  }
+
+  int _findNextQuestionIndex(int currentIndex, dynamic currentValue) {
+    final currentField = formJson[currentIndex];
+    
+    // Check if current field has branching logic
+    if (currentField['branching'] != null) {
+      var branchTo = currentField['branching'];
+      
+      // Check if branching leads to "end"
+      if (branchTo is Map<String, dynamic>) {
+        String? targetQuestion = branchTo[currentValue?.toString()];
+        if (targetQuestion == 'end') {
+          return -2;  // Special return code to indicate we should show submit button
+        }
+        if (targetQuestion != null) {
+          // Find the index of the target question
+          int targetIndex = formJson.indexWhere((field) => field['name'] == targetQuestion);
+          if (targetIndex != -1) {
+            return targetIndex;
+          }
+        }
+      }
+    }
+    
+    return -1; // Return -1 if no branching logic applies
   }
 
   bool _hasValidationError(Map<String, dynamic> field, AbstractControl currentControl, String fieldName) {
@@ -273,8 +305,22 @@ class DynamicFormController {
     );
   }
 
+  bool shouldShowSubmitButton() {
+    if (currentQuestionIndex >= formJson.length) return false;
+    
+    final currentField = formJson[currentQuestionIndex];
+    if (currentField['branching'] == null) return false;
+    
+    var branchTo = currentField['branching'];
+    if (branchTo is Map<String, dynamic>) {
+      String? targetQuestion = branchTo[form.control(currentField['name']).value?.toString()];
+      return targetQuestion == 'end';
+    }
+    
+    return false;
+  }
 
-void dispose() {
+  void dispose() {
     form.dispose(); // Dispose the ReactiveForm
     // Dispose of any other resources held by the controller
     if (kDebugMode) {
