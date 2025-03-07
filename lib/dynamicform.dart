@@ -151,20 +151,13 @@ class _DynamicFormState extends State<DynamicForm> {
             Expanded(
               child: Text(
                 field['label'] ?? '',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: widget.primaryColor,
-                ),
+                style: widget.fontFamily.copyWith(fontWeight: FontWeight.bold),
               ),
             ),
             if (field['required'] == true)
               Text(
                 ' *',
-                style: TextStyle(
-                  color: Colors.red,
-                  fontSize: 16,
-                ),
+                style: widget.fontFamily.copyWith(color: Colors.red),
               ),
           ],
         ),
@@ -215,7 +208,7 @@ class _DynamicFormState extends State<DynamicForm> {
                 padding: const EdgeInsets.only(top: 8.0),
                 child: Text(
                   control.errors.toString(),
-                  style: TextStyle(color: Colors.red[700], fontSize: 12),
+                  style: widget.fontFamily.copyWith(color: Colors.red[700], fontSize: 12),
                 ),
               ),
           ],
@@ -242,10 +235,7 @@ class _DynamicFormState extends State<DynamicForm> {
         if (field['required'] == true)
           Text(
             ' *',
-            style: TextStyle(
-              color: Colors.red,
-              fontSize: 16,
-            ),
+            style: widget.fontFamily.copyWith(color: Colors.red),
           ),
         SizedBox(height: 8),
         Text(
@@ -1110,10 +1100,7 @@ class _DynamicFormState extends State<DynamicForm> {
 
   Widget _buildNavigationButtons() {
     bool showSubmit = shouldShowSubmitButton();
-    print('Should show submit button: $showSubmit');
-    print('Current question index: $controller.currentQuestionIndex');
-    print('Current form value: ${controller.form.control(widget.formJson[controller.currentQuestionIndex]['name']).value}');
-    
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -1150,7 +1137,7 @@ class _DynamicFormState extends State<DynamicForm> {
               validateAndProceed(context);
             }
           },
-          child: Text(showSubmit ? 'Submit' : 'Next'),
+          child: Text(showSubmit ? 'Submit' : 'Next' ,style: widget.fontFamily),
         ),
       ],
     );

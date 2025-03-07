@@ -27,6 +27,14 @@ final List<Map<String, dynamic>> formJson = [
 //   "disableAttachmentsOn" :"",
 //   "attachmentsRequired" : true
 // },
+{
+  "name": "questio90",
+  "type": "radio",
+  "hasComments": true,
+  "requiredCommentsOn": "Yes",  // or any other value that should trigger required comments
+  // ... other field properties
+},
+
 
 {
   "name": "question1iio",

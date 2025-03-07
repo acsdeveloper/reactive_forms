@@ -262,7 +262,7 @@ class DynamicFormController {
   void _showErrorSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Text(message,style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: Colors.red),),
         duration: Duration(seconds: 2),
       ),
     );
