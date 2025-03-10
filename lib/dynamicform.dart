@@ -7,6 +7,9 @@ import 'package:reactiveform/constants.dart';
 import 'package:reactiveform/string_constants.dart';
 import 'package:flutter/services.dart';
 import 'dynamicformcontroller.dart';
+import 'package:reactiveform/models/form_field_model.dart';
+
+import 'widgets/multi_select_form_field.dart';
 
 class DynamicForm extends StatefulWidget {
   final List<Map<String, dynamic>> formJson;
@@ -223,6 +226,28 @@ class _DynamicFormState extends State<DynamicForm> {
         return _buildNumberField(field);
       case FieldType.file:
         return _buildFileField(field);
+      case 'multiselect':
+        return ReactiveFormField<List<String>, List<String>>(
+          formControlName: field['name'],
+          validationMessages: {
+            'required': (_) => 'Please select at least one option',
+          },
+          builder: (ReactiveFormFieldState<List<String>, List<String>> state) {
+            return MultiSelectFormField(
+              field: FormFieldModel.fromJson(field),
+              onChanged: (List<String> value) {
+                state.didChange(value);
+                state.control.markAsTouched();
+                controller.validateAndProceed(context);
+              },
+              value: state.value ?? <String>[],
+              hasError: state.control.touched && !state.control.valid,
+              errorText: state.control.touched && !state.control.valid 
+                  ? 'Please select at least one option'
+                  : null,
+            );
+          },
+        );
       default:
         return const SizedBox.shrink();
     }
@@ -260,6 +285,27 @@ class _DynamicFormState extends State<DynamicForm> {
         return _buildNumberField(field);
       case FieldType.file:
         return _buildFileField(field);
+      case 'multiselect':
+        return ReactiveFormField<List<String>, List<String>>(
+          formControlName: field['name'],
+          validationMessages: {
+            'required': (_) => 'Please select at least one option',
+          },
+          builder: (ReactiveFormFieldState<List<String>, List<String>> state) {
+            return MultiSelectFormField(
+              field: FormFieldModel.fromJson(field),
+              onChanged: (List<String> value) {
+                state.didChange(value);
+                state.control.markAsTouched();
+              },
+              value: state.value ?? <String>[],
+              hasError: state.control.touched && !state.control.valid,
+              errorText: state.control.touched && !state.control.valid 
+                  ? 'Please select at least one option'
+                  : null,
+            );
+          },
+        );
       default:
         return const SizedBox.shrink();
     }
@@ -914,7 +960,10 @@ class _DynamicFormState extends State<DynamicForm> {
                         return;
                       }
                     } else {
-                      isValid = control.value != null && control.value.toString().isNotEmpty;
+                      isValid = control.value != null && 
+                               control.value.toString().isNotEmpty && 
+                               control.value != 'null' && 
+                               control.value== [];
                       
                       if (!isValid) {
                         ScaffoldMessenger.of(context).showSnackBar(

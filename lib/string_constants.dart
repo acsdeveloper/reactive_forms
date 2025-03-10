@@ -85,4 +85,6 @@ class StringConstants {
   static const String isRequired = 'is required';
   static const String fileIsRequired = 'File is required';
   static const String pleaseProvideComment = 'Please provide a comment';
+  static const String pleaseSelectAtLeastOneOption = 'Please select at least one option';
+  static const String selectOptions = 'Select Options';
 } 

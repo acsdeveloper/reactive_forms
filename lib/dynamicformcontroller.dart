@@ -1,21 +1,25 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
+import 'package:reactive_forms/src/validators/validators.dart';
 import 'package:reactiveform/string_constants.dart';
+import 'package:reactiveform/models/form_field_model.dart';
 
 
-class DynamicFormController {
+class DynamicFormController extends ChangeNotifier {
   final List<Map<String, dynamic>> formJson;
   final void Function(Map<String, dynamic>, Map<String, List<Map<String, dynamic>>> uploadedFiles) onSubmit;
   
   late FormGroup form;
   Map<String, List<Map<String, dynamic>>> uploadedFiles = {};
   int currentQuestionIndex = 0;
+  Map<String, dynamic> _values = {};
+  final List<FormFieldModel> _fields;
 
   DynamicFormController({
     required this.formJson,
     required this.onSubmit,
-  }) {
+  }) : _fields = formJson.map((json) => FormFieldModel.fromJson(json)).toList() {
     _initializeForm();
   }
 
@@ -26,8 +30,14 @@ class DynamicFormController {
     for (var field in formJson) {
       final fieldName = field['name'];
       
-      // Initialize file upload fields
-      if (field['type'] == 'file') {
+      if (field['type'] == 'multiselect') {
+        controls[fieldName] = FormControl<List<String>>(
+          value: <String>[],
+          validators: field['required'] == true 
+              ? [Validators.required]
+              : [],
+        );
+      } else if (field['type'] == 'file') {
         uploadedFiles[fieldName] = []; // Initialize empty list for file uploads
         controls[fieldName] = FormControl<String>(value: '');
       } else if (field['type'] == 'number') {
@@ -102,6 +112,14 @@ class DynamicFormController {
     return validatorsList;
   }
 
+  static Map<String, dynamic>? _multiSelectValidator(AbstractControl<dynamic> control) {
+    final value = control.value as List<String>?;
+    if (value == null || value.isEmpty) {
+      return {'required': true};
+    }
+    return null;
+  }
+
   void submitForm(BuildContext context) {
     bool isValid = true;
     
@@ -155,69 +173,92 @@ class DynamicFormController {
   bool validateAndProceed(BuildContext context) {
     final field = formJson[currentQuestionIndex];
     final currentFieldName = field['name'];
-    
-    // Special handling for file type fields
-    if (field['type'] == 'file') {
-      // Check if file upload is required and no files are uploaded
-      if (field['validators']?.contains('required') == true && 
-          (uploadedFiles[currentFieldName]?.isEmpty ?? true)) {
-        _showErrorSnackBar(context, StringConstants.uploadRequiredFiles);
+    final currentControl = form.control(currentFieldName);
+
+    // Mark the current field as touched to trigger validation
+    currentControl.markAsTouched();
+
+    // Special handling for multiselect validation
+    if (field['type'] == 'multiselect' && field['required'] == true) {
+      final List<String>? values = currentControl.value as List<String>?;
+      if (values == null || values.isEmpty) {
+        _showErrorSnackBar(context, 'Please select at least one option');
+        notifyListeners();
         return false;
       }
-      // If file is not required or files are uploaded, proceed
-      if (currentQuestionIndex < formJson.length - 1) {
-        currentQuestionIndex++;
-      }
-      return true;
     }
 
-    // For non-file fields, use existing validation
-    final currentControl = form.control(currentFieldName);
-    if (_hasValidationError(field, currentControl, currentFieldName)) {
+    // Check if the current field is valid
+    if (!currentControl.valid) {
       String errorMessage = _getErrorMessage(field, currentControl);
       _showErrorSnackBar(context, errorMessage);
+      notifyListeners();
       return false;
     }
 
-    // Find next question index based on branching logic
+    // Handle branching logic
     int nextIndex = _findNextQuestionIndex(currentQuestionIndex, currentControl.value);
-    if (nextIndex == -2) {  // Special code indicating we should show submit button
-      return true;  // Return true but don't increment currentQuestionIndex
+    if (nextIndex == -2) {
+      return true;
     } else if (nextIndex != -1) {
       currentQuestionIndex = nextIndex;
     } else if (currentQuestionIndex < formJson.length - 1) {
       currentQuestionIndex++;
     }
+
+    notifyListeners();
     return true;
   }
 
   int _findNextQuestionIndex(int currentIndex, dynamic currentValue) {
     final currentField = formJson[currentIndex];
     
-    // Check if current field has branching logic
     if (currentField['branching'] != null) {
       var branchTo = currentField['branching'];
       
-      // Check if branching leads to "end"
       if (branchTo is Map<String, dynamic>) {
-        String? targetQuestion = branchTo[currentValue?.toString()];
-        if (targetQuestion == 'end') {
-          return -2;  // Special return code to indicate we should show submit button
-        }
-        if (targetQuestion != null) {
-          // Find the index of the target question
-          int targetIndex = formJson.indexWhere((field) => field['name'] == targetQuestion);
-          if (targetIndex != -1) {
-            return targetIndex;
+        // For multiselect, we might want to check if any of the selected values trigger branching
+        if (currentField['type'] == 'multiselect' && currentValue is List) {
+          for (var value in currentValue) {
+            String? targetQuestion = branchTo[value.toString()];
+            if (targetQuestion == 'end') {
+              return -2;
+            }
+            if (targetQuestion != null) {
+              int targetIndex = formJson.indexWhere((field) => field['name'] == targetQuestion);
+              if (targetIndex != -1) {
+                return targetIndex;
+              }
+            }
+          }
+        } else {
+          // Regular single-value branching
+          String? targetQuestion = branchTo[currentValue?.toString()];
+          if (targetQuestion == 'end') {
+            return -2;
+          }
+          if (targetQuestion != null) {
+            int targetIndex = formJson.indexWhere((field) => field['name'] == targetQuestion);
+            if (targetIndex != -1) {
+              return targetIndex;
+            }
           }
         }
       }
     }
     
-    return -1; // Return -1 if no branching logic applies
+    return -1;
   }
 
   bool _hasValidationError(Map<String, dynamic> field, AbstractControl currentControl, String fieldName) {
+    // Add multiselect validation
+    if (field['type'] == 'multiselect' && field['required'] == true) {
+      final List<String>? values = currentControl.value as List<String>?;
+      if (values == null || values.isEmpty) {
+        return true;
+      }
+    }
+
     // Required field validation
     if (field['validators']?.contains('required') == true && 
         (currentControl.value == null || currentControl.value.toString().isEmpty)) {
@@ -245,6 +286,13 @@ class DynamicFormController {
   }
 
   String _getErrorMessage(Map<String, dynamic> field, AbstractControl control) {
+    if (field['type'] == 'multiselect') {
+      final List<String>? values = control.value as List<String>?;
+      if (field['required'] == true && (values == null || values.isEmpty)) {
+        return 'Please select at least one option';
+      }
+    }
+    
     if (field['validators']?.contains('required') == true && 
         (control.value == null || control.value.toString().isEmpty)) {
       return field['type'] == 'radio' 
@@ -262,8 +310,12 @@ class DynamicFormController {
   void _showErrorSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message,style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: Colors.red),),
-        duration: Duration(seconds: 2),
+        content: Text(
+          message,
+          style: const TextStyle(color: Colors.white),
+        ),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -320,11 +372,40 @@ class DynamicFormController {
     return false;
   }
 
+  @override
   void dispose() {
+    super.dispose();
     form.dispose(); // Dispose the ReactiveForm
     // Dispose of any other resources held by the controller
     if (kDebugMode) {
       print('DynamicFormController disposed');
     }
+  }
+
+  void updateFieldValue(String fieldId, dynamic value) {
+    FormFieldModel field = _fields.firstWhere((f) => f.name == fieldId);
+    if (field.type == 'multiselect') {
+      // Ensure the value is always a List<String>
+      _values[fieldId] = (value as List).cast<String>();
+    } else {
+      _values[fieldId] = value;
+    }
+    notifyListeners();
+  }
+
+  dynamic getFieldValue(String fieldId) {
+    return _values[fieldId];
+  }
+
+  bool isFieldValid(String fieldName) {
+    final control = form.control(fieldName);
+    final field = formJson.firstWhere((f) => f['name'] == fieldName);
+    
+    if (field['type'] == 'multiselect' && field['required'] == true) {
+      final List<String>? values = control.value as List<String>?;
+      return values != null && values.isNotEmpty;
+    }
+    
+    return control.valid;
   }
 }
