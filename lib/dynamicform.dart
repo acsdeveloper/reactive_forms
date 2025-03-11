@@ -182,12 +182,63 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   Widget _buildField(Map<String, dynamic> field) {
-    final control = controller.form.control(field['name']);
-  
+    if (field['showWhen'] != null) {
+      // Get all dependent field names from showWhen conditions
+      final dependentFields = (field['showWhen'] as Map<String, dynamic>).keys.toList();
+      
+      // Create a ReactiveValueListenableBuilder for each dependent field
+      return ReactiveFormConsumer(
+        builder: (context, form, child) {
+          bool shouldShow = true;
+          final conditions = field['showWhen'] as Map<String, dynamic>;
+          
+          conditions.forEach((dependentField, expectedValue) {
+            final dependentControl = form.control(dependentField);
+            final currentValue = dependentControl.value;
+            
+            if (kDebugMode) {
+              print('Field: ${field['name']} checking condition on $dependentField');
+              print('Expected: $expectedValue, Actual: $currentValue');
+            }
+            
+            if (expectedValue is List) {
+              final containsValue = expectedValue.contains(currentValue);
+              shouldShow = shouldShow && containsValue;
+              if (kDebugMode) {
+                print('List comparison result: $containsValue');
+              }
+            } else {
+              final equals = currentValue == expectedValue;
+              shouldShow = shouldShow && equals;
+              if (kDebugMode) {
+                print('Direct comparison result: $equals');
+              }
+            }
+          });
+          
+          if (kDebugMode) {
+            print('Field: ${field['name']} shouldShow: $shouldShow');
+          }
+          
+          if (!shouldShow) {
+            return const SizedBox.shrink();
+          }
 
+          // If conditions are met, build the actual field
+          final control = controller.form.control(field['name']);
+          return _buildActualField(field, control);
+        },
+      );
+    }
+
+    // If no showWhen conditions, build the field directly
+    final control = controller.form.control(field['name']);
+    return _buildActualField(field, control);
+  }
+
+  Widget _buildActualField(Map<String, dynamic> field, AbstractControl<dynamic> control) {
     switch (field['type']) {
       case 'option':
-      
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -199,7 +250,6 @@ class _DynamicFormState extends State<DynamicForm> {
                   groupValue: control.value,
                   activeColor: widget.primaryColor,
                   onChanged: (value) {
-                  
                     setState(() {
                       control.value = value;
                     });
@@ -877,12 +927,12 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   Widget _buildStepNavigation(Color buttonColor) {
-    // Use StreamBuilder instead of ValueListenableBuilder
     return StreamBuilder(
-      stream: controller.form.control(widget.formJson[controller.currentQuestionIndex]['name']).valueChanges,
+      stream: controller.form.valueChanges,
       builder: (context, snapshot) {
-        final isLastQuestion = controller.currentQuestionIndex >= widget.formJson.length - 1;
-        final shouldShowSubmit = controller.shouldShowSubmitButton();
+        // Check if current question is effectively the last one
+        final isEffectivelyLastQuestion = isCurrentQuestionEffectivelyLast();
+        final shouldShowSubmit = controller.shouldShowSubmitButton() || isEffectivelyLastQuestion;
 
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -891,21 +941,7 @@ class _DynamicFormState extends State<DynamicForm> {
               IconButton(
                 onPressed: () {
                   setState(() {
-                    final currentField = widget.formJson[controller.currentQuestionIndex];
-                    if (currentField['prevQuestion'] != null) {
-                      final prevIndex = widget.formJson.indexWhere(
-                        (question) => question['name'] == currentField['prevQuestion']
-                      );
-                      if (prevIndex != -1) {
-                        visitedQuestions.remove(currentField['name']);
-                        updateQuestionSequence(prevIndex);
-                        controller.currentQuestionIndex = prevIndex;
-                      }
-                    } else {
-                      visitedQuestions.remove(currentField['name']);
-                      updateQuestionSequence(controller.currentQuestionIndex - 1);
-                      controller.currentQuestionIndex--;
-                    }
+                    moveToPreviousValidQuestion();
                   });
                 },
                 icon: const Icon(Icons.arrow_back_ios),
@@ -915,7 +951,7 @@ class _DynamicFormState extends State<DynamicForm> {
             else
               const SizedBox(width: 48),
 
-            if (shouldShowSubmit || isLastQuestion)
+            if (shouldShowSubmit)
               ElevatedButton(
                 onPressed: () => _submitForm(context),
                 style: ElevatedButton.styleFrom(
@@ -934,99 +970,7 @@ class _DynamicFormState extends State<DynamicForm> {
             else
               IconButton(
                 onPressed: () {
-                  final currentField = widget.formJson[controller.currentQuestionIndex];
-                  bool isValid = true;
-                  bool hasRequiredFiles = true;
-
-                  // Validation checks
-                  if (currentField['required'] == true) {
-                    final control = controller.form.control(currentField['name']);
-                    
-                    if (currentField['type'] == 'file') {
-                      hasRequiredFiles = control.value != null && 
-                                       control.value.toString().isNotEmpty && 
-                                       control.value != 'null';
-                      
-                      if (!hasRequiredFiles) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              '${currentField['label']} ${StringConstants.isRequired}',
-                              style: widget.fontFamily,
-                            ),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                        return;
-                      }
-                    } else {
-                      isValid = control.value != null && 
-                               control.value.toString().isNotEmpty && 
-                               control.value != 'null' && 
-                               control.value== [];
-                      
-                      if (!isValid) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              '${currentField['label']} ${StringConstants.isRequired}',
-                              style: widget.fontFamily,
-                            ),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                        return;
-                      }
-                    }
-                  }
-
-                  if (isValid && hasRequiredFiles) {
-                    setState(() {
-                      final control = controller.form.control(currentField['name']);
-                      visitedQuestions.add(currentField['name']);
-
-                      if (currentField['branching'] != null &&
-                          currentField['branching'][control.value] != null) {
-                        final targetQuestionName = currentField['branching'][control.value];
-                        
-                        if (visitedQuestions.contains(targetQuestionName)) {
-                          int nextIndex = widget.formJson.indexWhere(
-                            (question) => !visitedQuestions.contains(question['name']),
-                            controller.currentQuestionIndex + 1
-                          );
-                          
-                          if (nextIndex != -1) {
-                            updateQuestionSequence(nextIndex);
-                            controller.currentQuestionIndex = nextIndex;
-                          } else {
-                            controller.currentQuestionIndex = widget.formJson.length - 1;
-                          }
-                        } else {
-                          final targetIndex = widget.formJson.indexWhere(
-                            (question) => question['name'] == targetQuestionName
-                          );
-                          
-                          if (targetIndex != -1) {
-                            widget.formJson[targetIndex]['prevQuestion'] = currentField['name'];
-                            updateQuestionSequence(targetIndex);
-                            controller.currentQuestionIndex = targetIndex;
-                          }
-                        }
-                      } else {
-                        int nextIndex = widget.formJson.indexWhere(
-                          (question) => !visitedQuestions.contains(question['name']),
-                          controller.currentQuestionIndex + 1
-                        );
-                        
-                        if (nextIndex != -1) {
-                          updateQuestionSequence(nextIndex);
-                          controller.currentQuestionIndex = nextIndex;
-                        } else {
-                          controller.currentQuestionIndex = widget.formJson.length - 1;
-                        }
-                      }
-                    });
-                  }
+                  moveToNextQuestion(context);
                 },
                 icon: const Icon(Icons.arrow_forward_ios),
                 color: buttonColor,
@@ -1147,60 +1091,276 @@ class _DynamicFormState extends State<DynamicForm> {
     }
   }
 
-  Widget _buildNavigationButtons() {
-    bool showSubmit = shouldShowSubmitButton();
+  void moveToNextQuestion(BuildContext context) {
+    final currentField = widget.formJson[controller.currentQuestionIndex];
+    bool isValid = true;
+    bool hasRequiredFiles = true;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        if (controller.currentQuestionIndex > 0)
-          IconButton(
-            onPressed: () {
-              setState(() {
-                final currentField = widget.formJson[controller.currentQuestionIndex];
-                if (currentField['prevQuestion'] != null) {
-                  final prevIndex = widget.formJson.indexWhere(
-                    (question) => question['name'] == currentField['prevQuestion']
-                  );
-                  if (prevIndex != -1) {
-                    visitedQuestions.remove(currentField['name']);
-                    updateQuestionSequence(prevIndex);
-                    controller.currentQuestionIndex = prevIndex;
-                  }
-                } else {
-                  visitedQuestions.remove(currentField['name']);
-                  updateQuestionSequence(controller.currentQuestionIndex - 1);
-                  controller.currentQuestionIndex--;
-                }
-              });
-            },
-            icon: const Icon(Icons.arrow_back_ios),
-            color: widget.primaryColor,
-            iconSize: 30,
-          ),
-        ElevatedButton(
-          onPressed: () {
-            if (showSubmit) {
-              _submitForm(context);
+    // Validation checks
+    if (currentField['required'] == true || 
+        (currentField['requiredWhen'] != null && isRequiredBasedOnCondition(currentField))) {
+      final control = controller.form.control(currentField['name']);
+      
+      if (currentField['type'] == 'file') {
+        hasRequiredFiles = control.value != null && 
+                         control.value.toString().isNotEmpty && 
+                         control.value != 'null';
+        
+        if (!hasRequiredFiles) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${currentField['label']} ${StringConstants.isRequired}',
+                style: widget.fontFamily,
+              ),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+      } else {
+        isValid = control.value != null && 
+                 control.value.toString().isNotEmpty && 
+                 control.value != 'null';
+        
+        if (!isValid) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${currentField['label']} ${StringConstants.isRequired}',
+                style: widget.fontFamily,
+              ),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+      }
+    }
+
+    if (isValid && hasRequiredFiles) {
+      setState(() {
+        final control = controller.form.control(currentField['name']);
+        visitedQuestions.add(currentField['name']);
+
+        if (currentField['branching'] != null &&
+            currentField['branching'][control.value] != null) {
+          final targetQuestionName = currentField['branching'][control.value];
+          
+          if (visitedQuestions.contains(targetQuestionName)) {
+            moveToNextValidQuestion();
+          } else {
+            final targetIndex = widget.formJson.indexWhere(
+              (question) => question['name'] == targetQuestionName
+            );
+            
+            if (targetIndex != -1) {
+              widget.formJson[targetIndex]['prevQuestion'] = currentField['name'];
+              moveToIndex(targetIndex);
             } else {
-              validateAndProceed(context);
+              moveToNextValidQuestion();
             }
-          },
-          child: Text(showSubmit ? 'Submit' : 'Next' ,style: widget.fontFamily),
-        ),
-      ],
-    );
+          }
+        } else {
+          moveToNextValidQuestion();
+        }
+      });
+    }
   }
 
-  bool shouldShowSubmitButton() {
-    // Implement the logic to determine if the submit button should be shown
-    // This is a placeholder and should be replaced with the actual implementation
-    return false; // Placeholder return, actual implementation needed
+  void moveToNextValidQuestion() {
+    // Start from the next question
+    int nextIndex = controller.currentQuestionIndex + 1;
+    
+    // Loop until we find a valid question or reach the end
+    while (nextIndex < widget.formJson.length) {
+      final nextField = widget.formJson[nextIndex];
+      
+      // Skip questions that shouldn't be shown based on showWhen conditions
+      if (nextField['showWhen'] != null) {
+        bool shouldShow = true;
+        final conditions = nextField['showWhen'] as Map<String, dynamic>;
+        
+        conditions.forEach((dependentField, expectedValue) {
+          final dependentControl = controller.form.control(dependentField);
+          final currentValue = dependentControl.value;
+          
+          if (expectedValue is List) {
+            shouldShow = shouldShow && expectedValue.contains(currentValue);
+          } else {
+            shouldShow = shouldShow && currentValue == expectedValue;
+          }
+        });
+        
+        if (!shouldShow) {
+          // This question should be skipped, try the next one
+          nextIndex++;
+          continue;
+        }
+      }
+      
+      // Skip questions we've already visited
+      if (visitedQuestions.contains(nextField['name'])) {
+        nextIndex++;
+        continue;
+      }
+      
+      // Found a valid question, move to it
+      break;
+    }
+    
+    // If we reached the end, show the last question
+    if (nextIndex >= widget.formJson.length) {
+      controller.currentQuestionIndex = widget.formJson.length - 1;
+    } else {
+      updateQuestionSequence(nextIndex);
+      controller.currentQuestionIndex = nextIndex;
+    }
   }
 
-  void validateAndProceed(BuildContext context) {
-    // Implement the logic to validate and proceed to the next question
-    // This is a placeholder and should be replaced with the actual implementation
+  void moveToIndex(int index) {
+    if (index >= 0 && index < widget.formJson.length) {
+      final nextField = widget.formJson[index];
+      
+      // Check if this field should be shown based on showWhen
+      if (nextField['showWhen'] != null) {
+        bool shouldShow = true;
+        final conditions = nextField['showWhen'] as Map<String, dynamic>;
+        
+        conditions.forEach((dependentField, expectedValue) {
+          final dependentControl = controller.form.control(dependentField);
+          final currentValue = dependentControl.value;
+          
+          if (expectedValue is List) {
+            shouldShow = shouldShow && expectedValue.contains(currentValue);
+          } else {
+            shouldShow = shouldShow && currentValue == expectedValue;
+          }
+        });
+        
+        if (!shouldShow) {
+          // Skip this question and find the next valid one
+          moveToNextValidQuestion();
+          return;
+        }
+      }
+      
+      // This question should be shown
+      updateQuestionSequence(index);
+      controller.currentQuestionIndex = index;
+    }
+  }
+
+  bool isRequiredBasedOnCondition(Map<String, dynamic> field) {
+    if (field['requiredWhen'] == null) return false;
+    
+    final conditions = field['requiredWhen'] as Map<String, dynamic>;
+    bool isRequired = true;
+    
+    conditions.forEach((fieldName, expectedValue) {
+      final dependentControl = controller.form.control(fieldName);
+      if (expectedValue is List) {
+        isRequired = isRequired && expectedValue.contains(dependentControl.value);
+      } else {
+        isRequired = isRequired && dependentControl.value == expectedValue;
+      }
+    });
+    
+    return isRequired;
+  }
+
+  void moveToPreviousValidQuestion() {
+    // Start from the previous question
+    int prevIndex = controller.currentQuestionIndex - 1;
+    
+    // Loop until we find a valid previous question or reach the beginning
+    while (prevIndex >= 0) {
+      final prevField = widget.formJson[prevIndex];
+      
+      // Skip questions that shouldn't be shown based on showWhen conditions
+      if (prevField['showWhen'] != null) {
+        bool shouldShow = true;
+        final conditions = prevField['showWhen'] as Map<String, dynamic>;
+        
+        conditions.forEach((dependentField, expectedValue) {
+          final dependentControl = controller.form.control(dependentField);
+          final currentValue = dependentControl.value;
+          
+          if (expectedValue is List) {
+            shouldShow = shouldShow && expectedValue.contains(currentValue);
+          } else {
+            shouldShow = shouldShow && currentValue == expectedValue;
+          }
+        });
+        
+        if (!shouldShow) {
+          // This question should be skipped, try the previous one
+          prevIndex--;
+          continue;
+        }
+      }
+      
+      // Found a valid previous question, move to it
+      break;
+    }
+    
+    // If we reached the beginning, show the first question
+    if (prevIndex < 0) {
+      controller.currentQuestionIndex = 0;
+    } else {
+      // Move to the valid previous question
+      final currentField = widget.formJson[controller.currentQuestionIndex];
+      visitedQuestions.remove(currentField['name']);
+      updateQuestionSequence(prevIndex);
+      controller.currentQuestionIndex = prevIndex;
+    }
+  }
+
+  // Helper method to check if current question is effectively the last visible one
+  bool isCurrentQuestionEffectivelyLast() {
+    int nextVisibleIndex = findNextVisibleQuestionIndex();
+    return nextVisibleIndex == -1;
+  }
+
+  // Find the index of the next question that should be visible
+  int findNextVisibleQuestionIndex() {
+    // Start checking from the next question
+    int index = controller.currentQuestionIndex + 1;
+    
+    while (index < widget.formJson.length) {
+      final question = widget.formJson[index];
+      
+      // If the question has showWhen conditions, check if they're satisfied
+      if (question['showWhen'] != null) {
+        bool shouldShow = true;
+        final conditions = question['showWhen'] as Map<String, dynamic>;
+        
+        conditions.forEach((dependentField, expectedValue) {
+          final dependentControl = controller.form.control(dependentField);
+          final currentValue = dependentControl.value;
+          
+          if (expectedValue is List) {
+            shouldShow = shouldShow && expectedValue.contains(currentValue);
+          } else {
+            shouldShow = shouldShow && currentValue == expectedValue;
+          }
+        });
+        
+        // If this question should be shown, return its index
+        if (shouldShow) {
+          return index;
+        }
+      } else {
+        // If the question has no showWhen conditions, it should always be shown
+        return index;
+      }
+      
+      // Move to the next question
+      index++;
+    }
+    
+    // If no more visible questions found, return -1
+    return -1;
   }
 }
 

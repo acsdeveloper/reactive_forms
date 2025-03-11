@@ -52,22 +52,22 @@ class DynamicFormController extends ChangeNotifier {
           field['options'] = ['Yes', 'No'];
         }
         controls[fieldName] = FormControl<String>(
-          value: '',
+          value: field['defaultValue'] ?? '', // Initialize with default value if provided
           validators: _getValidators(field['validators'], field),
         );
         
         if (field['hasComments'] == true) {
-          controls['${fieldName}_comment'] = FormControl<String>();
+          controls['${fieldName}_comment'] = FormControl<String>(value: '');
         }
       } else {
         // Initialize form controls for non-file fields
         controls[fieldName] = FormControl<String>(
-          value: '',
+          value: field['defaultValue'] ?? '',
           validators: _getValidators(field['validators'], field),
         );
         
         if (field['hasComments'] == true) {
-          controls['${fieldName}_comment'] = FormControl<String>();
+          controls['${fieldName}_comment'] = FormControl<String>(value: '');
         }
         
         if (field['subQuestions'] != null) {
@@ -407,5 +407,23 @@ class DynamicFormController extends ChangeNotifier {
     }
     
     return control.valid;
+  }
+
+  bool shouldShowField(Map<String, dynamic> field) {
+    if (field['showWhen'] == null) return true;
+    
+    bool shouldShow = true;
+    final conditions = field['showWhen'] as Map<String, dynamic>;
+    
+    conditions.forEach((dependentField, expectedValue) {
+      final dependentControl = form.control(dependentField);
+      if (expectedValue is List) {
+        shouldShow = shouldShow && expectedValue.contains(dependentControl.value);
+      } else {
+        shouldShow = shouldShow && dependentControl.value == expectedValue;
+      }
+    });
+    
+    return shouldShow;
   }
 }
