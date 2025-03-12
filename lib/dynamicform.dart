@@ -1,6 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter/foundation.dart' show  kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
 import 'package:reactiveform/constants.dart';
@@ -13,7 +13,8 @@ import 'widgets/multi_select_form_field.dart';
 
 class DynamicForm extends StatefulWidget {
   final List<Map<String, dynamic>> formJson;
-  final Function(Map<String, dynamic>, Map<String, List<Map<String, dynamic>>> uploadedFiles) onSubmit;
+  final Function(Map<String, dynamic>,
+      Map<String, List<Map<String, dynamic>>> uploadedFiles) onSubmit;
   final Color primaryColor;
   final Color buttonTextColor;
   final double fieldSpacing;
@@ -71,14 +72,15 @@ class _DynamicFormState extends State<DynamicForm> {
     return Theme(
       data: Theme.of(context).copyWith(
         textTheme: Theme.of(context).textTheme.apply(
-          fontFamily: widget.fontFamily.fontFamily,
-        ),
+              fontFamily: widget.fontFamily.fontFamily,
+            ),
       ),
       child: ReactiveForm(
         formGroup: controller.form,
         child: Scaffold(
           body: SingleChildScrollView(
-            key: ValueKey('${StringConstants.form}${controller.currentQuestionIndex}'),
+            key: ValueKey(
+                '${StringConstants.form}${controller.currentQuestionIndex}'),
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,12 +107,14 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   List<Widget> _buildAllFields() {
-    return widget.formJson.map((field) => Column(
-      children: [
-        _buildField(field),
-        const Divider(height: 32, thickness: 1),
-      ],
-    )).toList();
+    return widget.formJson
+        .map((field) => Column(
+              children: [
+                _buildField(field),
+                const Divider(height: 32, thickness: 1),
+              ],
+            ))
+        .toList();
   }
 
   List<Widget> _buildOneByOneFields() {
@@ -152,16 +156,25 @@ class _DynamicFormState extends State<DynamicForm> {
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                field['label'] ?? '',
-                style: widget.fontFamily.copyWith(fontWeight: FontWeight.bold),
+              child: RichText(
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text: field['label'],
+                      style: widget.fontFamily.copyWith(fontWeight: FontWeight.bold,color: Colors.black),
+                    ),
+                    if (field['required'] == true)
+                      TextSpan(
+                        text: ' *',
+                        style: widget.fontFamily.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-            if (field['required'] == true)
-              Text(
-                ' *',
-                style: widget.fontFamily.copyWith(color: Colors.red),
-              ),
           ],
         ),
       ),
@@ -184,23 +197,25 @@ class _DynamicFormState extends State<DynamicForm> {
   Widget _buildField(Map<String, dynamic> field) {
     if (field['showWhen'] != null) {
       // Get all dependent field names from showWhen conditions
-      final dependentFields = (field['showWhen'] as Map<String, dynamic>).keys.toList();
-      
+      final dependentFields =
+          (field['showWhen'] as Map<String, dynamic>).keys.toList();
+
       // Create a ReactiveValueListenableBuilder for each dependent field
       return ReactiveFormConsumer(
         builder: (context, form, child) {
           bool shouldShow = true;
           final conditions = field['showWhen'] as Map<String, dynamic>;
-          
+
           conditions.forEach((dependentField, expectedValue) {
             final dependentControl = form.control(dependentField);
             final currentValue = dependentControl.value;
-            
+
             if (kDebugMode) {
-              print('Field: ${field['name']} checking condition on $dependentField');
+              print(
+                  'Field: ${field['name']} checking condition on $dependentField');
               print('Expected: $expectedValue, Actual: $currentValue');
             }
-            
+
             if (expectedValue is List) {
               final containsValue = expectedValue.contains(currentValue);
               shouldShow = shouldShow && containsValue;
@@ -215,11 +230,11 @@ class _DynamicFormState extends State<DynamicForm> {
               }
             }
           });
-          
+
           if (kDebugMode) {
             print('Field: ${field['name']} shouldShow: $shouldShow');
           }
-          
+
           if (!shouldShow) {
             return const SizedBox.shrink();
           }
@@ -236,32 +251,36 @@ class _DynamicFormState extends State<DynamicForm> {
     return _buildActualField(field, control);
   }
 
-  Widget _buildActualField(Map<String, dynamic> field, AbstractControl<dynamic> control) {
+  Widget _buildActualField(
+      Map<String, dynamic> field, AbstractControl<dynamic> control) {
     switch (field['type']) {
       case 'option':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (field['options'] != null)
-              ...field['options'].map<Widget>((option) => 
-                RadioListTile<String>(
-                  title: Text(option.toString(), style: widget.fontFamily),
-                  value: option.toString(),
-                  groupValue: control.value,
-                  activeColor: widget.primaryColor,
-                  onChanged: (value) {
-                    setState(() {
-                      control.value = value;
-                    });
-                  },
-                ),
-              ).toList(),
+              ...field['options']
+                  .map<Widget>(
+                    (option) => RadioListTile<String>(
+                      title: Text(option.toString(), style: widget.fontFamily),
+                      value: option.toString(),
+                      groupValue: control.value,
+                      activeColor: widget.primaryColor,
+                      onChanged: (value) {
+                        setState(() {
+                          control.value = value;
+                        });
+                      },
+                    ),
+                  )
+                  .toList(),
             if (control.touched && control.hasErrors)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: Text(
                   control.errors.toString(),
-                  style: widget.fontFamily.copyWith(color: Colors.red[700], fontSize: 12),
+                  style: widget.fontFamily
+                      .copyWith(color: Colors.red[700], fontSize: 12),
                 ),
               ),
           ],
@@ -283,16 +302,39 @@ class _DynamicFormState extends State<DynamicForm> {
             'required': (_) => 'Please select at least one option',
           },
           builder: (ReactiveFormFieldState<List<String>, List<String>> state) {
+            // Get current control value, ensuring it's a List<String>
+            List<String> currentValue = [];
+            final rawValue = controller.form.control(field['name']).value;
+            
+            if (rawValue is List) {
+              currentValue = List<String>.from(rawValue.map((e) => e.toString()));
+            } else if (rawValue != null && rawValue != "") {
+              // Handle case when it's a single value
+              currentValue = [rawValue.toString()];
+            }
+            
             return MultiSelectFormField(
               field: FormFieldModel.fromJson(field),
               onChanged: (List<String> value) {
+                // Force direct update to the FormGroup's value
+                controller.form.patchValue({field['name']: value});
+                
+                // Explicitly update control to ensure type consistency
+                final control = controller.form.control(field['name']);
+                if (control is FormControl<dynamic>) {
+                  control.updateValue(value);
+                }
+                
+                // Debug info
+                print('Updated ${field['name']} with: $value (type: ${value.runtimeType})');
+                print('Current form value: ${controller.form.value}');
+                
                 state.didChange(value);
                 state.control.markAsTouched();
-                controller.validateAndProceed(context);
               },
-              value: state.value ?? <String>[],
+              value: currentValue,
               hasError: state.control.touched && !state.control.valid,
-              errorText: state.control.touched && !state.control.valid 
+              errorText: state.control.touched && !state.control.valid
                   ? 'Please select at least one option'
                   : null,
             );
@@ -342,15 +384,39 @@ class _DynamicFormState extends State<DynamicForm> {
             'required': (_) => 'Please select at least one option',
           },
           builder: (ReactiveFormFieldState<List<String>, List<String>> state) {
+            // Get current control value, ensuring it's a List<String>
+            List<String> currentValue = [];
+            final rawValue = controller.form.control(field['name']).value;
+            
+            if (rawValue is List) {
+              currentValue = List<String>.from(rawValue.map((e) => e.toString()));
+            } else if (rawValue != null && rawValue != "") {
+              // Handle case when it's a single value
+              currentValue = [rawValue.toString()];
+            }
+            
             return MultiSelectFormField(
               field: FormFieldModel.fromJson(field),
               onChanged: (List<String> value) {
+                // Force direct update to the FormGroup's value
+                controller.form.patchValue({field['name']: value});
+                
+                // Explicitly update control to ensure type consistency
+                final control = controller.form.control(field['name']);
+                if (control is FormControl<dynamic>) {
+                  control.updateValue(value);
+                }
+                
+                // Debug info
+                print('Updated ${field['name']} with: $value (type: ${value.runtimeType})');
+                print('Current form value: ${controller.form.value}');
+                
                 state.didChange(value);
                 state.control.markAsTouched();
               },
-              value: state.value ?? <String>[],
+              value: currentValue,
               hasError: state.control.touched && !state.control.valid,
-              errorText: state.control.touched && !state.control.valid 
+              errorText: state.control.touched && !state.control.valid
                   ? 'Please select at least one option'
                   : null,
             );
@@ -376,17 +442,13 @@ class _DynamicFormState extends State<DynamicForm> {
                 child: ReactiveRadioListTile<String>(
                   formControlName: field['name'],
                   value: option.toString(),
-                  title: Text(
-                    option.toString(),
-                    style: widget.fontFamily
-                  ),
+                  title: Text(option.toString(), style: widget.fontFamily),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
             );
           }).toList(),
         ),
-       
         if (field['hasAttachments'] == true)
           ReactiveValueListenableBuilder(
             formControlName: field['name'],
@@ -394,17 +456,22 @@ class _DynamicFormState extends State<DynamicForm> {
               // First check if requireAttachmentsOn is specified
               if (field['requireAttachmentsOn'] != null) {
                 // Handle both single value and array of values
-                List<dynamic> requiredOptions = field['requireAttachmentsOn'] is List 
-                    ? field['requireAttachmentsOn'] 
-                    : [field['requireAttachmentsOn']];
-                    
-                List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
-                    ? field['disableAttachmentsOn']
-                    : field['disableAttachmentsOn'] != null ? [field['disableAttachmentsOn']] : [];
+                List<dynamic> requiredOptions =
+                    field['requireAttachmentsOn'] is List
+                        ? field['requireAttachmentsOn']
+                        : [field['requireAttachmentsOn']];
 
-                final showAttachments = requiredOptions.contains(control.value) &&
-                    !disabledOptions.contains(control.value);
-                
+                List<dynamic> disabledOptions =
+                    field['disableAttachmentsOn'] is List
+                        ? field['disableAttachmentsOn']
+                        : field['disableAttachmentsOn'] != null
+                            ? [field['disableAttachmentsOn']]
+                            : [];
+
+                final showAttachments =
+                    requiredOptions.contains(control.value) &&
+                        !disabledOptions.contains(control.value);
+
                 if (!showAttachments) return const SizedBox.shrink();
 
                 return Column(
@@ -438,7 +505,8 @@ class _DynamicFormState extends State<DynamicForm> {
                           controller.uploadedFiles[field['name']] = files;
                         });
                       },
-                      uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+                      uploadedFiles:
+                          controller.uploadedFiles[field['name']] ?? [],
                       onRemoveUploadedFile: (file) {
                         setState(() {
                           controller.uploadedFiles[field['name']]!.remove(file);
@@ -452,13 +520,16 @@ class _DynamicFormState extends State<DynamicForm> {
               // If no requireAttachmentsOn, check showAttachmentsOn
               else if (field['showAttachmentsOn'] != null) {
                 // Handle both single value and array of values
-                List<dynamic> showOptions = field['showAttachmentsOn'] is List 
-                    ? field['showAttachmentsOn'] 
+                List<dynamic> showOptions = field['showAttachmentsOn'] is List
+                    ? field['showAttachmentsOn']
                     : [field['showAttachmentsOn']];
-                    
-                List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
-                    ? field['disableAttachmentsOn']
-                    : field['disableAttachmentsOn'] != null ? [field['disableAttachmentsOn']] : [];
+
+                List<dynamic> disabledOptions =
+                    field['disableAttachmentsOn'] is List
+                        ? field['disableAttachmentsOn']
+                        : field['disableAttachmentsOn'] != null
+                            ? [field['disableAttachmentsOn']]
+                            : [];
 
                 final showAttachments = showOptions.contains(control.value) &&
                     !disabledOptions.contains(control.value);
@@ -479,7 +550,8 @@ class _DynamicFormState extends State<DynamicForm> {
                           controller.uploadedFiles[field['name']] = files;
                         });
                       },
-                      uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+                      uploadedFiles:
+                          controller.uploadedFiles[field['name']] ?? [],
                       onRemoveUploadedFile: (file) {
                         setState(() {
                           controller.uploadedFiles[field['name']]!.remove(file);
@@ -494,13 +566,14 @@ class _DynamicFormState extends State<DynamicForm> {
               return const SizedBox.shrink();
             },
           ),
-         if (field['hasComments'] == true) ...[
+        if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
               labelText: field['commentLabel'] ?? StringConstants.comments,
-              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
+              hintText:
+                  field['commentHint'] ?? StringConstants.enterCommentsHere,
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -548,7 +621,8 @@ class _DynamicFormState extends State<DynamicForm> {
                     control.value ?? StringConstants.selectOption,
                     style: widget.fontFamily,
                   ),
-                  trailing: Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+                  trailing:
+                      Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   visualDensity: VisualDensity.compact,
                 ),
@@ -556,7 +630,6 @@ class _DynamicFormState extends State<DynamicForm> {
             },
           ),
         ),
-       
         ReactiveValueListenableBuilder(
           formControlName: field['name'],
           builder: (context, control, child) {
@@ -569,7 +642,7 @@ class _DynamicFormState extends State<DynamicForm> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: (field['subQuestions'][control.value] as List)
                       .map<Widget>((subField) => Padding(
-                            padding:const EdgeInsets.only(top: 16.0),
+                            padding: const EdgeInsets.only(top: 16.0),
                             child: _buildField(subField),
                           ))
                       .toList(),
@@ -586,17 +659,22 @@ class _DynamicFormState extends State<DynamicForm> {
               // First check if requireAttachmentsOn is specified
               if (field['requireAttachmentsOn'] != null) {
                 // Handle both single value and array of values
-                List<dynamic> requiredOptions = field['requireAttachmentsOn'] is List 
-                    ? field['requireAttachmentsOn'] 
-                    : [field['requireAttachmentsOn']];
-                    
-                List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
-                    ? field['disableAttachmentsOn']
-                    : field['disableAttachmentsOn'] != null ? [field['disableAttachmentsOn']] : [];
+                List<dynamic> requiredOptions =
+                    field['requireAttachmentsOn'] is List
+                        ? field['requireAttachmentsOn']
+                        : [field['requireAttachmentsOn']];
 
-                final showAttachments = requiredOptions.contains(control.value) &&
-                    !disabledOptions.contains(control.value);
-                
+                List<dynamic> disabledOptions =
+                    field['disableAttachmentsOn'] is List
+                        ? field['disableAttachmentsOn']
+                        : field['disableAttachmentsOn'] != null
+                            ? [field['disableAttachmentsOn']]
+                            : [];
+
+                final showAttachments =
+                    requiredOptions.contains(control.value) &&
+                        !disabledOptions.contains(control.value);
+
                 if (!showAttachments) return const SizedBox.shrink();
 
                 return Column(
@@ -630,7 +708,8 @@ class _DynamicFormState extends State<DynamicForm> {
                           controller.uploadedFiles[field['name']] = files;
                         });
                       },
-                      uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+                      uploadedFiles:
+                          controller.uploadedFiles[field['name']] ?? [],
                       onRemoveUploadedFile: (file) {
                         setState(() {
                           controller.uploadedFiles[field['name']]!.remove(file);
@@ -644,13 +723,16 @@ class _DynamicFormState extends State<DynamicForm> {
               // If no requireAttachmentsOn, check showAttachmentsOn
               else if (field['showAttachmentsOn'] != null) {
                 // Handle both single value and array of values
-                List<dynamic> showOptions = field['showAttachmentsOn'] is List 
-                    ? field['showAttachmentsOn'] 
+                List<dynamic> showOptions = field['showAttachmentsOn'] is List
+                    ? field['showAttachmentsOn']
                     : [field['showAttachmentsOn']];
-                    
-                List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
-                    ? field['disableAttachmentsOn']
-                    : field['disableAttachmentsOn'] != null ? [field['disableAttachmentsOn']] : [];
+
+                List<dynamic> disabledOptions =
+                    field['disableAttachmentsOn'] is List
+                        ? field['disableAttachmentsOn']
+                        : field['disableAttachmentsOn'] != null
+                            ? [field['disableAttachmentsOn']]
+                            : [];
 
                 final showAttachments = showOptions.contains(control.value) &&
                     !disabledOptions.contains(control.value);
@@ -671,7 +753,8 @@ class _DynamicFormState extends State<DynamicForm> {
                           controller.uploadedFiles[field['name']] = files;
                         });
                       },
-                      uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+                      uploadedFiles:
+                          controller.uploadedFiles[field['name']] ?? [],
                       onRemoveUploadedFile: (file) {
                         setState(() {
                           controller.uploadedFiles[field['name']]!.remove(file);
@@ -686,13 +769,14 @@ class _DynamicFormState extends State<DynamicForm> {
               return const SizedBox.shrink();
             },
           ),
-           if (field['hasComments'] == true) ...[
+        if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
               labelText: field['commentLabel'] ?? StringConstants.comments,
-              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
+              hintText:
+                  field['commentHint'] ?? StringConstants.enterCommentsHere,
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -711,7 +795,8 @@ class _DynamicFormState extends State<DynamicForm> {
           formControlName: field['name'],
           builder: (context, control, child) {
             if (control.value != null &&
-                control.value.toString().toLowerCase() == field['inputType']?.toString().toLowerCase()) {
+                control.value.toString().toLowerCase() ==
+                    field['inputType']?.toString().toLowerCase()) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 controller.form.control(field['name']).value = '';
               });
@@ -731,7 +816,8 @@ class _DynamicFormState extends State<DynamicForm> {
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
               labelText: field['commentLabel'] ?? StringConstants.comments,
-              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
+              hintText:
+                  field['commentHint'] ?? StringConstants.enterCommentsHere,
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -773,8 +859,10 @@ class _DynamicFormState extends State<DynamicForm> {
           valueAccessor: NumValueAccessor(),
           validationMessages: {
             'required': (error) => StringConstants.requiredField,
-            'min': (error) => '${StringConstants.valueMustBeAtLeast} ${field['min']}',
-            'max': (error) => '${StringConstants.valueMustBeLessThanOrEqualTo} ${field['max']}',
+            'min': (error) =>
+                '${StringConstants.valueMustBeAtLeast} ${field['min']}',
+            'max': (error) =>
+                '${StringConstants.valueMustBeLessThanOrEqualTo} ${field['max']}',
           },
           inputFormatters: [
             if (field['allowNegatives'] == false)
@@ -786,17 +874,18 @@ class _DynamicFormState extends State<DynamicForm> {
           ],
           decoration: InputDecoration(
             hintText: StringConstants.enterANumber +
-              (field['min'] != null || field['max'] != null ? ' (' : '') +
-              (field['min'] != null ? 'min: ${field['min']}' : '') +
-              (field['min'] != null && field['max'] != null ? ', ' : '') +
-              (field['max'] != null ? 'max: ${field['max']}' : '') +
-              (field['min'] != null || field['max'] != null ? ')' : ''),
+                (field['min'] != null || field['max'] != null ? ' (' : '') +
+                (field['min'] != null ? 'min: ${field['min']}' : '') +
+                (field['min'] != null && field['max'] != null ? ', ' : '') +
+                (field['max'] != null ? 'max: ${field['max']}' : '') +
+                (field['min'] != null || field['max'] != null ? ')' : ''),
             labelStyle: widget.fontFamily,
             hintStyle: widget.fontFamily,
             errorStyle: widget.fontFamily.copyWith(color: Colors.red),
           ),
         ),
-        if (field['hasAttachments'] == true || field['attachmentsRequired'] == true) ...[
+        if (field['hasAttachments'] == true ||
+            field['attachmentsRequired'] == true) ...[
           const SizedBox(height: 16),
           Row(
             children: [
@@ -843,7 +932,8 @@ class _DynamicFormState extends State<DynamicForm> {
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
               labelText: field['commentLabel'] ?? StringConstants.comments,
-              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
+              hintText:
+                  field['commentHint'] ?? StringConstants.enterCommentsHere,
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -875,7 +965,8 @@ class _DynamicFormState extends State<DynamicForm> {
                       controller.uploadedFiles[field['name']] = files;
                       // Update the form control value when files are uploaded
                       if (files.isNotEmpty) {
-                        control.value = files.map((f) => f['fileName']).join(',');
+                        control.value =
+                            files.map((f) => f['fileName']).join(',');
                       } else {
                         control.value = null;
                       }
@@ -886,11 +977,13 @@ class _DynamicFormState extends State<DynamicForm> {
                     setState(() {
                       controller.uploadedFiles[field['name']]!.remove(file);
                       // Update the form control value when files are removed
-                      final remainingFiles = controller.uploadedFiles[field['name']] ?? [];
+                      final remainingFiles =
+                          controller.uploadedFiles[field['name']] ?? [];
                       if (remainingFiles.isEmpty) {
                         control.value = null;
                       } else {
-                        control.value = remainingFiles.map((f) => f['fileName']).join(',');
+                        control.value =
+                            remainingFiles.map((f) => f['fileName']).join(',');
                       }
                     });
                   },
@@ -908,14 +1001,14 @@ class _DynamicFormState extends State<DynamicForm> {
             );
           },
         ),
-        
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
               labelText: field['commentLabel'] ?? StringConstants.comments,
-              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
+              hintText:
+                  field['commentHint'] ?? StringConstants.enterCommentsHere,
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -932,7 +1025,8 @@ class _DynamicFormState extends State<DynamicForm> {
       builder: (context, snapshot) {
         // Check if current question is effectively the last one
         final isEffectivelyLastQuestion = isCurrentQuestionEffectivelyLast();
-        final shouldShowSubmit = controller.shouldShowSubmitButton() || isEffectivelyLastQuestion;
+        final shouldShowSubmit =
+            controller.shouldShowSubmitButton() || isEffectivelyLastQuestion;
 
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -950,14 +1044,14 @@ class _DynamicFormState extends State<DynamicForm> {
               )
             else
               const SizedBox(width: 48),
-
             if (shouldShowSubmit)
               ElevatedButton(
                 onPressed: () => _submitForm(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: buttonColor,
                   foregroundColor: widget.buttonTextColor,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 ),
                 child: Text(
                   StringConstants.submit,
@@ -991,11 +1085,44 @@ class _DynamicFormState extends State<DynamicForm> {
         padding: const EdgeInsets.symmetric(vertical: 16),
         minimumSize: const Size(double.infinity, 50),
       ),
-      child: Text(StringConstants.submit,style: widget.fontFamily.copyWith(color:widget.buttonTextColor)),
+      child: Text(StringConstants.submit,
+          style: widget.fontFamily.copyWith(color: widget.buttonTextColor)),
     );
   }
 
   void _submitForm(BuildContext context) {
+    // First validate the current question if in step-by-step mode
+    if (widget.showOneByOne && controller.currentQuestionIndex < widget.formJson.length) {
+      final currentField = widget.formJson[controller.currentQuestionIndex];
+      final control = controller.form.control(currentField['name']);
+      
+      // Check if the current field is required and empty
+      if ((currentField['required'] == true) &&
+          (control.value == null || control.value.toString().isEmpty || control.value == 'null')) {
+        
+        control.markAsTouched();
+        
+       popuperror(StringConstants.pleaseFillInAllRequiredFields);
+        return; // Stop submission process
+      }
+      
+      // Also check for required file uploads
+      if (currentField['type'] == 'file' && currentField['required'] == true) {
+        final hasFiles = controller.uploadedFiles[currentField['name']]?.isNotEmpty ?? false;
+        if (!hasFiles) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${currentField['label']} ${StringConstants.isRequired}',
+                  style: widget.fontFamily),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          return; // Stop submission process
+        }
+      }
+    }
+    
+    // After validating current question, check the entire form
     if (controller.form.valid) {
       widget.onSubmit(controller.form.value, controller.uploadedFiles);
     } else {
@@ -1005,7 +1132,7 @@ class _DynamicFormState extends State<DynamicForm> {
       if (widget.showOneByOne) {
         int errorIndex = widget.formJson.indexWhere((field) {
           final control = controller.form.control(field['name']);
-          if (field['validators']?.contains('required') == true &&
+          if (field['required'] == true &&
               (control.value == null || control.value.toString().isEmpty)) {
             return true;
           }
@@ -1016,7 +1143,8 @@ class _DynamicFormState extends State<DynamicForm> {
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(StringConstants.pleaseFillInAllRequiredFields,style: widget.fontFamily),
+              content: Text(StringConstants.pleaseFillInAllRequiredFields,
+                  style: widget.fontFamily),
               duration: const Duration(seconds: 2),
             ),
           );
@@ -1053,10 +1181,10 @@ class _DynamicFormState extends State<DynamicForm> {
   int getTotalQuestions() {
     int total = 1; // Start with 1 for the first question
     int currentIndex = 0;
-    
+
     while (currentIndex < widget.formJson.length) {
       final currentField = widget.formJson[currentIndex];
-      
+
       // Check if current question has branching
       if (currentField['branching'] != null) {
         // Get the selected value for this question
@@ -1064,9 +1192,8 @@ class _DynamicFormState extends State<DynamicForm> {
         if (control.value != null) {
           // Follow the branch path
           final targetQuestionName = currentField['branching'][control.value];
-          final targetIndex = widget.formJson.indexWhere(
-            (question) => question['name'] == targetQuestionName
-          );
+          final targetIndex = widget.formJson
+              .indexWhere((question) => question['name'] == targetQuestionName);
           if (targetIndex != -1) {
             currentIndex = targetIndex;
             total++;
@@ -1097,15 +1224,16 @@ class _DynamicFormState extends State<DynamicForm> {
     bool hasRequiredFiles = true;
 
     // Validation checks
-    if (currentField['required'] == true || 
-        (currentField['requiredWhen'] != null && isRequiredBasedOnCondition(currentField))) {
+    if (currentField['required'] == true ||
+        (currentField['requiredWhen'] != null &&
+            isRequiredBasedOnCondition(currentField))) {
       final control = controller.form.control(currentField['name']);
-      
+
       if (currentField['type'] == 'file') {
-        hasRequiredFiles = control.value != null && 
-                         control.value.toString().isNotEmpty && 
-                         control.value != 'null';
-        
+        hasRequiredFiles = control.value != null &&
+            control.value.toString().isNotEmpty &&
+            control.value != 'null';
+
         if (!hasRequiredFiles) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -1118,21 +1246,42 @@ class _DynamicFormState extends State<DynamicForm> {
           );
           return;
         }
-      } else {
-        isValid = control.value != null && 
-                 control.value.toString().isNotEmpty && 
-                 control.value != 'null';
+      } else if (currentField['type'] == 'number') {
+        if (currentField['min'] != null && currentField['max'] != null ||
+            currentField['min'] != '' && currentField['max'] == '') {
+          if (control.value != null) {
+            isValid = control.value >= currentField['min'] &&
+                control.value <= currentField['max'];
+            if (!isValid) {
+              control.value = null;
+              popuperror(
+                  '${StringConstants.pleaseEnterNumberBetween} ${currentField['min']} ${StringConstants.and} ${currentField['max']}');
+              return;
+            }
+          }
+          else if (control.value == null) {
+            isValid = false;
+             control.value = null;
+            popuperror(
+                '${StringConstants.pleaseEnterNumberBetween} ${currentField['min']} ${StringConstants.and} ${currentField['max']}');
+            return;
+          }
         
+        } else {
+          isValid = control.value != null &&
+              control.value.toString().isNotEmpty &&
+              control.value != 'null';
+        }
+      } else {
+        isValid = control.value != null &&
+            control.value.toString().isNotEmpty &&
+
+            /// main part
+            control.value != 'null';
+
         if (!isValid) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '${currentField['label']} ${StringConstants.isRequired}',
-                style: widget.fontFamily,
-              ),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          popuperror('${currentField['label']} ${StringConstants.isRequired}');
+
           return;
         }
       }
@@ -1146,16 +1295,16 @@ class _DynamicFormState extends State<DynamicForm> {
         if (currentField['branching'] != null &&
             currentField['branching'][control.value] != null) {
           final targetQuestionName = currentField['branching'][control.value];
-          
+
           if (visitedQuestions.contains(targetQuestionName)) {
             moveToNextValidQuestion();
           } else {
             final targetIndex = widget.formJson.indexWhere(
-              (question) => question['name'] == targetQuestionName
-            );
-            
+                (question) => question['name'] == targetQuestionName);
+
             if (targetIndex != -1) {
-              widget.formJson[targetIndex]['prevQuestion'] = currentField['name'];
+              widget.formJson[targetIndex]['prevQuestion'] =
+                  currentField['name'];
               moveToIndex(targetIndex);
             } else {
               moveToNextValidQuestion();
@@ -1171,44 +1320,44 @@ class _DynamicFormState extends State<DynamicForm> {
   void moveToNextValidQuestion() {
     // Start from the next question
     int nextIndex = controller.currentQuestionIndex + 1;
-    
+
     // Loop until we find a valid question or reach the end
     while (nextIndex < widget.formJson.length) {
       final nextField = widget.formJson[nextIndex];
-      
+
       // Skip questions that shouldn't be shown based on showWhen conditions
       if (nextField['showWhen'] != null) {
         bool shouldShow = true;
         final conditions = nextField['showWhen'] as Map<String, dynamic>;
-        
+
         conditions.forEach((dependentField, expectedValue) {
           final dependentControl = controller.form.control(dependentField);
           final currentValue = dependentControl.value;
-          
+
           if (expectedValue is List) {
             shouldShow = shouldShow && expectedValue.contains(currentValue);
           } else {
             shouldShow = shouldShow && currentValue == expectedValue;
           }
         });
-        
+
         if (!shouldShow) {
           // This question should be skipped, try the next one
           nextIndex++;
           continue;
         }
       }
-      
+
       // Skip questions we've already visited
       if (visitedQuestions.contains(nextField['name'])) {
         nextIndex++;
         continue;
       }
-      
+
       // Found a valid question, move to it
       break;
     }
-    
+
     // If we reached the end, show the last question
     if (nextIndex >= widget.formJson.length) {
       controller.currentQuestionIndex = widget.formJson.length - 1;
@@ -1221,30 +1370,30 @@ class _DynamicFormState extends State<DynamicForm> {
   void moveToIndex(int index) {
     if (index >= 0 && index < widget.formJson.length) {
       final nextField = widget.formJson[index];
-      
+
       // Check if this field should be shown based on showWhen
       if (nextField['showWhen'] != null) {
         bool shouldShow = true;
         final conditions = nextField['showWhen'] as Map<String, dynamic>;
-        
+
         conditions.forEach((dependentField, expectedValue) {
           final dependentControl = controller.form.control(dependentField);
           final currentValue = dependentControl.value;
-          
+
           if (expectedValue is List) {
             shouldShow = shouldShow && expectedValue.contains(currentValue);
           } else {
             shouldShow = shouldShow && currentValue == expectedValue;
           }
         });
-        
+
         if (!shouldShow) {
           // Skip this question and find the next valid one
           moveToNextValidQuestion();
           return;
         }
       }
-      
+
       // This question should be shown
       updateQuestionSequence(index);
       controller.currentQuestionIndex = index;
@@ -1253,57 +1402,58 @@ class _DynamicFormState extends State<DynamicForm> {
 
   bool isRequiredBasedOnCondition(Map<String, dynamic> field) {
     if (field['requiredWhen'] == null) return false;
-    
+
     final conditions = field['requiredWhen'] as Map<String, dynamic>;
     bool isRequired = true;
-    
+
     conditions.forEach((fieldName, expectedValue) {
       final dependentControl = controller.form.control(fieldName);
       if (expectedValue is List) {
-        isRequired = isRequired && expectedValue.contains(dependentControl.value);
+        isRequired =
+            isRequired && expectedValue.contains(dependentControl.value);
       } else {
         isRequired = isRequired && dependentControl.value == expectedValue;
       }
     });
-    
+
     return isRequired;
   }
 
   void moveToPreviousValidQuestion() {
     // Start from the previous question
     int prevIndex = controller.currentQuestionIndex - 1;
-    
+
     // Loop until we find a valid previous question or reach the beginning
     while (prevIndex >= 0) {
       final prevField = widget.formJson[prevIndex];
-      
+
       // Skip questions that shouldn't be shown based on showWhen conditions
       if (prevField['showWhen'] != null) {
         bool shouldShow = true;
         final conditions = prevField['showWhen'] as Map<String, dynamic>;
-        
+
         conditions.forEach((dependentField, expectedValue) {
           final dependentControl = controller.form.control(dependentField);
           final currentValue = dependentControl.value;
-          
+
           if (expectedValue is List) {
             shouldShow = shouldShow && expectedValue.contains(currentValue);
           } else {
             shouldShow = shouldShow && currentValue == expectedValue;
           }
         });
-        
+
         if (!shouldShow) {
           // This question should be skipped, try the previous one
           prevIndex--;
           continue;
         }
       }
-      
+
       // Found a valid previous question, move to it
       break;
     }
-    
+
     // If we reached the beginning, show the first question
     if (prevIndex < 0) {
       controller.currentQuestionIndex = 0;
@@ -1326,26 +1476,26 @@ class _DynamicFormState extends State<DynamicForm> {
   int findNextVisibleQuestionIndex() {
     // Start checking from the next question
     int index = controller.currentQuestionIndex + 1;
-    
+
     while (index < widget.formJson.length) {
       final question = widget.formJson[index];
-      
+
       // If the question has showWhen conditions, check if they're satisfied
       if (question['showWhen'] != null) {
         bool shouldShow = true;
         final conditions = question['showWhen'] as Map<String, dynamic>;
-        
+
         conditions.forEach((dependentField, expectedValue) {
           final dependentControl = controller.form.control(dependentField);
           final currentValue = dependentControl.value;
-          
+
           if (expectedValue is List) {
             shouldShow = shouldShow && expectedValue.contains(currentValue);
           } else {
             shouldShow = shouldShow && currentValue == expectedValue;
           }
         });
-        
+
         // If this question should be shown, return its index
         if (shouldShow) {
           return index;
@@ -1354,13 +1504,25 @@ class _DynamicFormState extends State<DynamicForm> {
         // If the question has no showWhen conditions, it should always be shown
         return index;
       }
-      
+
       // Move to the next question
       index++;
     }
-    
+
     // If no more visible questions found, return -1
     return -1;
+  }
+
+  void popuperror(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${message} ${StringConstants.isRequired}',
+          style: widget.fontFamily,
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 }
 
@@ -1403,14 +1565,15 @@ class _DropdownSearchState extends State<_DropdownSearch> {
   void _filterOptions(String query) {
     setState(() {
       filteredOptions = widget.options
-          .where((option) => option.toString().toLowerCase().contains(query.toLowerCase()))
+          .where((option) =>
+              option.toString().toLowerCase().contains(query.toLowerCase()))
           .toList();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-        return DraggableScrollableSheet(
+    return DraggableScrollableSheet(
       initialChildSize: 0.7,
       minChildSize: 0.5,
       maxChildSize: 0.9,
@@ -1446,8 +1609,8 @@ class _DropdownSearchState extends State<_DropdownSearch> {
                     title: Text(option.toString()),
                     onTap: () => widget.onSelect(option.toString()),
                     trailing: widget.selectedValue == option.toString()
-                      ? Icon(Icons.check, color: widget.primaryColor)
-                      : null,
+                        ? Icon(Icons.check, color: widget.primaryColor)
+                        : null,
                   );
                 },
               ),
@@ -1522,10 +1685,12 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(widget.primaryColor),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(widget.primaryColor),
                   ),
                   const SizedBox(height: 16),
-                  Text(StringConstants.processingFilePleaseWait, style: widget.fontFamily),
+                  Text(StringConstants.processingFilePleaseWait,
+                      style: widget.fontFamily),
                 ],
               ),
             ),
@@ -1548,7 +1713,6 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
       }
     }
 
-
     showModalBottomSheet(
       context: context,
       builder: (BuildContext context) {
@@ -1560,7 +1724,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                   Icons.description_outlined,
                   size: _DynamicFormState._iconSize,
                 ),
-                title: Text(StringConstants.chooseFile, style: widget.fontFamily),
+                title:
+                    Text(StringConstants.chooseFile, style: widget.fontFamily),
                 onTap: () async {
                   Navigator.pop(context);
                   FilePickerResult? result;
@@ -1574,10 +1739,12 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     );
 
                     if (result != null && result.files.isNotEmpty) {
-                      if ((result.files.first.bytes?.length ?? 0) > _DynamicFormState._maxFileSize) {
+                      if ((result.files.first.bytes?.length ?? 0) >
+                          _DynamicFormState._maxFileSize) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(StringConstants.fileSizeMustBeLessThan5MB,
+                            content: Text(
+                                StringConstants.fileSizeMustBeLessThan5MB,
                                 style: widget.fontFamily),
                             duration: const Duration(seconds: 2),
                             backgroundColor: Colors.red,
@@ -1597,7 +1764,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                             : 'application/octet-stream',
                       };
 
-                      widget.onFilesUploaded([...widget.uploadedFiles, newFile]);
+                      widget
+                          .onFilesUploaded([...widget.uploadedFiles, newFile]);
                     }
                   } catch (e) {
                     if (kDebugMode) {
@@ -1605,7 +1773,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     }
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(StringConstants.errorSelectingFilePleaseTryAgain,
+                        content: Text(
+                            StringConstants.errorSelectingFilePleaseTryAgain,
                             style: widget.fontFamily),
                         duration: const Duration(seconds: 2),
                       ),
@@ -1621,7 +1790,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                   Icons.collections_outlined,
                   size: _DynamicFormState._iconSize,
                 ),
-                title: Text(StringConstants.chooseFromGallery, style: widget.fontFamily),
+                title: Text(StringConstants.chooseFromGallery,
+                    style: widget.fontFamily),
                 onTap: () async {
                   Navigator.pop(context);
                   XFile? image;
@@ -1638,7 +1808,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                       if (bytes.length > _DynamicFormState._maxFileSize) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(StringConstants.fileSizeMustBeLessThan5MB,
+                            content: Text(
+                                StringConstants.fileSizeMustBeLessThan5MB,
                                 style: widget.fontFamily),
                             duration: const Duration(seconds: 2),
                             backgroundColor: Colors.red,
@@ -1655,8 +1826,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                         'fileType': 'image',
                         'mimeType': 'image/${image.name.split('.').last}',
                       };
-                      widget.onFilesUploaded([...widget.uploadedFiles, newFile]);
-
+                      widget
+                          .onFilesUploaded([...widget.uploadedFiles, newFile]);
                     }
                   } catch (e) {
                     if (kDebugMode) {
@@ -1664,7 +1835,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     }
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(StringConstants.errorSelectingImagePleaseTryAgain,
+                        content: Text(
+                            StringConstants.errorSelectingImagePleaseTryAgain,
                             style: widget.fontFamily),
                         duration: const Duration(seconds: 2),
                       ),
@@ -1681,7 +1853,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     Icons.photo_camera_outlined,
                     size: _DynamicFormState._iconSize,
                   ),
-                  title: Text(StringConstants.takePhoto, style: widget.fontFamily),
+                  title:
+                      Text(StringConstants.takePhoto, style: widget.fontFamily),
                   onTap: () async {
                     Navigator.pop(context);
                     XFile? photo;
@@ -1698,41 +1871,44 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                         if (bytes.length > _DynamicFormState._maxFileSize) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(StringConstants.fileSizeMustBeLessThan5MB,
+                              content: Text(
+                                  StringConstants.fileSizeMustBeLessThan5MB,
                                   style: widget.fontFamily),
-                            duration: const Duration(seconds: 2),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                        return;
+                              duration: const Duration(seconds: 2),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+                        final newFile = {
+                          'question_name': widget.fieldName,
+                          'question_label': widget.fieldLabel,
+                          'file': bytes,
+                          'fileName': photo.name,
+                          'fileType': 'image',
+                          'mimeType': 'image/${photo.name.split('.').last}',
+                        };
+                        widget.onFilesUploaded(
+                            [...widget.uploadedFiles, newFile]);
                       }
-                      final newFile = {
-                        'question_name': widget.fieldName,
-                        'question_label': widget.fieldLabel,
-                        'file': bytes,
-                        'fileName': photo.name,
-                        'fileType': 'image',
-                        'mimeType': 'image/${photo.name.split('.').last}',
-                      };
-                      widget.onFilesUploaded([...widget.uploadedFiles, newFile]);
+                    } catch (e) {
+                      if (kDebugMode) {
+                        print('Error taking photo: $e');
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                              StringConstants.errorTakingPhotoPleaseTryAgain,
+                              style: widget.fontFamily),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    } finally {
+                      hideLoadingDialog();
+                      photo = null;
                     }
-                  } catch (e) {
-                    if (kDebugMode) {
-                      print('Error taking photo: $e');
-                    }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(StringConstants.errorTakingPhotoPleaseTryAgain,
-                            style: widget.fontFamily),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  } finally {
-                    hideLoadingDialog();
-                    photo = null;
-                  }
-                },
-              ),
+                  },
+                ),
             ],
           ),
         );
@@ -1785,18 +1961,16 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.upload_file_rounded, 
-                  color: widget.buttonTextColor, 
+                  Icons.upload_file_rounded,
+                  color: widget.buttonTextColor,
                   size: 32,
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  StringConstants.uploadFiles, 
-                  style: widget.fontFamily.copyWith(
-                    color: widget.buttonTextColor,
-                    fontSize: 18,
-                  )
-                ),
+                Text(StringConstants.uploadFiles,
+                    style: widget.fontFamily.copyWith(
+                      color: widget.buttonTextColor,
+                      fontSize: 18,
+                    )),
               ],
             ),
           ),
@@ -1835,6 +2009,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     );
   }
 }
+
 IconData _getFileIcon(String fileType) {
   switch (fileType) {
     case FileTypes.pdf:

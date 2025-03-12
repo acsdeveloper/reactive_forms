@@ -87,4 +87,6 @@ class StringConstants {
   static const String pleaseProvideComment = 'Please provide a comment';
   static const String pleaseSelectAtLeastOneOption = 'Please select at least one option';
   static const String selectOptions = 'Select Options';
+  static const String pleaseEnterNumberBetween = 'Please enter a number between';
+  static const String and = 'and';
 } 

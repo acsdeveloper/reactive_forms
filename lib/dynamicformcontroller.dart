@@ -31,11 +31,20 @@ class DynamicFormController extends ChangeNotifier {
       final fieldName = field['name'];
       
       if (field['type'] == 'multiselect') {
+        // Create a properly typed FormControl for multiselect
+        List<String> initialValue = [];
+        if (field['defaultValue'] != null) {
+          if (field['defaultValue'] is List) {
+            initialValue = (field['defaultValue'] as List).map((item) => item.toString()).toList();
+          }
+        }
+        
+        // Debug print
+        print('Initializing multiselect field: $fieldName with initial value: $initialValue');
+        
         controls[fieldName] = FormControl<List<String>>(
-          value: <String>[],
-          validators: field['required'] == true 
-              ? [Validators.required]
-              : [],
+          value: initialValue,
+          validators: field['required'] == true ? [Validators.required] : [],
         );
       } else if (field['type'] == 'file') {
         uploadedFiles[fieldName] = []; // Initialize empty list for file uploads
@@ -44,7 +53,7 @@ class DynamicFormController extends ChangeNotifier {
         // Special handling for number fields
         controls[fieldName] = FormControl<num>(
           value: null,
-          validators: _getValidators(field['validators'], field),
+          validators: _getValidators(field ['required'], field),
         );
       } else if (field['type'] == 'radio') {
         // Set default Yes/No options for radio type if no options provided
@@ -53,7 +62,7 @@ class DynamicFormController extends ChangeNotifier {
         }
         controls[fieldName] = FormControl<String>(
           value: field['defaultValue'] ?? '', // Initialize with default value if provided
-          validators: _getValidators(field['validators'], field),
+          validators: _getValidators(field['required'], field),
         );
         
         if (field['hasComments'] == true) {
@@ -63,7 +72,7 @@ class DynamicFormController extends ChangeNotifier {
         // Initialize form controls for non-file fields
         controls[fieldName] = FormControl<String>(
           value: field['defaultValue'] ?? '',
-          validators: _getValidators(field['validators'], field),
+          validators: _getValidators(field['required'], field),
         );
         
         if (field['hasComments'] == true) {
@@ -76,7 +85,7 @@ class DynamicFormController extends ChangeNotifier {
               for (var subField in subQuestions) {
                 if (subField is Map<String, dynamic>) {
                   controls[subField['name']] = FormControl<String>(
-                    validators: _getValidators(subField['validators'], subField),
+                    validators: _getValidators(subField['required'], subField),
                   );
                 }
               }
@@ -87,15 +96,18 @@ class DynamicFormController extends ChangeNotifier {
     }
     
     form = FormGroup(controls);
+    
+    // Debug: Print initial form values
+    print('Initial form values: ${form.value}');
   }
 
-  List<Validator<dynamic>> _getValidators(List<dynamic>? validators, Map<String, dynamic>? field) {
+  List<Validator<dynamic>> _getValidators( bool validators, Map<String, dynamic>? field) {
     List<Validator<dynamic>> validatorsList = [];
     
-    if (validators == null) return validatorsList;
+
 
     // Add required validator if present
-    if (validators.contains('required')) {
+    if (validators==true) {
       validatorsList.add(Validators.required);
     }
 
@@ -123,28 +135,36 @@ class DynamicFormController extends ChangeNotifier {
   void submitForm(BuildContext context) {
     bool isValid = true;
     
+    // Print the current form value for debugging
+    print('Form value at submission: ${form.value}');
+    
     // Check each field's validation
     for (var field in formJson) {
       final fieldName = field['name'];
       final control = form.control(fieldName);
       
+      // Debug info
+      print('Field: $fieldName, Value: ${control.value}, Valid: ${control.valid}');
+      
       // If field is file type, check uploaded files
       if (field['type'] == 'file') {
-        if (field['validators']?.contains('required') == true) {
+        if (field['required'] == true) {
           isValid = isValid && (uploadedFiles[fieldName]?.isNotEmpty ?? false);
         }
         continue; // Skip further validation for file fields
       }
       
       // For non-file fields, check form control validity
-      if (!control.valid && field['validators']?.contains('required') == true) {
+      if (!control.valid && field['required'] == true) {
         isValid = false;
         break;
       }
     }
 
     if (isValid) {
-      onSubmit(form.value, uploadedFiles);
+      // Make a deep copy of the form value to ensure we get everything
+      final formValue = Map<String, dynamic>.from(form.value);
+      onSubmit(formValue, uploadedFiles);
     } else {
       form.markAllAsTouched();
       _handleFormErrors(context);
@@ -154,7 +174,7 @@ class DynamicFormController extends ChangeNotifier {
   void _handleFormErrors(BuildContext context) {
     int errorIndex = formJson.indexWhere((field) {
       final control = form.control(field['name']);
-      return field['validators']?.contains('required') == true && 
+      return field['required']== true && 
              (control.value == null || control.value.toString().isEmpty);
     });
     
@@ -180,7 +200,13 @@ class DynamicFormController extends ChangeNotifier {
 
     // Special handling for multiselect validation
     if (field['type'] == 'multiselect' && field['required'] == true) {
-      final List<String>? values = currentControl.value as List<String>?;
+      if (currentControl.value == null) {
+        _showErrorSnackBar(context, 'Please select at least one option');
+        notifyListeners();
+        return false;
+      }
+      
+      final List<dynamic>? values = currentControl.value is List ? currentControl.value : null;
       if (values == null || values.isEmpty) {
         _showErrorSnackBar(context, 'Please select at least one option');
         notifyListeners();
@@ -260,7 +286,7 @@ class DynamicFormController extends ChangeNotifier {
     }
 
     // Required field validation
-    if (field['validators']?.contains('required') == true && 
+    if (field['required'] == true && 
         (currentControl.value == null || currentControl.value.toString().isEmpty)) {
       return true;
     }
@@ -275,7 +301,7 @@ class DynamicFormController extends ChangeNotifier {
     if (field['subQuestions']?[currentControl.value] != null) {
       for (var subField in field['subQuestions'][currentControl.value]) {
         final subControl = form.control(subField['name']);
-        if (subField['validators']?.contains('required') == true && 
+        if (subField['required'] == true && 
             (subControl.value == null || subControl.value.toString().isEmpty)) {
           return true;
         }
@@ -287,13 +313,16 @@ class DynamicFormController extends ChangeNotifier {
 
   String _getErrorMessage(Map<String, dynamic> field, AbstractControl control) {
     if (field['type'] == 'multiselect') {
-      final List<String>? values = control.value as List<String>?;
+      // First check if value is actually a List
+      final dynamic rawValue = control.value;
+      final List<dynamic>? values = rawValue is List ? rawValue : null;
+      
       if (field['required'] == true && (values == null || values.isEmpty)) {
         return 'Please select at least one option';
       }
     }
     
-    if (field['validators']?.contains('required') == true && 
+    if (field['required'] == true && 
         (control.value == null || control.value.toString().isEmpty)) {
       return field['type'] == 'radio' 
           ? StringConstants.pleaseSelectAnOption
@@ -425,5 +454,35 @@ class DynamicFormController extends ChangeNotifier {
     });
     
     return shouldShow;
+  }
+
+  // Add this helper method to get properly typed multiselect values
+  List<String> getMultiselectValue(String fieldName) {
+    final value = form.control(fieldName).value;
+    
+    // Convert to List<String> regardless of current type
+    if (value == null || value == "") {
+      return [];
+    } else if (value is List) {
+      return List<String>.from(value.map((item) => item.toString()));
+    } else {
+      // Handle unexpected single value
+      return [value.toString()];
+    }
+  }
+
+  // Modify the updateMultiselectValue method
+  void updateMultiselectValue(String fieldName, List<String> selectedValues) {
+    print('Updating multiselect: $fieldName with values: $selectedValues');
+    
+    // Update value in form using various approaches to ensure it sticks
+    form.patchValue({fieldName: selectedValues});
+    
+    final control = form.control(fieldName);
+    control.updateValue(selectedValues);
+    
+    // Verify the update
+    print('After update, control value type: ${control.value.runtimeType}');
+    print('After update, control value: ${control.value}');
   }
 }

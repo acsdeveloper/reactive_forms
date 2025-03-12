@@ -32,7 +32,7 @@ class MultiSelectFormField extends StatelessWidget {
             onChanged(selectedItems);
             Navigator.pop(context);
           },
-          title: field.label,
+          title: '',
         );
       },
     );
@@ -43,13 +43,13 @@ class MultiSelectFormField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          field.label + (field.required ? ' *' : ''),
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        // Text(
+        //   field.label + (field.required ? ' *' : ''),
+        //   style: const TextStyle(
+        //     fontSize: 16,
+        //     fontWeight: FontWeight.w500,
+        //   ),
+        // ),
         const SizedBox(height: 8),
         InkWell(
           onTap: () => _showMultiSelectBottomSheet(context),
