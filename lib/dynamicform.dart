@@ -594,8 +594,7 @@ class _DynamicFormState extends State<DynamicForm> {
               context: context,
               isScrollControlled: true,
               shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
-              ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(15))),
               builder: (context) => _DropdownSearch(
                 fontFamily: widget.fontFamily,
                 options: field['options'] as List<dynamic>,
@@ -1099,14 +1098,12 @@ class _DynamicFormState extends State<DynamicForm> {
       // Check if the current field is required and empty
       if ((currentField['required'] == true) &&
           (control.value == null || control.value.toString().isEmpty || control.value == 'null')) {
-        
         control.markAsTouched();
-        
-       popuperror(StringConstants.pleaseFillInAllRequiredFields);
-        return; // Stop submission process
+        popuperror(StringConstants.pleaseFillInAllRequiredFields);
+        return;
       }
       
-      // Also check for required file uploads
+      // Check for required file uploads
       if (currentField['type'] == 'file' && currentField['required'] == true) {
         final hasFiles = controller.uploadedFiles[currentField['name']]?.isNotEmpty ?? false;
         if (!hasFiles) {
@@ -1117,40 +1114,39 @@ class _DynamicFormState extends State<DynamicForm> {
               duration: const Duration(seconds: 2),
             ),
           );
-          return; // Stop submission process
+          return;
         }
       }
     }
     
-    // After validating current question, check the entire form
-    if (controller.form.valid) {
-      widget.onSubmit(controller.form.value, controller.uploadedFiles);
-    } else {
-      controller.form.markAllAsTouched();
+    // Clean up form data before submission
+    Map<String, dynamic> cleanedFormData = Map.from(controller.form.value);
+    Map<String, List<Map<String, dynamic>>> cleanedUploadedFiles = {};
 
-      // Find first error and navigate to it
-      if (widget.showOneByOne) {
-        int errorIndex = widget.formJson.indexWhere((field) {
-          final control = controller.form.control(field['name']);
-          if (field['required'] == true &&
-              (control.value == null || control.value.toString().isEmpty)) {
-            return true;
-          }
-          return false;
-        });
-        if (errorIndex != -1) {
-          controller.form.focus(widget.formJson[errorIndex]['name']);
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(StringConstants.pleaseFillInAllRequiredFields,
-                  style: widget.fontFamily),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+    // Iterate through all form fields
+    for (var field in widget.formJson) {
+      final fieldName = field['name'];
+      final value = cleanedFormData[fieldName];
+      
+      // Remove empty or null values
+      if (value == null || value.toString().isEmpty || value == 'null') {
+        cleanedFormData.remove(fieldName);
+        controller.uploadedFiles.remove(fieldName);
+        
+        // Also remove associated comment if it exists
+        if (field['hasComments'] == true) {
+          cleanedFormData.remove('${fieldName}_comment');
+        }
+      } else {
+        // Keep the uploaded files for answered questions
+        if (controller.uploadedFiles.containsKey(fieldName)) {
+          cleanedUploadedFiles[fieldName] = controller.uploadedFiles[fieldName]!;
         }
       }
     }
+
+    // Submit the cleaned data
+    widget.onSubmit(cleanedFormData, cleanedUploadedFiles);
   }
 
   String _getFileType(String fileName) {

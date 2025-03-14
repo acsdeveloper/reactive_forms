@@ -1,52 +1,57 @@
 final List<Map<String, dynamic>> formJson = [
   {
-    "name": "name",
-    "type": "text",
-    "label": "What is your name?",
-    "required": true,
-  },
-  {
-    "name": "age",
-    "type": "number",
-    "label": "What is your age?",
-    "required": true,
-    "min": 18,
-    "max": 100
-  },
-  {
-    "name": "has_health_issues",
+    "name": "question_1",
     "type": "radio",
-    "label": "Do you have any health issues?",
-    "options": ["Yes", "No"],
+    "label": "Is the fridge operating between 0-5°C?",
+    "options": ["A1", "B1", "C1", "D1"],
     "required": true,
+    "hasAttachments": true,
+    "requireAttachmentsOn": ["YES"],
+    "disableAttachmentsOn": ["NO"],
+    "hasComments": false,
+    "commentsRequired": false
   },
   {
-    "name": "health_type",
+    "name": "question_2",
     "type": "radio",
-    "label": "What type of health issue do you have?",
-    "options": ["Diabetes", "Heart Disease", "Other"],
+    "label": "Is the freezer operating below -18°C?",
+    "options": ["YES", "NO"],
     "required": true,
-   
-  },
-  {
-    "name": "other_condition",
-    "type": "text",
-    "label": "Please specify your other health condition",
-    "required": true,
+    "hasAttachments": true,
+    "requireAttachmentsOn": ["YES"],
+    "disableAttachmentsOn": ["NO"],
+    "hasComments": false,
+    "commentsRequired": false,
     "showWhen": {
-      "has_health_issues": "Yes",
-      "health_type": "Other"
-    },
-  },
- {
-    "name": "other_condition",
-    "type": "text",
-    "label": "Please specify your haRT health condition",
-    "required": true,
-    "showWhen": {
-      "has_health_issues": "Yes",
-      "health_type": "Heart Disease"
+      "question_1": ["A1", "D1"]
     }
+  },
+  {
+    "name": "question_3",
+    "type": "radio",
+    "label": "Was the temperature checked twice today (AM & PM)?",
+    "options": ["YES", "NO"],
+    "required": true,
+    "hasAttachments": true,
+    "requireAttachmentsOn": ["YES"],
+    "disableAttachmentsOn": ["NO"],
+    "hasComments": false,
+    "commentsRequired": false,
+    "showWhen": {
+      "question_1": ["C1"]
+    }
+  },
+  {
+    "name": "question_4",
+    "type": "radio",
+    "label": "Was the jelly pot or thermometer used to check the temperature?",
+    "options": ["YES", "NO"],
+    "required": true,
+    "hasAttachments": true,
+    "requireAttachmentsOn": [],
+    "disableAttachmentsOn": [],
+    "hasComments": false,
+    "commentsRequired": false
   }
 ];
  
