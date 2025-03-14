@@ -440,19 +440,28 @@ class DynamicFormController extends ChangeNotifier {
 
   bool shouldShowField(Map<String, dynamic> field) {
     if (field['showWhen'] == null) return true;
-    
+
     bool shouldShow = true;
     final conditions = field['showWhen'] as Map<String, dynamic>;
-    
+
     conditions.forEach((dependentField, expectedValue) {
-      final dependentControl = form.control(dependentField);
+      final dependentControl = form.control(dependentField) as FormControl<dynamic>;
+      final currentValue = dependentControl.value;
+
       if (expectedValue is List) {
-        shouldShow = shouldShow && expectedValue.contains(dependentControl.value);
+        if (currentValue is List) {
+          // Check if any of the expected values are in the current values
+          shouldShow = shouldShow && expectedValue.any((v) => currentValue.contains(v));
+        } else {
+          // Check if current single value is in expected list
+          shouldShow = shouldShow && expectedValue.contains(currentValue);
+        }
       } else {
-        shouldShow = shouldShow && dependentControl.value == expectedValue;
+        // For single value comparison
+        shouldShow = shouldShow && currentValue == expectedValue;
       }
     });
-    
+
     return shouldShow;
   }
 
