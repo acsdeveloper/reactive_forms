@@ -29,4 +29,5 @@ class  FileTypes{
   static const String tiff = 'tiff';
   static const String webp = 'webp';
   static const String any = 'any';
+  static const String text = 'txt';
 }

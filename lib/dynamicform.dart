@@ -1728,7 +1728,19 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                   try {
                     showLoadingDialog(context);
                     result = await FilePicker.platform.pickFiles(
-                      type: FileType.image, // Allow all file types
+                      type: FileType.custom,
+                      allowedExtensions: [
+                    
+                         FileTypes.pdf,
+                         FileTypes.jpg,
+                         FileTypes.gif,
+                         FileTypes.jpeg,
+                         FileTypes.png,
+                         FileTypes.xlsx,
+                         FileTypes.xls,
+                         FileTypes.text
+
+                      ],
                       allowMultiple: false,
                       withData: true,
                       allowCompression: true,
