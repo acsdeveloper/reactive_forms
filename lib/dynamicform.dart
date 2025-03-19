@@ -1315,16 +1315,13 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
    void moveToPreviousValidQuestion() {
-    // Start from the previous question
     int prevIndex = controller.currentQuestionIndex - 1;
 
-    // Loop until we find a valid previous question or reach the beginning
     while (prevIndex >= 0) {
       final prevField = widget.formJson[prevIndex];
 
-      // Skip questions that shouldn't be shown based on showWhen conditions
       if (prevField['showWhen'] != null) {
-        bool shouldShow = true;
+        bool shouldShow = false;  // Initialize to false for OR logic
         final conditions = prevField['showWhen'] as Map<String, dynamic>;
 
         conditions.forEach((dependentField, expectedValue) {
@@ -1332,33 +1329,33 @@ class _DynamicFormState extends State<DynamicForm> {
           final currentValue = dependentControl.value;
 
           if (expectedValue is List) {
-            shouldShow = shouldShow && expectedValue.contains(currentValue);
+            shouldShow = shouldShow || expectedValue.contains(currentValue);
           } else {
-            shouldShow = shouldShow && currentValue == expectedValue;
+            shouldShow = shouldShow || currentValue == expectedValue;
           }
         });
 
         if (!shouldShow) {
-          // This question should be skipped, try the previous one
           prevIndex--;
           continue;
         }
       }
-
-      // Found a valid previous question, move to it
       break;
     }
 
-    // If we reached the beginning, show the first question
-    if (prevIndex < 0) {
-      controller.currentQuestionIndex = 0;
-    } else {
-      // Move to the valid previous question
-      final currentField = widget.formJson[controller.currentQuestionIndex];
-      visitedQuestions.remove(currentField['name']);
-      updateQuestionSequence(prevIndex);
-      controller.currentQuestionIndex = prevIndex;
-    }
+    setState(() {
+      if (prevIndex < 0) {
+        controller.currentQuestionIndex = 0;
+      } else {
+        // Remove the current question from visited questions
+        final currentField = widget.formJson[controller.currentQuestionIndex];
+        visitedQuestions.remove(currentField['name']);
+        
+        // Update sequence and move to previous question
+        updateQuestionSequence(prevIndex);
+        controller.currentQuestionIndex = prevIndex;
+      }
+    });
   }
 
   // Helper method to check if current question is effectively the last visible one
