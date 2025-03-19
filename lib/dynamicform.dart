@@ -196,57 +196,35 @@ class _DynamicFormState extends State<DynamicForm> {
 
   Widget _buildField(Map<String, dynamic> field) {
     if (field['showWhen'] != null) {
-      // Get all dependent field names from showWhen conditions
-      final dependentFields =
-          (field['showWhen'] as Map<String, dynamic>).keys.toList();
-
-      // Create a ReactiveValueListenableBuilder for each dependent field
       return ReactiveFormConsumer(
         builder: (context, form, child) {
-          bool shouldShow = true;
+          bool shouldShow = false;  // Initialize to false for OR logic
           final conditions = field['showWhen'] as Map<String, dynamic>;
 
           conditions.forEach((dependentField, expectedValue) {
             final dependentControl = form.control(dependentField);
             final currentValue = dependentControl.value;
 
-            if (kDebugMode) {
-              print(
-                  'Field: ${field['name']} checking condition on $dependentField');
-              print('Expected: $expectedValue, Actual: $currentValue');
-            }
-
             if (expectedValue is List) {
-              final containsValue = expectedValue.contains(currentValue);
-              shouldShow = shouldShow && containsValue;
-              if (kDebugMode) {
-                print('List comparison result: $containsValue');
-              }
+              shouldShow = shouldShow || expectedValue.contains(currentValue);
             } else {
-              final equals = currentValue == expectedValue;
-              shouldShow = shouldShow && equals;
-              if (kDebugMode) {
-                print('Direct comparison result: $equals');
-              }
+              shouldShow = shouldShow || currentValue == expectedValue;
             }
           });
-
-          if (kDebugMode) {
-            print('Field: ${field['name']} shouldShow: $shouldShow');
-          }
 
           if (!shouldShow) {
             return const SizedBox.shrink();
           }
 
-          // If conditions are met, build the actual field
-          final control = controller.form.control(field['name']);
-          return _buildActualField(field, control);
+          return _buildFieldWidget(field);
         },
       );
     }
 
-    // If no showWhen conditions, build the field directly
+    return _buildFieldWidget(field);
+  }
+
+  Widget _buildFieldWidget(Map<String, dynamic> field) {
     final control = controller.form.control(field['name']);
     return _buildActualField(field, control);
   }
@@ -1314,16 +1292,13 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   void moveToNextValidQuestion() {
-    // Start from the next question
     int nextIndex = controller.currentQuestionIndex + 1;
 
-    // Loop until we find a valid question or reach the end
     while (nextIndex < widget.formJson.length) {
       final nextField = widget.formJson[nextIndex];
 
-      // Skip questions that shouldn't be shown based on showWhen conditions
       if (nextField['showWhen'] != null) {
-        bool shouldShow = true;
+        bool shouldShow = false;  // Initialize to false for OR logic
         final conditions = nextField['showWhen'] as Map<String, dynamic>;
 
         conditions.forEach((dependentField, expectedValue) {
@@ -1331,30 +1306,21 @@ class _DynamicFormState extends State<DynamicForm> {
           final currentValue = dependentControl.value;
 
           if (expectedValue is List) {
-            shouldShow = shouldShow && expectedValue.contains(currentValue);
+            shouldShow = shouldShow || expectedValue.contains(currentValue);
           } else {
-            shouldShow = shouldShow && currentValue == expectedValue;
+            shouldShow = shouldShow || currentValue == expectedValue;
           }
         });
 
         if (!shouldShow) {
-          // This question should be skipped, try the next one
           nextIndex++;
           continue;
         }
       }
 
-      // Skip questions we've already visited
-      if (visitedQuestions.contains(nextField['name'])) {
-        nextIndex++;
-        continue;
-      }
-
-      // Found a valid question, move to it
       break;
     }
 
-    // If we reached the end, show the last question
     if (nextIndex >= widget.formJson.length) {
       controller.currentQuestionIndex = widget.formJson.length - 1;
     } else {
@@ -1415,7 +1381,7 @@ class _DynamicFormState extends State<DynamicForm> {
     return isRequired;
   }
 
-  void moveToPreviousValidQuestion() {
+   void moveToPreviousValidQuestion() {
     // Start from the previous question
     int prevIndex = controller.currentQuestionIndex - 1;
 
@@ -1729,6 +1695,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     showLoadingDialog(context);
                     result = await FilePicker.platform.pickFiles(
                       type: FileType.custom,
+                  
                       allowedExtensions: [
                     
                          FileTypes.pdf,

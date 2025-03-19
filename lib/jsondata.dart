@@ -38,7 +38,8 @@ final List<Map<String, dynamic>> formJson = [
     "hasComments": false,
     "commentsRequired": false,
     "showWhen": {
-      "question_1": ["C1"]
+      "question_1": ["A1"],
+      "question_2": ["NO"]
     }
   },
   {

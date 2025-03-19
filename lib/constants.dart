@@ -5,6 +5,7 @@ class FieldType {
   static const String text = 'text';
   static const String dropdown = 'dropdown';
   static const String input = 'input';
+  static const String multiselect = 'multiselect';
 }
 
 class ValidatorsType {
