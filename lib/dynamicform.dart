@@ -1193,76 +1193,10 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   void moveToNextQuestion(BuildContext context) {
-    final currentField = widget.formJson[controller.currentQuestionIndex];
-    bool isValid = true;
-    bool hasRequiredFiles = true;
-
-    // Validation checks
-    if (currentField['required'] == true ||
-        (currentField['requiredWhen'] != null &&
-            isRequiredBasedOnCondition(currentField))) {
-      final control = controller.form.control(currentField['name']);
-
-      if (currentField['type'] == 'file') {
-        hasRequiredFiles = control.value != null &&
-            control.value.toString().isNotEmpty &&
-            control.value != 'null';
-
-        if (!hasRequiredFiles) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '${currentField['label']} ${StringConstants.isRequired}',
-                style: widget.fontFamily,
-              ),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-          return;
-        }
-      } else if (currentField['type'] == 'number') {
-        if (currentField['min'] != null && currentField['max'] != null ||
-            currentField['min'] != '' && currentField['max'] == '') {
-          if (control.value != null) {
-            isValid = control.value >= currentField['min'] &&
-                control.value <= currentField['max'];
-            if (!isValid) {
-              control.value = null;
-              popuperror(
-                  '${StringConstants.pleaseEnterNumberBetween} ${currentField['min']} ${StringConstants.and} ${currentField['max']}');
-              return;
-            }
-          }
-          else if (control.value == null) {
-            isValid = false;
-             control.value = null;
-            popuperror(
-                '${StringConstants.pleaseEnterNumberBetween} ${currentField['min']} ${StringConstants.and} ${currentField['max']}');
-            return;
-          }
-        
-        } else {
-          isValid = control.value != null &&
-              control.value.toString().isNotEmpty &&
-              control.value != 'null';
-        }
-      } else {
-        isValid = control.value != null &&
-            control.value.toString().isNotEmpty &&
-
-            /// main part
-            control.value != 'null';
-
-        if (!isValid) {
-          popuperror('${currentField['label']} ${StringConstants.isRequired}');
-
-          return;
-        }
-      }
-    }
-
-    if (isValid && hasRequiredFiles) {
+    // Use validateAndProceed instead of manual validation
+    if (controller.validateAndProceed(context)) {
       setState(() {
+        final currentField = widget.formJson[controller.currentQuestionIndex];
         final control = controller.form.control(currentField['name']);
         visitedQuestions.add(currentField['name']);
 
@@ -1277,8 +1211,7 @@ class _DynamicFormState extends State<DynamicForm> {
                 (question) => question['name'] == targetQuestionName);
 
             if (targetIndex != -1) {
-              widget.formJson[targetIndex]['prevQuestion'] =
-                  currentField['name'];
+              widget.formJson[targetIndex]['prevQuestion'] = currentField['name'];
               moveToIndex(targetIndex);
             } else {
               moveToNextValidQuestion();

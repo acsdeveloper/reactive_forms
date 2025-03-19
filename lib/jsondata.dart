@@ -53,7 +53,95 @@ final List<Map<String, dynamic>> formJson = [
     "disableAttachmentsOn": [],
     "hasComments": false,
     "commentsRequired": false
+  },
+  {
+    "name": "question_5",
+    "type": "radio",
+    "label": "Is the fridge temperature within the recommended range for food safety?",
+    "options": ["YES", "NO"],
+    "required": true,
+    "hasAttachments": true,
+    "requireAttachmentsOn": ["YES"],
+    "disableAttachmentsOn": ["NO"],
+    "hasComments": true,
+    "commentsRequired": true,
+    "showWhen": {
+      "question_2": ["YES"]
+    }
+  },
+  {
+    "name": "question_6",
+    "type": "radio",
+    "label": "Are there any abnormalities in the freezer operation?",
+    "options": ["YES", "NO"],
+    "required": true,
+    "hasAttachments": true,
+    "requireAttachmentsOn": ["YES"],
+    "disableAttachmentsOn": ["NO"],
+    "hasComments": true,
+    "commentsRequired": true,
+    "showWhen": {
+      "question_2": ["YES"]
+    }
+  },
+  {
+    "name": "question_7",
+    "type": "radio",
+    "label": "Did the temperature check indicate that the fridge is too cold?",
+    "options": ["YES", "NO"],
+    "required": true,
+    "hasAttachments": true,
+    "requireAttachmentsOn": ["YES"],
+    "disableAttachmentsOn": ["NO"],
+    "hasComments": true,
+    "commentsRequired": false,
+    "showWhen": {
+      "question_3": ["YES"]
+    }
+  },
+  {
+    "name": "question_8",
+    "type": "radio",
+    "label": "Is there a need to increase the fridge temperature?",
+    "options": ["YES", "NO"],
+    "required": true,
+    "hasAttachments": true,
+    "requireAttachmentsOn": [],
+    "disableAttachmentsOn": [],
+    "hasComments": true,
+    "commentsRequired": false,
+    "showWhen": {
+      "question_7": ["YES"]
+    }
+  },
+  {
+    "name": "question_9",
+    "type": "radio",
+    "label": "Is the freezer temperature too low, requiring adjustments?",
+    "options": ["YES", "NO"],
+    "required": true,
+    "hasAttachments": true,
+    "requireAttachmentsOn": [],
+    "disableAttachmentsOn": [],
+    "hasComments": true,
+    "commentsRequired": false,
+    "showWhen": {
+      "question_6": ["YES"]
+    }
+  },
+  {
+    "name": "question_10",
+    "type": "radio",
+    "label": "Was there any issue during the temperature checks?",
+    "options": ["YES", "NO"],
+    "required": true,
+    "hasAttachments": true,
+    "requireAttachmentsOn": ["YES"],
+    "disableAttachmentsOn": ["NO"],
+    "hasComments": true,
+    "commentsRequired": true,
+    "showWhen": {
+      "question_4": ["YES"]
+    }
   }
 ];
- 
- 

@@ -198,6 +198,48 @@ class DynamicFormController extends ChangeNotifier {
     // Mark the current field as touched to trigger validation
     currentControl.markAsTouched();
 
+    // Check showWhen conditions first
+    if (field['showWhen'] != null) {
+      bool shouldShow = false;  // Initialize to false for OR logic
+      final conditions = field['showWhen'] as Map<String, dynamic>;
+
+      conditions.forEach((dependentField, expectedValue) {
+        final dependentControl = form.control(dependentField);
+        final currentValue = dependentControl.value;
+
+        if (expectedValue is List) {
+          shouldShow = shouldShow || expectedValue.contains(currentValue);
+        } else {
+          shouldShow = shouldShow || currentValue == expectedValue;
+        }
+      });
+
+      if (!shouldShow) {
+        _showErrorSnackBar(context, "This question is not applicable based on previous answers");
+        return false;
+      }
+    }
+
+    // Check if file upload is required based on the selected option
+    if (field['hasAttachments'] == true && 
+        field['requireAttachmentsOn'] != null &&
+        field['requireAttachmentsOn'].isNotEmpty) {
+      
+      final selectedValue = currentControl.value;
+      final requireAttachmentsOn = field['requireAttachmentsOn'] is List 
+          ? field['requireAttachmentsOn'] 
+          : [field['requireAttachmentsOn']];
+
+      if (requireAttachmentsOn.contains(selectedValue)) {
+        // Check if files are uploaded
+        if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
+          _showErrorSnackBar(context, StringConstants.uploadRequiredFiles);
+          notifyListeners();
+          return false;
+        }
+      }
+    }
+
     // Special handling for multiselect validation
     if (field['type'] == 'multiselect' && field['required'] == true) {
       if (currentControl.value == null) {
