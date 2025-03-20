@@ -49,6 +49,10 @@ class _DynamicFormState extends State<DynamicForm> {
   static const double _iconSize = 24.0;
   List<int> questionSequence = [0];
   Set<String> visitedQuestions = {};
+  int currentVisibleQuestionIndex = 0;
+  int totalVisibleQuestions = 1;
+  late PageController _pageController;
+  final _progressKey = GlobalKey();
 
   @override
   void initState() {
@@ -57,16 +61,108 @@ class _DynamicFormState extends State<DynamicForm> {
       formJson: widget.formJson,
       onSubmit: widget.onSubmit,
     );
+    
+    // Add a listener to the controller to update the UI when the question changes
+    controller.addListener(_onControllerChanged);
+    
+    // Initialize PageController to the current question
+    _pageController = PageController(initialPage: controller.currentQuestionIndex);
+    
+    // Calculate initial progress
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _calculateProgress();
+    });
   }
 
   @override
   void dispose() {
-    controller.dispose();
+    // Remove the listener when the widget is disposed
+    controller.removeListener(_onControllerChanged);
     super.dispose();
+  }
+
+  // This will be called whenever the controller notifies its listeners
+  void _onControllerChanged() {
+    // When controller changes, update the PageView if needed
+    if (_pageController.page?.round() != controller.currentQuestionIndex) {
+      _pageController.animateToPage(
+        controller.currentQuestionIndex,
+        duration: Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+    _calculateProgress();
+  }
+
+  // Calculate the progress based on visible questions
+  void _calculateProgress() {
+    List<int> visibleIndices = _getVisibleQuestionIndices();
+    
+    int position = visibleIndices.indexOf(controller.currentQuestionIndex);
+    if (position == -1 && visibleIndices.isNotEmpty) {
+      // Find the closest position
+      for (int i = 0; i < visibleIndices.length; i++) {
+        if (visibleIndices[i] >= controller.currentQuestionIndex) {
+          position = i;
+          break;
+        }
+      }
+      if (position == -1) position = visibleIndices.length - 1;
+    }
+    
+    setState(() {
+      currentVisibleQuestionIndex = position >= 0 ? position : 0;
+      totalVisibleQuestions = visibleIndices.isNotEmpty ? visibleIndices.length : 1;
+      print("Progress updated: ${currentVisibleQuestionIndex + 1}/$totalVisibleQuestions");
+    });
+  }
+
+  // Get the list of visible question indices
+  List<int> _getVisibleQuestionIndices() {
+    List<int> visible = [];
+    
+    for (int i = 0; i < widget.formJson.length; i++) {
+      final question = widget.formJson[i];
+      
+      if (question['showWhen'] == null) {
+        visible.add(i);
+        continue;
+      }
+      
+      bool shouldShow = true;
+      final conditions = question['showWhen'] as Map<String, dynamic>;
+      
+      conditions.forEach((field, expectedValues) {
+        if (!controller.form.contains(field)) {
+          shouldShow = false;
+          return;
+        }
+        
+        final value = controller.form.control(field).value;
+        bool matches = false;
+        
+        if (expectedValues is List) {
+          matches = expectedValues.contains(value);
+        } else {
+          matches = (value == expectedValues);
+        }
+        
+        shouldShow = shouldShow && matches;
+      });
+      
+      if (shouldShow) {
+        visible.add(i);
+      }
+    }
+    
+    return visible;
   }
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild progress in the main build method to ensure it updates
+    _calculateProgress();
+    
     final buttonColor = widget.primaryColor;
 
     return Theme(
@@ -87,7 +183,7 @@ class _DynamicFormState extends State<DynamicForm> {
               children: [
                 if (widget.showOneByOne) ..._buildOneByOneFields(),
                 if (!widget.showOneByOne) ..._buildAllFields(),
-                const SizedBox(height: 80),
+                
               ],
             ),
           ),
@@ -131,7 +227,7 @@ class _DynamicFormState extends State<DynamicForm> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '${StringConstants.questionNumber} ${questionSequence.length}',
+              '${StringConstants.questionNumber} ${currentVisibleQuestionIndex + 1}',
               style: widget.fontFamily.copyWith(fontWeight: FontWeight.bold),
             ),
             SizedBox(
@@ -140,7 +236,9 @@ class _DynamicFormState extends State<DynamicForm> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(3),
                 child: LinearProgressIndicator(
-                  value: (questionSequence.length) / widget.formJson.length,
+                  value: totalVisibleQuestions > 0 
+                    ? (currentVisibleQuestionIndex + 1) / totalVisibleQuestions 
+                    : 0,
                   backgroundColor: Colors.grey[200],
                   valueColor: AlwaysStoppedAnimation<Color>(
                     widget.primaryColor,
@@ -1182,14 +1280,8 @@ class _DynamicFormState extends State<DynamicForm> {
     return total;
   }
 
-  void updateQuestionSequence(int newIndex) {
-    if (newIndex > controller.currentQuestionIndex) {
-      // Moving forward
-      questionSequence.add(newIndex);
-    } else {
-      // Moving backward
-      questionSequence.removeLast();
-    }
+  void updateQuestionSequence(int index) {
+    _calculateProgress();
   }
 
   void moveToNextQuestion(BuildContext context) {
@@ -1225,132 +1317,37 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   void moveToNextValidQuestion() {
-    // Let the controller handle navigation via validateAndProceed
-    // This function is called from UI buttons but should do nothing
-    print("moveToNextValidQuestion called but navigation is handled by controller");
+    // The controller handles the actual navigation
+    print("moveToNextValidQuestion called");
   }
 
   void moveToPreviousValidQuestion() {
-    print("Moving to previous question from index: ${controller.currentQuestionIndex}");
+    print("BACK BUTTON PRESSED at index: ${controller.currentQuestionIndex}");
     
+    // Can't go back from the first question
     if (controller.currentQuestionIndex <= 0) {
-      print("Already at first question, cannot go back");
+      print("Already at first question");
       return;
     }
     
-    // Find the previous visible question
-    int prevQuestionIndex = findPreviousVisibleQuestionIndex();
+    // Simply go back one question directly - simplest possible approach
+    int newIndex = controller.currentQuestionIndex - 1;
+    print("Moving back to question index: $newIndex");
     
-    if (prevQuestionIndex != -1) {
-      controller.currentQuestionIndex = prevQuestionIndex;
-      updateQuestionSequence(prevQuestionIndex);
-      print("Moving back to question at index $prevQuestionIndex");
-    } else {
-      // If no conditional previous question found, go to first question
-      controller.currentQuestionIndex = 0;
-      updateQuestionSequence(0);
-      print("No previous visible question found, moving to first question");
-    }
-  }
-
-  // Helper method to find the previous visible question
-  int findPreviousVisibleQuestionIndex() {
-    print("Finding previous visible question before ${controller.currentQuestionIndex}");
+    // Update controller index
+    controller.currentQuestionIndex = newIndex;
     
-    // Check questions in reverse order starting from the previous one
-    for (int i = controller.currentQuestionIndex - 1; i >= 0; i--) {
-      final question = widget.formJson[i];
-      final questionName = question['name'];
-      
-      // If no conditions, this question should always be shown
-      if (question['showWhen'] == null) {
-        print("Previous question $questionName has no conditions - will be shown");
-        return i;
-      }
-      
-      // Check if this question's conditions are met
-      final Map<String, dynamic> conditions = question['showWhen'];
-      bool shouldShow = true; // Start with true for AND logic between fields
-      
-      print("Checking conditions for previous question $questionName: $conditions");
-      
-      // Check each condition
-      conditions.forEach((dependentField, expectedValues) {
-        // Skip if the dependent field doesn't exist in the form
-        if (!controller.form.contains(dependentField)) {
-          print("Field $dependentField not found in form");
-          shouldShow = false;
-          return;
-        }
-        
-        // Get the value of the dependent field
-        final dependentControl = controller.form.control(dependentField);
-        final fieldValue = dependentControl.value;
-        
-        print("Field $dependentField has value: $fieldValue");
-        
-        // Check if the field value matches any expected value
-        bool fieldMatches = false;
-        if (expectedValues is List) {
-          fieldMatches = expectedValues.contains(fieldValue);
-          print("Checking if $fieldValue is in $expectedValues: $fieldMatches");
-        } else {
-          fieldMatches = (fieldValue == expectedValues);
-          print("Checking if $fieldValue equals $expectedValues: $fieldMatches");
-        }
-        
-        // For this question to show, ALL conditions must be met (AND logic)
-        shouldShow = shouldShow && fieldMatches;
-      });
-      
-      // If this question's conditions are met, it should be shown
-      if (shouldShow) {
-        print("All conditions met for previous question $questionName, it will be shown");
-        return i;
-      } else {
-        print("Conditions not met for previous question $questionName, checking previous one");
-      }
+    // If using PageView, update it directly
+    if (_pageController != null && _pageController.hasClients) {
+      _pageController.jumpToPage(newIndex);
     }
     
-    // No previous questions should be shown
-    return -1;
-  }
-
-  // This function should be called in validateAndProceed() instead of calling moveToNextValidQuestion
-  bool shouldDisplayQuestion(int questionIndex) {
-    if (questionIndex >= widget.formJson.length) {
-      return false;
-    }
-    
-    final question = widget.formJson[questionIndex];
-    
-    // If no conditions, always show the question
-    if (question['showWhen'] == null) {
-      return true;
-    }
-    
-    final conditions = question['showWhen'] as Map<String, dynamic>;
-    bool shouldShow = true;
-    
-    conditions.forEach((dependentField, expectedValues) {
-      if (!controller.form.contains(dependentField)) {
-        shouldShow = false;
-        return;
-      }
-      
-      final fieldValue = controller.form.control(dependentField).value;
-      bool fieldMatches = false;
-      
-      if (expectedValues is List) {
-        fieldMatches = expectedValues.contains(fieldValue);
-      } else {
-        fieldMatches = (fieldValue == expectedValues);
-      }
-      
-      shouldShow = shouldShow && fieldMatches;
+    // Force UI update and recalculate progress
+    setState(() {
+      _calculateProgress();
     });
     
-    return shouldShow;
+    print("Back navigation complete, now at index: ${controller.currentQuestionIndex}");
   }
 
   // Helper method to find the next visible question using the same logic as the controller
@@ -1470,12 +1467,49 @@ class _DynamicFormState extends State<DynamicForm> {
       ),
       onPressed: controller.currentQuestionIndex > 0
           ? () {
-              // Simply go back one question - the controller will handle
-              // determining which question to show
-              controller.currentQuestionIndex--;
-              updateQuestionSequence(controller.currentQuestionIndex);
+              print("Back button tapped!");
+              moveToPreviousValidQuestion();
             }
           : null,
+    );
+  }
+
+  // Completely rebuild the progress indicator widget
+  Widget _buildProgressIndicator({Key? key}) {
+    // Calculate values directly here to ensure they're current
+    double progress = totalVisibleQuestions > 0 
+        ? (currentVisibleQuestionIndex + 1) / totalVisibleQuestions
+        : 0;
+    
+    print("RENDERING progress bar: ${currentVisibleQuestionIndex + 1}/$totalVisibleQuestions");
+    
+    // Use RepaintBoundary to force redraw
+    return RepaintBoundary(
+      key: key,
+      child: Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 10,
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              color: widget.primaryColor,
+              backgroundColor: Colors.grey[300],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              'Question ${currentVisibleQuestionIndex + 1} of $totalVisibleQuestions',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

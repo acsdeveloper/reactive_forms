@@ -12,7 +12,7 @@ class DynamicFormController extends ChangeNotifier {
   
   late FormGroup form;
   Map<String, List<Map<String, dynamic>>> uploadedFiles = {};
-  int currentQuestionIndex = 0;
+  int _currentQuestionIndex = 0;
   Map<String, dynamic> _values = {};
   final List<FormFieldModel> _fields;
 
@@ -179,7 +179,7 @@ class DynamicFormController extends ChangeNotifier {
     });
     
     if (errorIndex != -1) {
-      currentQuestionIndex = errorIndex;
+      _currentQuestionIndex = errorIndex;
       
       ScaffoldMessenger.of(context).showSnackBar(
        const SnackBar(
@@ -191,7 +191,7 @@ class DynamicFormController extends ChangeNotifier {
   }
 
   bool validateAndProceed(BuildContext context) {
-    final field = formJson[currentQuestionIndex];
+    final field = formJson[_currentQuestionIndex];
     final currentFieldName = field['name'];
     final currentControl = form.control(currentFieldName);
 
@@ -250,13 +250,13 @@ class DynamicFormController extends ChangeNotifier {
     int nextQuestionIndex = findNextVisibleQuestionIndex();
     
     if (nextQuestionIndex != -1) {
-      currentQuestionIndex = nextQuestionIndex;
+      _currentQuestionIndex = nextQuestionIndex;
       print("Navigation: Moving to question at index $nextQuestionIndex");
-    } else if (currentQuestionIndex < formJson.length - 1) {
+    } else if (_currentQuestionIndex < formJson.length - 1) {
       // If no conditional question found but we're not at the end, 
       // move to the next sequential question
-      currentQuestionIndex++;
-      print("Navigation: No conditional question found, moving to next question ${currentQuestionIndex}");
+      _currentQuestionIndex++;
+      print("Navigation: No conditional question found, moving to next question ${_currentQuestionIndex}");
     }
 
     notifyListeners();
@@ -265,10 +265,10 @@ class DynamicFormController extends ChangeNotifier {
 
   // Helper method to find the next question that should be visible
   int findNextVisibleQuestionIndex() {
-    print("Finding next visible question after ${currentQuestionIndex}");
+    print("Finding next visible question after ${_currentQuestionIndex}");
     
     // Check questions sequentially starting from the next one
-    for (int i = currentQuestionIndex + 1; i < formJson.length; i++) {
+    for (int i = _currentQuestionIndex + 1; i < formJson.length; i++) {
       final question = formJson[i];
       final questionName = question['name'];
       
@@ -473,9 +473,9 @@ class DynamicFormController extends ChangeNotifier {
   }
 
   bool shouldShowSubmitButton() {
-    if (currentQuestionIndex >= formJson.length) return false;
+    if (_currentQuestionIndex >= formJson.length) return false;
     
-    final currentField = formJson[currentQuestionIndex];
+    final currentField = formJson[_currentQuestionIndex];
     if (currentField['branching'] == null) return false;
     
     var branchTo = currentField['branching'];
@@ -580,4 +580,13 @@ class DynamicFormController extends ChangeNotifier {
     print('After update, control value type: ${control.value.runtimeType}');
     print('After update, control value: ${control.value}');
   }
+
+  set currentQuestionIndex(int value) {
+    if (_currentQuestionIndex != value) {
+      _currentQuestionIndex = value;
+      notifyListeners();  // This is crucial to trigger the UI update
+    }
+  }
+  
+  int get currentQuestionIndex => _currentQuestionIndex;
 }
