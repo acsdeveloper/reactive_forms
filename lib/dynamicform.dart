@@ -1398,8 +1398,8 @@ class _DynamicFormState extends State<DynamicForm> {
           print("Checking if $fieldValue equals $expectedValues: $fieldMatches");
         }
         
-        // For this question to show, ALL conditions must be met (AND logic)
-        shouldShow = shouldShow && fieldMatches;
+        // For this question to show, ALL conditions must be met (or logic)
+        shouldShow = shouldShow || fieldMatches;
       });
       
       // If this question's conditions are met, it should be shown
