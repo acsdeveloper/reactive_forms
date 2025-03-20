@@ -21,7 +21,7 @@ final List<Map<String, dynamic>> formJson = [
     "disableAttachmentsOn": ["NO"],
     "hasComments": false,
     "showWhen": {
-      "question_1": ["A1"]
+      "question_1": ["A1", "B1"]
     }
   },
   {
