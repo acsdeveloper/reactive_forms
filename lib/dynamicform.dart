@@ -1225,41 +1225,182 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   void moveToNextValidQuestion() {
-    int nextIndex = controller.currentQuestionIndex + 1;
+    // Let the controller handle navigation via validateAndProceed
+    // This function is called from UI buttons but should do nothing
+    print("moveToNextValidQuestion called but navigation is handled by controller");
+  }
 
-    while (nextIndex < widget.formJson.length) {
-      final nextField = widget.formJson[nextIndex];
+  void moveToPreviousValidQuestion() {
+    print("Moving to previous question from index: ${controller.currentQuestionIndex}");
+    
+    if (controller.currentQuestionIndex <= 0) {
+      print("Already at first question, cannot go back");
+      return;
+    }
+    
+    // Find the previous visible question
+    int prevQuestionIndex = findPreviousVisibleQuestionIndex();
+    
+    if (prevQuestionIndex != -1) {
+      controller.currentQuestionIndex = prevQuestionIndex;
+      updateQuestionSequence(prevQuestionIndex);
+      print("Moving back to question at index $prevQuestionIndex");
+    } else {
+      // If no conditional previous question found, go to first question
+      controller.currentQuestionIndex = 0;
+      updateQuestionSequence(0);
+      print("No previous visible question found, moving to first question");
+    }
+  }
 
-      if (nextField['showWhen'] != null) {
-        bool shouldShow = false;  // Initialize to false for OR logic
-        final conditions = nextField['showWhen'] as Map<String, dynamic>;
+  // Helper method to find the previous visible question
+  int findPreviousVisibleQuestionIndex() {
+    print("Finding previous visible question before ${controller.currentQuestionIndex}");
+    
+    // Check questions in reverse order starting from the previous one
+    for (int i = controller.currentQuestionIndex - 1; i >= 0; i--) {
+      final question = widget.formJson[i];
+      final questionName = question['name'];
+      
+      // If no conditions, this question should always be shown
+      if (question['showWhen'] == null) {
+        print("Previous question $questionName has no conditions - will be shown");
+        return i;
+      }
+      
+      // Check if this question's conditions are met
+      final Map<String, dynamic> conditions = question['showWhen'];
+      bool shouldShow = true; // Start with true for AND logic between fields
+      
+      print("Checking conditions for previous question $questionName: $conditions");
+      
+      // Check each condition
+      conditions.forEach((dependentField, expectedValues) {
+        // Skip if the dependent field doesn't exist in the form
+        if (!controller.form.contains(dependentField)) {
+          print("Field $dependentField not found in form");
+          shouldShow = false;
+          return;
+        }
+        
+        // Get the value of the dependent field
+        final dependentControl = controller.form.control(dependentField);
+        final fieldValue = dependentControl.value;
+        
+        print("Field $dependentField has value: $fieldValue");
+        
+        // Check if the field value matches any expected value
+        bool fieldMatches = false;
+        if (expectedValues is List) {
+          fieldMatches = expectedValues.contains(fieldValue);
+          print("Checking if $fieldValue is in $expectedValues: $fieldMatches");
+        } else {
+          fieldMatches = (fieldValue == expectedValues);
+          print("Checking if $fieldValue equals $expectedValues: $fieldMatches");
+        }
+        
+        // For this question to show, ALL conditions must be met (AND logic)
+        shouldShow = shouldShow && fieldMatches;
+      });
+      
+      // If this question's conditions are met, it should be shown
+      if (shouldShow) {
+        print("All conditions met for previous question $questionName, it will be shown");
+        return i;
+      } else {
+        print("Conditions not met for previous question $questionName, checking previous one");
+      }
+    }
+    
+    // No previous questions should be shown
+    return -1;
+  }
 
-        conditions.forEach((dependentField, expectedValue) {
-          final dependentControl = controller.form.control(dependentField);
-          final currentValue = dependentControl.value;
+  // This function should be called in validateAndProceed() instead of calling moveToNextValidQuestion
+  bool shouldDisplayQuestion(int questionIndex) {
+    if (questionIndex >= widget.formJson.length) {
+      return false;
+    }
+    
+    final question = widget.formJson[questionIndex];
+    
+    // If no conditions, always show the question
+    if (question['showWhen'] == null) {
+      return true;
+    }
+    
+    final conditions = question['showWhen'] as Map<String, dynamic>;
+    bool shouldShow = true;
+    
+    conditions.forEach((dependentField, expectedValues) {
+      if (!controller.form.contains(dependentField)) {
+        shouldShow = false;
+        return;
+      }
+      
+      final fieldValue = controller.form.control(dependentField).value;
+      bool fieldMatches = false;
+      
+      if (expectedValues is List) {
+        fieldMatches = expectedValues.contains(fieldValue);
+      } else {
+        fieldMatches = (fieldValue == expectedValues);
+      }
+      
+      shouldShow = shouldShow && fieldMatches;
+    });
+    
+    return shouldShow;
+  }
 
-          if (expectedValue is List) {
-            shouldShow = shouldShow || expectedValue.contains(currentValue);
-          } else {
-            shouldShow = shouldShow || currentValue == expectedValue;
-          }
-        });
-
-        if (!shouldShow) {
-          nextIndex++;
+  // Helper method to find the next visible question using the same logic as the controller
+  int findNextVisibleQuestionIndex() {
+    // Start checking from the next question
+    int startIndex = controller.currentQuestionIndex + 1;
+    
+    // Check each question in order
+    for (int i = startIndex; i < widget.formJson.length; i++) {
+      final question = widget.formJson[i];
+      
+      // No conditions means the question is always visible
+      if (question['showWhen'] == null) {
+        return i;
+      }
+      
+      // Check the conditions
+      final Map<String, dynamic> conditions = question['showWhen'];
+      bool shouldShow = false;
+      
+      // Check each field condition
+      for (final entry in conditions.entries) {
+        final dependentField = entry.key;
+        final expectedValues = entry.value;
+        
+        // Skip if field doesn't exist in the form
+        if (!controller.form.contains(dependentField)) {
           continue;
         }
+        
+        final currentValue = controller.form.control(dependentField).value;
+        
+        // Check if value matches
+        if (expectedValues is List) {
+          if (expectedValues.contains(currentValue)) {
+            shouldShow = true;
+            break; // Exit early if any condition matches
+          }
+        } else if (currentValue == expectedValues) {
+          shouldShow = true;
+          break; // Exit early if any condition matches
+        }
       }
-
-      break;
+      
+      if (shouldShow) {
+        return i;
+      }
     }
-
-    if (nextIndex >= widget.formJson.length) {
-      controller.currentQuestionIndex = widget.formJson.length - 1;
-    } else {
-      updateQuestionSequence(nextIndex);
-      controller.currentQuestionIndex = nextIndex;
-    }
+    
+    return -1; // No visible questions found
   }
 
   void moveToIndex(int index) {
@@ -1295,114 +1436,10 @@ class _DynamicFormState extends State<DynamicForm> {
     }
   }
 
-  bool isRequiredBasedOnCondition(Map<String, dynamic> field) {
-    if (field['requiredWhen'] == null) return false;
-
-    final conditions = field['requiredWhen'] as Map<String, dynamic>;
-    bool isRequired = true;
-
-    conditions.forEach((fieldName, expectedValue) {
-      final dependentControl = controller.form.control(fieldName);
-      if (expectedValue is List) {
-        isRequired =
-            isRequired && expectedValue.contains(dependentControl.value);
-      } else {
-        isRequired = isRequired && dependentControl.value == expectedValue;
-      }
-    });
-
-    return isRequired;
-  }
-
-   void moveToPreviousValidQuestion() {
-    int prevIndex = controller.currentQuestionIndex - 1;
-
-    while (prevIndex >= 0) {
-      final prevField = widget.formJson[prevIndex];
-
-      if (prevField['showWhen'] != null) {
-        bool shouldShow = false;  // Initialize to false for OR logic
-        final conditions = prevField['showWhen'] as Map<String, dynamic>;
-
-        conditions.forEach((dependentField, expectedValue) {
-          final dependentControl = controller.form.control(dependentField);
-          final currentValue = dependentControl.value;
-
-          if (expectedValue is List) {
-            shouldShow = shouldShow || expectedValue.contains(currentValue);
-          } else {
-            shouldShow = shouldShow || currentValue == expectedValue;
-          }
-        });
-
-        if (!shouldShow) {
-          prevIndex--;
-          continue;
-        }
-      }
-      break;
-    }
-
-    setState(() {
-      if (prevIndex < 0) {
-        controller.currentQuestionIndex = 0;
-      } else {
-        // Remove the current question from visited questions
-        final currentField = widget.formJson[controller.currentQuestionIndex];
-        visitedQuestions.remove(currentField['name']);
-        
-        // Update sequence and move to previous question
-        updateQuestionSequence(prevIndex);
-        controller.currentQuestionIndex = prevIndex;
-      }
-    });
-  }
-
   // Helper method to check if current question is effectively the last visible one
   bool isCurrentQuestionEffectivelyLast() {
     int nextVisibleIndex = findNextVisibleQuestionIndex();
     return nextVisibleIndex == -1;
-  }
-
-  // Find the index of the next question that should be visible
-  int findNextVisibleQuestionIndex() {
-    // Start checking from the next question
-    int index = controller.currentQuestionIndex + 1;
-
-    while (index < widget.formJson.length) {
-      final question = widget.formJson[index];
-
-      // If the question has showWhen conditions, check if they're satisfied
-      if (question['showWhen'] != null) {
-        bool shouldShow = true;
-        final conditions = question['showWhen'] as Map<String, dynamic>;
-
-        conditions.forEach((dependentField, expectedValue) {
-          final dependentControl = controller.form.control(dependentField);
-          final currentValue = dependentControl.value;
-
-          if (expectedValue is List) {
-            shouldShow = shouldShow && expectedValue.contains(currentValue);
-          } else {
-            shouldShow = shouldShow && currentValue == expectedValue;
-          }
-        });
-
-        // If this question should be shown, return its index
-        if (shouldShow) {
-          return index;
-        }
-      } else {
-        // If the question has no showWhen conditions, it should always be shown
-        return index;
-      }
-
-      // Move to the next question
-      index++;
-    }
-
-    // If no more visible questions found, return -1
-    return -1;
   }
 
   void popuperror(String message) {
@@ -1414,6 +1451,31 @@ class _DynamicFormState extends State<DynamicForm> {
         ),
         duration: const Duration(seconds: 2),
       ),
+    );
+  }
+
+  // Reset the form navigation to ensure we start at the beginning
+  void resetNavigation() {
+    controller.currentQuestionIndex = 0;
+    updateQuestionSequence(0);
+  }
+
+  // Update how the back button works to use the hardcoded navigation
+  Widget _buildBackButton() {
+    return TextButton.icon(
+      icon: Icon(Icons.arrow_back, color: widget.primaryColor),
+      label: Text(
+        'Back',
+        style: TextStyle(color: widget.primaryColor),
+      ),
+      onPressed: controller.currentQuestionIndex > 0
+          ? () {
+              // Simply go back one question - the controller will handle
+              // determining which question to show
+              controller.currentQuestionIndex--;
+              updateQuestionSequence(controller.currentQuestionIndex);
+            }
+          : null,
     );
   }
 }

@@ -195,32 +195,21 @@ class DynamicFormController extends ChangeNotifier {
     final currentFieldName = field['name'];
     final currentControl = form.control(currentFieldName);
 
+    // Debug information
+    print("Current question: ${currentFieldName}, value: ${currentControl.value}");
+
     // Mark the current field as touched to trigger validation
     currentControl.markAsTouched();
 
-    // Check showWhen conditions first
-    if (field['showWhen'] != null) {
-      bool shouldShow = false;  // Initialize to false for OR logic
-      final conditions = field['showWhen'] as Map<String, dynamic>;
-
-      conditions.forEach((dependentField, expectedValue) {
-        final dependentControl = form.control(dependentField);
-        final currentValue = dependentControl.value;
-
-        if (expectedValue is List) {
-          shouldShow = shouldShow || expectedValue.contains(currentValue);
-        } else {
-          shouldShow = shouldShow || currentValue == expectedValue;
-        }
-      });
-
-      if (!shouldShow) {
-        _showErrorSnackBar(context, "This question is not applicable based on previous answers");
-        return false;
-      }
+    // Check if the current field is valid
+    if (!currentControl.valid) {
+      String errorMessage = _getErrorMessage(field, currentControl);
+      _showErrorSnackBar(context, errorMessage);
+      notifyListeners();
+      return false;
     }
 
-    // Check if file upload is required based on the selected option
+    // Check if file upload is required
     if (field['hasAttachments'] == true && 
         field['requireAttachmentsOn'] != null &&
         field['requireAttachmentsOn'].isNotEmpty) {
@@ -256,66 +245,121 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    // Check if the current field is valid
-    if (!currentControl.valid) {
-      String errorMessage = _getErrorMessage(field, currentControl);
-      _showErrorSnackBar(context, errorMessage);
-      notifyListeners();
-      return false;
-    }
-
-    // Handle branching logic
-    int nextIndex = _findNextQuestionIndex(currentQuestionIndex, currentControl.value);
-    if (nextIndex == -2) {
-      return true;
-    } else if (nextIndex != -1) {
-      currentQuestionIndex = nextIndex;
+    // DYNAMIC NAVIGATION LOGIC
+    // Find the next question that should be shown based on current answers
+    int nextQuestionIndex = findNextVisibleQuestionIndex();
+    
+    if (nextQuestionIndex != -1) {
+      currentQuestionIndex = nextQuestionIndex;
+      print("Navigation: Moving to question at index $nextQuestionIndex");
     } else if (currentQuestionIndex < formJson.length - 1) {
+      // If no conditional question found but we're not at the end, 
+      // move to the next sequential question
       currentQuestionIndex++;
+      print("Navigation: No conditional question found, moving to next question ${currentQuestionIndex}");
     }
 
     notifyListeners();
     return true;
   }
 
-  int _findNextQuestionIndex(int currentIndex, dynamic currentValue) {
-    final currentField = formJson[currentIndex];
+  // Helper method to find the next question that should be visible
+  int findNextVisibleQuestionIndex() {
+    print("Finding next visible question after ${currentQuestionIndex}");
     
-    if (currentField['branching'] != null) {
-      var branchTo = currentField['branching'];
+    // Check questions sequentially starting from the next one
+    for (int i = currentQuestionIndex + 1; i < formJson.length; i++) {
+      final question = formJson[i];
+      final questionName = question['name'];
       
-      if (branchTo is Map<String, dynamic>) {
-        // For multiselect, we might want to check if any of the selected values trigger branching
-        if (currentField['type'] == 'multiselect' && currentValue is List) {
-          for (var value in currentValue) {
-            String? targetQuestion = branchTo[value.toString()];
-            if (targetQuestion == 'end') {
-              return -2;
-            }
-            if (targetQuestion != null) {
-              int targetIndex = formJson.indexWhere((field) => field['name'] == targetQuestion);
-              if (targetIndex != -1) {
-                return targetIndex;
-              }
-            }
-          }
-        } else {
-          // Regular single-value branching
-          String? targetQuestion = branchTo[currentValue?.toString()];
-          if (targetQuestion == 'end') {
-            return -2;
-          }
-          if (targetQuestion != null) {
-            int targetIndex = formJson.indexWhere((field) => field['name'] == targetQuestion);
-            if (targetIndex != -1) {
-              return targetIndex;
-            }
-          }
+      // If no conditions, this question should always be shown
+      if (question['showWhen'] == null) {
+        print("Question $questionName has no conditions - will be shown");
+        return i;
+      }
+      
+      // Check if this question's conditions are met
+      final Map<String, dynamic> conditions = question['showWhen'];
+      bool shouldShow = true; // Start with true for AND logic between fields
+      
+      print("Checking conditions for $questionName: $conditions");
+      
+      // Check each condition
+      conditions.forEach((dependentField, expectedValues) {
+        // Skip if the dependent field doesn't exist in the form
+        if (!form.contains(dependentField)) {
+          print("Field $dependentField not found in form");
+          shouldShow = false;
+          return;
         }
+        
+        // Get the value of the dependent field
+        final dependentControl = form.control(dependentField);
+        final fieldValue = dependentControl.value;
+        
+        print("Field $dependentField has value: $fieldValue");
+        
+        // Check if the field value matches any expected value
+        bool fieldMatches = false;
+        if (expectedValues is List) {
+          fieldMatches = expectedValues.contains(fieldValue);
+          print("Checking if $fieldValue is in $expectedValues: $fieldMatches");
+        } else {
+          fieldMatches = (fieldValue == expectedValues);
+          print("Checking if $fieldValue equals $expectedValues: $fieldMatches");
+        }
+        
+        // For this question to show, ALL conditions must be met (AND logic)
+        shouldShow = shouldShow && fieldMatches;
+      });
+      
+      // If this question's conditions are met, it should be shown
+      if (shouldShow) {
+        print("All conditions met for $questionName, it will be shown");
+        return i;
+      } else {
+        print("Conditions not met for $questionName, checking next question");
       }
     }
     
+    // No more questions should be shown
     return -1;
+  }
+
+  bool shouldDisplayQuestion(int questionIndex) {
+    if (questionIndex >= formJson.length) {
+      return false;
+    }
+    
+    final question = formJson[questionIndex];
+    
+    // If no conditions, always show the question
+    if (question['showWhen'] == null) {
+      return true;
+    }
+    
+    final conditions = question['showWhen'] as Map<String, dynamic>;
+    bool shouldShow = true;
+    
+    conditions.forEach((dependentField, expectedValues) {
+      if (!form.contains(dependentField)) {
+        shouldShow = false;
+        return;
+      }
+      
+      final fieldValue = form.control(dependentField).value;
+      bool fieldMatches = false;
+      
+      if (expectedValues is List) {
+        fieldMatches = expectedValues.contains(fieldValue);
+      } else {
+        fieldMatches = (fieldValue == expectedValues);
+      }
+      
+      shouldShow = shouldShow && fieldMatches;
+    });
+    
+    return shouldShow;
   }
 
   bool _hasValidationError(Map<String, dynamic> field, AbstractControl currentControl, String fieldName) {
