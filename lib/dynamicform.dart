@@ -53,6 +53,7 @@ class _DynamicFormState extends State<DynamicForm> {
   int totalVisibleQuestions = 1;
   late PageController _pageController;
   final _progressKey = GlobalKey();
+  bool _showAttachmentError = false;
 
   @override
   void initState() {
@@ -183,7 +184,7 @@ class _DynamicFormState extends State<DynamicForm> {
               children: [
                 if (widget.showOneByOne) ..._buildOneByOneFields(),
                 if (!widget.showOneByOne) ..._buildAllFields(),
-                
+                if (_showAttachmentError) _buildErrorMessage(),
               ],
             ),
           ),
@@ -887,20 +888,58 @@ class _DynamicFormState extends State<DynamicForm> {
         ),
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
+          Row(
+            children: [
+              Text(
+                field['commentLabel'] ?? StringConstants.comments,
+                style: widget.fontFamily,
+              ),
+              if (field['commentsRequired'] == true) ...[
+                const SizedBox(width: 4),
+                Text(
+                  '*',
+                  style: widget.fontFamily.copyWith(
+                    color: const Color.fromARGB(255, 222, 75, 64),
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ],
+          ),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
-              labelText: field['commentLabel'] ?? StringConstants.comments,
-              hintText:
-                  field['commentHint'] ?? StringConstants.enterCommentsHere,
+              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
             maxLines: 3,
+            validationMessages: field['commentsRequired'] == true
+                ? {'required': (_) => StringConstants.requiredField}
+                : null,
           ),
         ],
-        if (field['hasAttachments'] == true) ...[
+        if (field['hasAttachments'] == true || field['requireAttachmentsOn'] == true || field['requiredAttachmentsOn'] == true) ...[
           const SizedBox(height: 16),
+          Row(
+            children: [
+              Text(
+                StringConstants.uploadFiles,
+                style: widget.fontFamily,
+              ),
+              if (field['requireAttachmentsOn'] == true || field['requiredAttachmentsOn'] == true) ...[
+                const SizedBox(width: 4),
+                Text(
+                  '*',
+                  style: widget.fontFamily.copyWith(
+                    color: const Color.fromARGB(255, 222, 75, 64),
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
           FileUploadWidget(
             fieldName: field['name'],
             fieldLabel: field['label'],
@@ -918,6 +957,7 @@ class _DynamicFormState extends State<DynamicForm> {
                 controller.uploadedFiles[field['name']]!.remove(file);
               });
             },
+            isRequired: field['requireAttachmentsOn'] == true || field['requiredAttachmentsOn'] == true,
           ),
         ],
       ],
@@ -1589,6 +1629,89 @@ class _DynamicFormState extends State<DynamicForm> {
     
     // No more questions should be shown
     return -1;
+  }
+
+  // Add this helper method to get the current question name
+  String _getCurrentQuestionName() {
+    if (controller.currentQuestionIndex < widget.formJson.length) {
+      return widget.formJson[controller.currentQuestionIndex]['name'];
+    }
+    return '';
+  }
+
+  // Fix the _validateCurrentStep method to use widget.formJson
+  bool _validateCurrentStep() {
+    // Make sure we have a valid question index
+    if (controller.currentQuestionIndex >= widget.formJson.length) {
+      return true;
+    }
+    
+    // Get the name of the current question
+    String questionName = _getCurrentQuestionName();
+    if (questionName.isEmpty) {
+      return true;
+    }
+    
+    // Check if control exists and is valid
+    if (!controller.form.contains(questionName)) {
+      return true;
+    }
+    
+    bool isValid = controller.form.control(questionName).valid;
+    
+    // Get the current field definition
+    Map<String, dynamic>? currentField = widget.formJson[controller.currentQuestionIndex];
+    
+    if (currentField != null) {
+      // Check for required attachments
+      if ((currentField['requireAttachmentsOn'] == true || 
+           currentField['requiredAttachmentsOn'] == true) && 
+          (controller.uploadedFiles[currentField['name']] == null || 
+           controller.uploadedFiles[currentField['name']]!.isEmpty)) {
+        setState(() {
+          _showAttachmentError = true;
+        });
+        return false;
+      }
+      
+      // For radio/checkbox fields, check if the selected value requires attachments
+      if (currentField['type'] == 'radio' || currentField['type'] == 'checkbox') {
+        var selectedValue = controller.form.control(currentField['name']).value;
+        if (currentField['requireAttachmentsOn'] is List && 
+            currentField['requireAttachmentsOn'].contains(selectedValue) &&
+            (controller.uploadedFiles[currentField['name']] == null || 
+             controller.uploadedFiles[currentField['name']]!.isEmpty)) {
+          setState(() {
+            _showAttachmentError = true;
+          });
+          return false;
+        }
+      }
+    }
+    
+    setState(() {
+      _showAttachmentError = false;
+    });
+    
+    return isValid;
+  }
+
+  // Add an error message display for attachments
+  Widget _buildErrorMessage() {
+    return _showAttachmentError 
+        ? Container(
+            padding: const EdgeInsets.all(8),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: Colors.red.shade100,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              'Required attachments are missing',
+              style: TextStyle(color: Colors.red.shade900),
+            ),
+          )
+        : const SizedBox.shrink();
   }
 }
 

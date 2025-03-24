@@ -6,7 +6,7 @@ final List<Map<String, dynamic>> formJson = [
     "options": ["A1", "B1", "C1", "D1"],
     "required": true,
     "hasAttachments": true,
-    "requireAttachmentsOn": ["YES"],
+    "requireAttachmentsOn": ["A1"],
     "disableAttachmentsOn": ["NO"],
     "hasComments": false,
   },
@@ -66,7 +66,8 @@ final List<Map<String, dynamic>> formJson = [
     "type": "text",
     "label": "If an issue was found, describe the problem.",
     "required": true,
-    "hasAttachments": false
+    "hasAttachments": true,
+    "requiredAttachmentsOn": true,
   },
   {
     "name": "question_7",

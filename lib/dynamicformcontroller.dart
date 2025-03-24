@@ -209,7 +209,17 @@ class DynamicFormController extends ChangeNotifier {
       return false;
     }
 
-    // Check if file upload is required
+    // Check if file upload is required for TEXT fields with requiredAttachmentsOn = true
+    if (field['type'] == 'text' && field['requiredAttachmentsOn'] == true) {
+      // Check if files are uploaded
+      if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
+        _showErrorSnackBar(context, StringConstants.uploadRequiredFiles);
+        notifyListeners();
+        return false;
+      }
+    }
+
+    // Check if file upload is required for RADIO fields with requireAttachmentsOn
     if (field['hasAttachments'] == true && 
         field['requireAttachmentsOn'] != null &&
         field['requireAttachmentsOn'].isNotEmpty) {
@@ -301,10 +311,22 @@ class DynamicFormController extends ChangeNotifier {
         
         // Check if the field value matches any expected value
         bool fieldMatches = false;
-        if (expectedValues is List) {
+        
+        // Handle different types of field values and expected values
+        if (fieldValue is List && expectedValues is List) {
+          // If both are lists, check if there's any intersection
+          fieldMatches = fieldValue.any((v) => expectedValues.contains(v));
+          print("Checking if list $fieldValue intersects with $expectedValues: $fieldMatches");
+        } else if (fieldValue is List) {
+          // If field value is a list but expected value is single, check if the list contains the expected value
+          fieldMatches = fieldValue.contains(expectedValues);
+          print("Checking if list $fieldValue contains $expectedValues: $fieldMatches");
+        } else if (expectedValues is List) {
+          // If expected value is a list but field value is single, check if the expected list contains the field value
           fieldMatches = expectedValues.contains(fieldValue);
-          print("Checking if $fieldValue is in $expectedValues: $fieldMatches");
+          print("Checking if $fieldValue is in list $expectedValues: $fieldMatches");
         } else {
+          // Simple equality check for single values
           fieldMatches = (fieldValue == expectedValues);
           print("Checking if $fieldValue equals $expectedValues: $fieldMatches");
         }
@@ -531,23 +553,32 @@ class DynamicFormController extends ChangeNotifier {
     final conditions = field['showWhen'] as Map<String, dynamic>;
 
     conditions.forEach((dependentField, expectedValue) {
-      final dependentControl = form.control(dependentField) as FormControl<dynamic>;
-      final currentValue = dependentControl.value;
-
-      if (expectedValue is List) {
-        if (currentValue is List) {
-          // Check if any of the expected values are in the current values
-          shouldShow = shouldShow && expectedValue.any((v) => currentValue.contains(v));
-        } else {
-          // Check if current single value is in expected list
-          shouldShow = shouldShow && expectedValue.contains(currentValue);
-        }
-      } else {
-        // For single value comparison
-        shouldShow = shouldShow && currentValue == expectedValue;
+      if (!form.contains(dependentField)) {
+        shouldShow = false;
+        return;
       }
+      
+      final fieldValue = form.control(dependentField).value;
+      bool fieldMatches = false;
+      
+      // Handle different types of field values and expected values
+      if (fieldValue is List && expectedValue is List) {
+        // If both are lists, check if there's any intersection
+        fieldMatches = fieldValue.any((v) => expectedValue.contains(v));
+      } else if (fieldValue is List) {
+        // If field value is a list but expected value is single, check if the list contains the expected value
+        fieldMatches = fieldValue.contains(expectedValue);
+      } else if (expectedValue is List) {
+        // If expected value is a list but field value is single, check if the expected list contains the field value
+        fieldMatches = expectedValue.contains(fieldValue);
+      } else {
+        // Simple equality check for single values
+        fieldMatches = (fieldValue == expectedValue);
+      }
+      
+      shouldShow = shouldShow && fieldMatches;
     });
-
+    
     return shouldShow;
   }
 
