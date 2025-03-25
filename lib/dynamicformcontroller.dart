@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
 import 'package:reactive_forms/src/validators/validators.dart';
+import 'package:reactiveform/components/app_snackbar.dart';
 import 'package:reactiveform/string_constants.dart';
 import 'package:reactiveform/models/form_field_model.dart';
+import 'package:universal_html/html.dart';
 
 
 class DynamicFormController extends ChangeNotifier {
@@ -190,13 +192,26 @@ class DynamicFormController extends ChangeNotifier {
     }
   }
 
+  /// The function `validateAndProceed` in Dart validates form fields, handles file uploads, and
+  /// navigates to the next question based on user input.
+  /// 
+  /// Args:
+  ///   context (BuildContext): The `context` parameter in the `validateAndProceed` function is of type
+  /// `BuildContext`. It is typically used in Flutter to provide access to the nearest BuildContext
+  /// ancestor in the widget tree. This context is necessary for various operations such as showing
+  /// dialogs, navigating between screens, accessing theme data, and
+  /// 
+  /// Returns:
+  ///   The function `validateAndProceed` returns a boolean value - `true` if the current field is valid
+  /// and all necessary conditions are met to proceed to the next question, and `false` if there are
+  /// validation errors or requirements that prevent moving to the next question.
   bool validateAndProceed(BuildContext context) {
     final field = formJson[_currentQuestionIndex];
     final currentFieldName = field['name'];
     final currentControl = form.control(currentFieldName);
 
     // Debug information
-    print("Current question: ${currentFieldName}, value: ${currentControl.value}");
+    print("Current question: ${currentFieldName}, value: ${field}");
 
     // Mark the current field as touched to trigger validation
     currentControl.markAsTouched();
@@ -204,16 +219,28 @@ class DynamicFormController extends ChangeNotifier {
     // Check if the current field is valid
     if (!currentControl.valid) {
       String errorMessage = _getErrorMessage(field, currentControl);
-      _showErrorSnackBar(context, errorMessage);
+      if (!(field["type"] == "text" || field["type"] == "number")) {
+        AppSnackBar(context).showErrorSnackBar(errorMessage);
+      }
       notifyListeners();
       return false;
+    }
+
+    // Add scenario for 'file' type with 'required' set to true
+    if (field['type'] == 'file' && field['required'] == true) {
+      // Check if files are uploaded
+      if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
+        AppSnackBar(context).showErrorSnackBar(StringConstants.fileIsRequired);
+        notifyListeners();
+        return false;
+      }
     }
 
     // Check if file upload is required for TEXT fields with requiredAttachmentsOn = true
     if (field['type'] == 'text' && field['requiredAttachmentsOn'] == true) {
       // Check if files are uploaded
       if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
-        _showErrorSnackBar(context, StringConstants.uploadRequiredFiles);
+        AppSnackBar(context).showErrorSnackBar(StringConstants.uploadRequiredFiles);
         notifyListeners();
         return false;
       }
@@ -232,7 +259,7 @@ class DynamicFormController extends ChangeNotifier {
       if (requireAttachmentsOn.contains(selectedValue)) {
         // Check if files are uploaded
         if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
-          _showErrorSnackBar(context, StringConstants.uploadRequiredFiles);
+          AppSnackBar(context).showErrorSnackBar(StringConstants.uploadRequiredFiles);
           notifyListeners();
           return false;
         }
@@ -242,14 +269,14 @@ class DynamicFormController extends ChangeNotifier {
     // Special handling for multiselect validation
     if (field['type'] == 'multiselect' && field['required'] == true) {
       if (currentControl.value == null) {
-        _showErrorSnackBar(context, 'Please select at least one option');
+        AppSnackBar(context).showErrorSnackBar(StringConstants.pleaseSelectAtLeastOneOption);
         notifyListeners();
         return false;
       }
       
       final List<dynamic>? values = currentControl.value is List ? currentControl.value : null;
       if (values == null || values.isEmpty) {
-        _showErrorSnackBar(context, 'Please select at least one option');
+        AppSnackBar(context).showErrorSnackBar(StringConstants.pleaseSelectAtLeastOneOption);
         notifyListeners();
         return false;
       }
@@ -419,6 +446,25 @@ class DynamicFormController extends ChangeNotifier {
     return false;
   }
 
+  /// The function `_getErrorMessage` checks for various conditions and returns error messages based on
+  /// the field type and control value.
+  /// 
+  /// Args:
+  ///   field (Map<String, dynamic>): The `field` parameter is a map containing information about a form
+  /// field. It includes properties like `type`, `required`, and `requireAttachmentsOn`.
+  ///   control (AbstractControl): The `control` parameter in the `_getErrorMessage` function is an
+  /// instance of `AbstractControl`. This parameter is likely used to access the current value of a form
+  /// control in an Angular application. The function checks various conditions based on the type of
+  /// field and the value of the control to determine the appropriate
+  /// 
+  /// Returns:
+  ///   The function `_getErrorMessage` returns an error message based on the conditions specified in
+  /// the code. The specific error message returned depends on the type of field, whether it is
+  /// required, the control value, and other conditions. The possible error messages that can be
+  /// returned are:
+  /// - 'Please select at least one option' if a multiselect field is required and no option is
+  /// selected.
+  /// - 'Please select
   String _getErrorMessage(Map<String, dynamic> field, AbstractControl control) {
     if (field['type'] == 'multiselect') {
       // First check if value is actually a List
@@ -426,15 +472,19 @@ class DynamicFormController extends ChangeNotifier {
       final List<dynamic>? values = rawValue is List ? rawValue : null;
       
       if (field['required'] == true && (values == null || values.isEmpty)) {
-        return 'Please select at least one option';
+        return StringConstants.pleaseSelectAtLeastOneOption;
       }
     }
     
     if (field['required'] == true && 
         (control.value == null || control.value.toString().isEmpty)) {
-      return field['type'] == 'radio' 
-          ? StringConstants.pleaseSelectAnOption
-          : StringConstants.pleaseAnswerThisQuestion;
+      if (field['type'] == "radio") {
+        return StringConstants.pleaseSelectAnOption;
+      } else if (field['type'] == 'text' || field['type'] == 'number') {
+        return StringConstants.requiredField;
+      } else {
+        return StringConstants.pleaseAnswerThisQuestion;
+      }
     }
     
     if (field['requireAttachmentsOn'] == control.value) {
@@ -442,19 +492,6 @@ class DynamicFormController extends ChangeNotifier {
     }
     
     return StringConstants.pleaseAnswerAllRequiredSubQuestions;
-  }
-
-  void _showErrorSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   void showDropdownBottomSheet(BuildContext context, Map<String, dynamic> field) {

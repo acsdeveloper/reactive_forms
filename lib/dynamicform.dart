@@ -3,6 +3,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
+import 'package:reactiveform/components/app_snackbar.dart';
+import 'package:reactiveform/components/app_typographpy.dart';
 import 'package:reactiveform/constants.dart';
 import 'package:reactiveform/string_constants.dart';
 import 'package:flutter/services.dart';
@@ -121,41 +123,41 @@ class _DynamicFormState extends State<DynamicForm> {
   // Get the list of visible question indices
   List<int> _getVisibleQuestionIndices() {
     List<int> visible = [];
-    
+
     for (int i = 0; i < widget.formJson.length; i++) {
       final question = widget.formJson[i];
-      
+
       if (question['showWhen'] == null) {
         visible.add(i);
         continue;
       }
-      
+
       bool shouldShow = true;
       final conditions = question['showWhen'] as Map<String, dynamic>;
-      
+
       conditions.forEach((field, expectedValues) {
         if (!controller.form.contains(field)) {
           shouldShow = false;
           return;
         }
-        
+
         final value = controller.form.control(field).value;
         bool matches = false;
-        
+
         if (expectedValues is List) {
           matches = expectedValues.contains(value);
         } else {
           matches = (value == expectedValues);
         }
-        
+
         shouldShow = shouldShow && matches;
       });
-      
+
       if (shouldShow) {
         visible.add(i);
       }
     }
-    
+
     return visible;
   }
 
@@ -163,7 +165,7 @@ class _DynamicFormState extends State<DynamicForm> {
   Widget build(BuildContext context) {
     // Rebuild progress in the main build method to ensure it updates
     _calculateProgress();
-    
+
     final buttonColor = widget.primaryColor;
 
     return Theme(
@@ -382,30 +384,31 @@ class _DynamicFormState extends State<DynamicForm> {
             // Get current control value, ensuring it's a List<String>
             List<String> currentValue = [];
             final rawValue = controller.form.control(field['name']).value;
-            
+
             if (rawValue is List) {
               currentValue = List<String>.from(rawValue.map((e) => e.toString()));
             } else if (rawValue != null && rawValue != "") {
               // Handle case when it's a single value
               currentValue = [rawValue.toString()];
             }
-            
+
             return MultiSelectFormField(
               field: FormFieldModel.fromJson(field),
               onChanged: (List<String> value) {
                 // Force direct update to the FormGroup's value
                 controller.form.patchValue({field['name']: value});
-                
+
                 // Explicitly update control to ensure type consistency
                 final control = controller.form.control(field['name']);
                 if (control is FormControl<dynamic>) {
                   control.updateValue(value);
                 }
-                
+
                 // Debug info
-                print('Updated ${field['name']} with: $value (type: ${value.runtimeType})');
+                print(
+                    'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
                 print('Current form value: ${controller.form.value}');
-                
+
                 state.didChange(value);
                 state.control.markAsTouched();
               },
@@ -464,30 +467,31 @@ class _DynamicFormState extends State<DynamicForm> {
             // Get current control value, ensuring it's a List<String>
             List<String> currentValue = [];
             final rawValue = controller.form.control(field['name']).value;
-            
+
             if (rawValue is List) {
               currentValue = List<String>.from(rawValue.map((e) => e.toString()));
             } else if (rawValue != null && rawValue != "") {
               // Handle case when it's a single value
               currentValue = [rawValue.toString()];
             }
-            
+
             return MultiSelectFormField(
               field: FormFieldModel.fromJson(field),
               onChanged: (List<String> value) {
                 // Force direct update to the FormGroup's value
                 controller.form.patchValue({field['name']: value});
-                
+
                 // Explicitly update control to ensure type consistency
                 final control = controller.form.control(field['name']);
                 if (control is FormControl<dynamic>) {
                   control.updateValue(value);
                 }
-                
+
                 // Debug info
-                print('Updated ${field['name']} with: $value (type: ${value.runtimeType})');
+                print(
+                    'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
                 print('Current form value: ${controller.form.value}');
-                
+
                 state.didChange(value);
                 state.control.markAsTouched();
               },
@@ -878,11 +882,31 @@ class _DynamicFormState extends State<DynamicForm> {
               });
             }
 
-            return ReactiveTextField(
-              formControlName: field['name'],
-              keyboardType: field['type'] == 'number'
-                  ? TextInputType.number
-                  : TextInputType.text,
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ReactiveTextField(
+                  formControlName: field['name'],
+                  validationMessages: {
+                    'required': (error) => StringConstants.requiredField,
+                  },
+                  keyboardType: field['type'] == 'number'
+                      ? TextInputType.number
+                      : TextInputType.text,
+                  cursorColor: Colors.black, // Set the cursor color to black
+                  decoration: InputDecoration(
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(
+                          color: Colors.black), // Set underline color to black
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(
+                          color: Colors
+                              .black), // Set focused underline color to black
+                    ),
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -977,7 +1001,7 @@ class _DynamicFormState extends State<DynamicForm> {
             'min': (error) =>
                 '${StringConstants.valueMustBeAtLeast} ${field['min']}',
             'max': (error) =>
-                '${StringConstants.valueMustBeLessThanOrEqualTo} ${field['max']}',
+                '${StringConstants.valueMustBeLessThanOrEqualTo} ${field['max']} ${StringConstants.characters}',
           },
           inputFormatters: [
             if (field['allowNegatives'] == false)
@@ -996,7 +1020,8 @@ class _DynamicFormState extends State<DynamicForm> {
                 (field['min'] != null || field['max'] != null ? ')' : ''),
             labelStyle: widget.fontFamily,
             hintStyle: widget.fontFamily,
-            errorStyle: widget.fontFamily.copyWith(color: Colors.red),
+            errorStyle:
+                widget.fontFamily.copyWith(fontSize: 12, color: Colors.red),
           ),
         ),
         if (field['hasAttachments'] == true ||
@@ -1104,6 +1129,7 @@ class _DynamicFormState extends State<DynamicForm> {
                   },
                   isRequired: field['required'] == true,
                 ),
+                // Show error message if validation error occurs and control is touched
                 if (control.touched && control.hasErrors)
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
@@ -1116,6 +1142,7 @@ class _DynamicFormState extends State<DynamicForm> {
             );
           },
         ),
+        // Comments section if `hasComments` is true
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
           ReactiveTextField(
@@ -1210,7 +1237,7 @@ class _DynamicFormState extends State<DynamicForm> {
     if (widget.showOneByOne && controller.currentQuestionIndex < widget.formJson.length) {
       final currentField = widget.formJson[controller.currentQuestionIndex];
       final control = controller.form.control(currentField['name']);
-      
+
       // Check if the current field is required and empty
       if ((currentField['required'] == true) &&
           (control.value == null || control.value.toString().isEmpty || control.value == 'null')) {
@@ -1218,7 +1245,7 @@ class _DynamicFormState extends State<DynamicForm> {
         popuperror(StringConstants.pleaseFillInAllRequiredFields);
         return;
       }
-      
+
       // Check for required file uploads
       if (currentField['type'] == 'file' && currentField['required'] == true) {
         final hasFiles = controller.uploadedFiles[currentField['name']]?.isNotEmpty ?? false;
@@ -1234,7 +1261,7 @@ class _DynamicFormState extends State<DynamicForm> {
         }
       }
     }
-    
+
     // Clean up form data before submission
     Map<String, dynamic> cleanedFormData = Map.from(controller.form.value);
     Map<String, List<Map<String, dynamic>>> cleanedUploadedFiles = {};
@@ -1243,12 +1270,12 @@ class _DynamicFormState extends State<DynamicForm> {
     for (var field in widget.formJson) {
       final fieldName = field['name'];
       final value = cleanedFormData[fieldName];
-      
+
       // Remove empty or null values
       if (value == null || value.toString().isEmpty || value == 'null') {
         cleanedFormData.remove(fieldName);
         controller.uploadedFiles.remove(fieldName);
-        
+
         // Also remove associated comment if it exists
         if (field['hasComments'] == true) {
           cleanedFormData.remove('${fieldName}_comment');
@@ -1363,26 +1390,26 @@ class _DynamicFormState extends State<DynamicForm> {
 
   void moveToPreviousValidQuestion() {
     print("Backward navigation from index: ${controller.currentQuestionIndex}");
-    
+
     if (controller.currentQuestionIndex <= 0) {
       print("Already at first question, cannot go back");
       return;
     }
-    
+
     // Find the previous valid question
     int previousIndex = findPreviousVisibleQuestionIndex();
-    
+
     if (previousIndex != -1) {
       print("Moving back to question at index: $previousIndex");
-      
+
       // Update controller
       controller.currentQuestionIndex = previousIndex;
-      
+
       // Update PageView if using it
       if (_pageController != null && _pageController.hasClients) {
         _pageController.jumpToPage(previousIndex);
       }
-      
+
       // Force UI update
       setState(() {
         _calculateProgress();
@@ -1400,19 +1427,19 @@ class _DynamicFormState extends State<DynamicForm> {
     for (int i = controller.currentQuestionIndex - 1; i >= 0; i--) {
       final question = widget.formJson[i];
       final questionName = question['name'];
-      
+
       // If no conditions, this question should always be shown
       if (question['showWhen'] == null) {
         print("Question $questionName has no conditions - will be shown");
         return i;
       }
-      
+
       // Check if this question's conditions are met
       final Map<String, dynamic> conditions = question['showWhen'];
       bool shouldShow = true; // Start with true for AND logic between fields
-      
+
       print("Checking conditions for question $questionName: $conditions");
-      
+
       // Check each condition
       conditions.forEach((dependentField, expectedValues) {
         // Skip if the dependent field doesn't exist in the form
@@ -1421,13 +1448,13 @@ class _DynamicFormState extends State<DynamicForm> {
           shouldShow = false;
           return;
         }
-        
+
         // Get the value of the dependent field
         final dependentControl = controller.form.control(dependentField);
         final fieldValue = dependentControl.value;
-        
+
         print("Field $dependentField has value: $fieldValue");
-        
+
         // Check if the field value matches any expected value
         bool fieldMatches = false;
         if (expectedValues is List) {
@@ -1435,22 +1462,25 @@ class _DynamicFormState extends State<DynamicForm> {
           print("Checking if $fieldValue is in $expectedValues: $fieldMatches");
         } else {
           fieldMatches = (fieldValue == expectedValues);
-          print("Checking if $fieldValue equals $expectedValues: $fieldMatches");
+          print(
+              "Checking if $fieldValue equals $expectedValues: $fieldMatches");
         }
-        
+
         // For this question to show, ALL conditions must be met (or logic)
         shouldShow = shouldShow || fieldMatches;
       });
-      
+
       // If this question's conditions are met, it should be shown
       if (shouldShow) {
-        print("All conditions met for question $questionName, it will be shown");
+        print(
+            "All conditions met for question $questionName, it will be shown");
         return i;
       } else {
-        print("Conditions not met for question $questionName, checking previous question");
+        print(
+            "Conditions not met for question $questionName, checking previous question");
       }
     }
-    
+
     // If we get here, no previous questions should be shown
     return -1;
   }
@@ -1532,12 +1562,13 @@ class _DynamicFormState extends State<DynamicForm> {
   // Completely rebuild the progress indicator widget
   Widget _buildProgressIndicator({Key? key}) {
     // Calculate values directly here to ensure they're current
-    double progress = totalVisibleQuestions > 0 
+    double progress = totalVisibleQuestions > 0
         ? (currentVisibleQuestionIndex + 1) / totalVisibleQuestions
         : 0;
-    
-    print("RENDERING progress bar: ${currentVisibleQuestionIndex + 1}/$totalVisibleQuestions");
-    
+
+    print(
+        "RENDERING progress bar: ${currentVisibleQuestionIndex + 1}/$totalVisibleQuestions");
+
     // Use RepaintBoundary to force redraw
     return RepaintBoundary(
       key: key,
@@ -1570,25 +1601,28 @@ class _DynamicFormState extends State<DynamicForm> {
 
   // Add this helper method to find the next visible question
   int findNextVisibleQuestionIndex() {
-    print("Finding next visible question after ${controller.currentQuestionIndex}");
-    
+    print(
+        "Finding next visible question after ${controller.currentQuestionIndex}");
+
     // Check questions sequentially starting from the next one
-    for (int i = controller.currentQuestionIndex + 1; i < widget.formJson.length; i++) {
+    for (int i = controller.currentQuestionIndex + 1;
+        i < widget.formJson.length;
+        i++) {
       final question = widget.formJson[i];
       final questionName = question['name'];
-      
+
       // If no conditions, this question should always be shown
       if (question['showWhen'] == null) {
         print("Question $questionName has no conditions - will be shown");
         return i;
       }
-      
+
       // Check if this question's conditions are met
       final Map<String, dynamic> conditions = question['showWhen'];
       bool shouldShow = true; // Start with true for AND logic between fields
-      
+
       print("Checking conditions for $questionName: $conditions");
-      
+
       // Check each condition
       conditions.forEach((dependentField, expectedValues) {
         // Skip if the dependent field doesn't exist in the form
@@ -1597,13 +1631,13 @@ class _DynamicFormState extends State<DynamicForm> {
           shouldShow = false;
           return;
         }
-        
+
         // Get the value of the dependent field
         final dependentControl = controller.form.control(dependentField);
         final fieldValue = dependentControl.value;
-        
+
         print("Field $dependentField has value: $fieldValue");
-        
+
         // Check if the field value matches any expected value
         bool fieldMatches = false;
         if (expectedValues is List) {
@@ -1611,13 +1645,14 @@ class _DynamicFormState extends State<DynamicForm> {
           print("Checking if $fieldValue is in $expectedValues: $fieldMatches");
         } else {
           fieldMatches = (fieldValue == expectedValues);
-          print("Checking if $fieldValue equals $expectedValues: $fieldMatches");
+          print(
+              "Checking if $fieldValue equals $expectedValues: $fieldMatches");
         }
-        
+
         // For this question to show, ALL conditions must be met (AND logic)
         shouldShow = shouldShow && fieldMatches;
       });
-      
+
       // If this question's conditions are met, it should be shown
       if (shouldShow) {
         print("All conditions met for $questionName, it will be shown");
@@ -1626,7 +1661,7 @@ class _DynamicFormState extends State<DynamicForm> {
         print("Conditions not met for $questionName, checking next question");
       }
     }
-    
+
     // No more questions should be shown
     return -1;
   }
@@ -1763,50 +1798,101 @@ class _DropdownSearchState extends State<_DropdownSearch> {
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.7,
+      initialChildSize: 0.75,
       minChildSize: 0.5,
       maxChildSize: 0.9,
       expand: false,
-      builder: (context, scrollController) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: TextField(
-                style: widget.fontFamily,
-                controller: searchController,
-                decoration: InputDecoration(
-                  hintText: StringConstants.search,
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+          ),
+          child: Column(
+            children: [
+              // Top header with gray notch and Done button
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    Center(
+                      child: Container(
+                        height: 6,
+                        width: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => widget.onSelect(widget.selectedValue ?? ""),
+                          child: Text(
+                            'Done',
+                            style: AppTypography.searchInput,  // Assuming the style is defined in AppTypography
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // Search bar with no rounded corners
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.zero,  // No border radius
+                  ),
+                  child: TextField(
+                    controller: searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search...',
+                      border: InputBorder.none,
+                      hintStyle: AppTypography.searchHint,  // Assuming the style is defined in AppTypography
+                      icon: const Icon(Icons.search),
+                    ),
+                    onChanged: _filterOptions,
                   ),
                 ),
-                onChanged: _filterOptions,
               ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: filteredOptions.length,
-                itemBuilder: (context, index) {
-                  final option = filteredOptions[index];
-                  return ListTile(
-                    title: Text(option.toString()),
-                    onTap: () => widget.onSelect(option.toString()),
-                    trailing: widget.selectedValue == option.toString()
-                        ? Icon(Icons.check, color: widget.primaryColor)
-                        : null,
-                  );
-                },
+              const SizedBox(height: 8),
+              // Options list
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 20.0, right: 20.0),
+                  child: ListView.builder(
+                    controller: scrollController,
+                    itemCount: filteredOptions.length,
+                    itemBuilder: (context, index) {
+                      final option = filteredOptions[index];
+                      final isSelected = widget.selectedValue == option.toString();
+                      return ListTile(
+                        title: Text(option.toString(), style: AppTypography.searchInput),  // Assuming the style is defined in AppTypography
+                        trailing: isSelected
+                            ? const Icon(Icons.check, color: Colors.black)
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            widget.onSelect(option.toString());
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -1854,86 +1940,164 @@ class FileUploadWidget extends StatefulWidget {
 }
 
 class _FileUploadWidgetState extends State<FileUploadWidget> {
-  Future<void> _pickAndUploadFile(BuildContext context) async {
-    BuildContext? loadingContext;
+  // Define 2MB in bytes.
+  static const int _maxFileSize = 5 * 1024 * 1024;
+  BuildContext? _loadingContext;
 
-    void showLoadingDialog(BuildContext context) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext context) {
-          loadingContext = context;
-          return Center(
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(widget.primaryColor),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(StringConstants.processingFilePleaseWait,
-                      style: widget.fontFamily),
-                ],
-              ),
+  /// The `_showLoadingDialog` function displays a loading dialog with a circular progress
+  /// indicator and a text message in a Flutter app.
+  ///
+  /// Args:
+  ///   context (BuildContext): The `context` parameter in the `_showLoadingDialog` function
+  /// refers to the BuildContext object that represents the location of the widget within the
+  /// widget tree. It is used to access information about the widget's location and to perform
+  /// various operations such as navigating to a new screen, showing dialogs, accessing theme
+  ///
+  /// Returns:
+  ///   A loading dialog widget is being returned. It consists of a container with padding,
+  /// decoration, and child widgets including a CircularProgressIndicator and a Text widget
+  /// displaying a message "Processing file. Please wait."
+  void _showLoadingDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        _loadingContext = context;
+        return Center(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
             ),
-          );
-        },
-      );
-    }
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(widget.primaryColor),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  StringConstants.processingFilePleaseWait,
+                  style: widget.fontFamily,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-    void hideLoadingDialog() {
-      if (loadingContext != null) {
-        try {
-          Navigator.of(loadingContext!).pop();
-        } catch (e) {
-          if (kDebugMode) {
-            print('Error closing dialog: $e');
-          }
-        } finally {
-          loadingContext = null;
+  /// The function `_hideLoadingDialog` is used to close a loading dialog if it is currently
+  /// being displayed.
+  void _hideLoadingDialog() {
+    if (_loadingContext != null) {
+      try {
+        Navigator.of(_loadingContext!).pop();
+      } catch (e) {
+        if (kDebugMode) {
+          print('Error closing dialog: $e');
         }
+      } finally {
+        _loadingContext = null;
       }
     }
+  }
 
+  /// Validates file size and, if acceptable, adds the file using the callback.
+  /// The _processFile function processes a file by checking its size, creating a new file
+  /// object with relevant information, and updating the list of uploaded files.
+  ///
+  /// Args:
+  ///   bytes (Uint8List): The `bytes` parameter in the `_processFile` function is a required
+  /// `Uint8List` type that represents the content of the file being processed. It is
+  /// essential for reading and manipulating the file data within the function.
+  ///   fileName (String): The `fileName` parameter in the `_processFile` function is a
+  /// required parameter of type String. It represents the name of the file being processed.
+  ///   fileType (String): The `fileType` parameter in the `_processFile` function is a String
+  /// that represents the type of the file being processed. It is an optional parameter,
+  /// meaning it can be provided but is not required. If it is not provided, the function will
+  /// determine the file type based on the `fileName
+  ///   mimeType (String): The `mimeType` parameter in the `_processFile` function is used to
+  /// specify the type of the file being processed. It is typically a standardized internet
+  /// media type (also known as MIME type) that describes the content type of the file.
+  ///
+  /// Returns:
+  ///   If the length of the `bytes` is greater than `_maxFileSize`, a SnackBar is shown with
+  /// a message indicating that the file size must be less than 2MB. After displaying the
+  /// SnackBar, the function will return and not proceed further.
+  void _processFile({
+    required Uint8List bytes,
+    required String fileName,
+    String? fileType,
+    String? mimeType,
+  }) {
+    if (bytes.length > _maxFileSize) {
+      AppSnackBar(context).showErrorSnackBar(StringConstants.fileSizeMustBeLessThan2MB);
+      return;
+    }
+
+    final newFile = {
+      'question_name': widget.fieldName,
+      'question_label': widget.fieldLabel,
+      'file': bytes,
+      'fileName': fileName,
+      'fileType': fileType ?? _getFileType(fileName),
+      'mimeType': mimeType ??
+          (fileName.split('.').length > 1
+              ? 'application/${fileName.split('.').last}'
+              : 'application/octet-stream'),
+    };
+
+    widget.onFilesUploaded([...widget.uploadedFiles, newFile]);
+  }
+
+  /// The `_pickAndUploadFile` function in Dart displays a modal bottom sheet with options to choose a
+  /// file from FilePicker, gallery, or take a photo from the camera, handling the selection and
+  /// processing of the chosen file accordingly.
+  ///
+  /// Args:
+  ///   context (BuildContext): The `context` parameter in the `_pickAndUploadFile` function refers to
+  /// the BuildContext of the widget that called this function. It is used to show modal dialogs, access
+  /// theme data, navigate to other screens, and more within the Flutter application. The BuildContext
+  /// provides information about the location of
+  ///
+  /// Returns:
+  ///   The `_pickAndUploadFile` function is returning a `Future<void>`.
+  Future<void> _pickAndUploadFile(BuildContext context) async {
     showModalBottomSheet(
       context: context,
       builder: (BuildContext context) {
         return SafeArea(
           child: Wrap(
             children: <Widget>[
+              // Choose file from FilePicker.
               ListTile(
                 leading: const Icon(
                   Icons.description_outlined,
                   size: _DynamicFormState._iconSize,
                 ),
-                title:
-                    Text(StringConstants.chooseFile, style: widget.fontFamily),
+                title: Text(
+                  StringConstants.chooseFile,
+                  style: widget.fontFamily,
+                ),
                 onTap: () async {
                   Navigator.pop(context);
-                  FilePickerResult? result;
                   try {
-                    showLoadingDialog(context);
-                    result = await FilePicker.platform.pickFiles(
+                    _showLoadingDialog(context);
+                    final result = await FilePicker.platform.pickFiles(
                       type: FileType.custom,
-                  
                       allowedExtensions: [
-                    
-                         FileTypes.pdf,
-                         FileTypes.jpg,
-                         FileTypes.gif,
-                         FileTypes.jpeg,
-                         FileTypes.png,
-                         FileTypes.xlsx,
-                         FileTypes.xls,
-                         FileTypes.text
-
+                        FileTypes.pdf,
+                        FileTypes.jpg,
+                        FileTypes.gif,
+                        FileTypes.jpeg,
+                        FileTypes.png,
+                        FileTypes.xlsx,
+                        FileTypes.xls,
+                        FileTypes.text,
                       ],
                       allowMultiple: false,
                       withData: true,
@@ -1941,33 +2105,10 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     );
 
                     if (result != null && result.files.isNotEmpty) {
-                      if ((result.files.first.bytes?.length ?? 0) >
-                          _DynamicFormState._maxFileSize) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                                StringConstants.fileSizeMustBeLessThan5MB,
-                                style: widget.fontFamily),
-                            duration: const Duration(seconds: 2),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                        return;
+                      final file = result.files.first;
+                      if (file.bytes != null) {
+                        _processFile(bytes: file.bytes!, fileName: file.name);
                       }
-
-                      final newFile = {
-                        'question_name': widget.fieldName,
-                        'question_label': widget.fieldLabel,
-                        'file': result.files.first.bytes,
-                        'fileName': result.files.first.name,
-                        'fileType': _getFileType(result.files.first.name),
-                        'mimeType': result.files.first.extension != null
-                            ? 'application/${result.files.first.extension}'
-                            : 'application/octet-stream',
-                      };
-
-                      widget
-                          .onFilesUploaded([...widget.uploadedFiles, newFile]);
                     }
                   } catch (e) {
                     if (kDebugMode) {
@@ -1976,60 +2117,45 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                            StringConstants.errorSelectingFilePleaseTryAgain,
-                            style: widget.fontFamily),
+                          StringConstants.errorSelectingFilePleaseTryAgain,
+                          style: widget.fontFamily,
+                        ),
                         duration: const Duration(seconds: 2),
                       ),
                     );
                   } finally {
-                    hideLoadingDialog();
-                    result = null;
+                    _hideLoadingDialog();
                   }
                 },
               ),
+              // Choose file from Gallery.
               ListTile(
                 leading: const Icon(
                   Icons.collections_outlined,
                   size: _DynamicFormState._iconSize,
                 ),
-                title: Text(StringConstants.chooseFromGallery,
-                    style: widget.fontFamily),
+                title: Text(
+                  StringConstants.chooseFromGallery,
+                  style: widget.fontFamily,
+                ),
                 onTap: () async {
                   Navigator.pop(context);
-                  XFile? image;
                   try {
-                    showLoadingDialog(context);
+                    _showLoadingDialog(context);
                     final ImagePicker picker = ImagePicker();
-                    image = await picker.pickImage(
+                    final XFile? image = await picker.pickImage(
                       source: ImageSource.gallery,
                       imageQuality: 80,
                     );
 
                     if (image != null) {
                       final bytes = await image.readAsBytes();
-                      if (bytes.length > _DynamicFormState._maxFileSize) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                                StringConstants.fileSizeMustBeLessThan5MB,
-                                style: widget.fontFamily),
-                            duration: const Duration(seconds: 2),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                        return;
-                      }
-
-                      final newFile = {
-                        'question_name': widget.fieldName,
-                        'question_label': widget.fieldLabel,
-                        'file': bytes,
-                        'fileName': image.name,
-                        'fileType': 'image',
-                        'mimeType': 'image/${image.name.split('.').last}',
-                      };
-                      widget
-                          .onFilesUploaded([...widget.uploadedFiles, newFile]);
+                      _processFile(
+                        bytes: bytes,
+                        fileName: image.name,
+                        fileType: 'image',
+                        mimeType: 'image/${image.name.split('.').last}',
+                      );
                     }
                   } catch (e) {
                     if (kDebugMode) {
@@ -2038,60 +2164,46 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                            StringConstants.errorSelectingImagePleaseTryAgain,
-                            style: widget.fontFamily),
+                          StringConstants.errorSelectingImagePleaseTryAgain,
+                          style: widget.fontFamily,
+                        ),
                         duration: const Duration(seconds: 2),
                       ),
                     );
                   } finally {
-                    hideLoadingDialog();
-                    image = null;
+                    _hideLoadingDialog();
                   }
                 },
               ),
+              // Take photo from Camera.
               if (!kIsWeb)
                 ListTile(
                   leading: const Icon(
                     Icons.photo_camera_outlined,
                     size: _DynamicFormState._iconSize,
                   ),
-                  title:
-                      Text(StringConstants.takePhoto, style: widget.fontFamily),
+                  title: Text(
+                    StringConstants.takePhoto,
+                    style: widget.fontFamily,
+                  ),
                   onTap: () async {
                     Navigator.pop(context);
-                    XFile? photo;
                     try {
-                      showLoadingDialog(context);
+                      _showLoadingDialog(context);
                       final ImagePicker picker = ImagePicker();
-                      photo = await picker.pickImage(
+                      final XFile? photo = await picker.pickImage(
                         source: ImageSource.camera,
                         imageQuality: 80,
                       );
 
                       if (photo != null) {
                         final bytes = await photo.readAsBytes();
-                        if (bytes.length > _DynamicFormState._maxFileSize) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  StringConstants.fileSizeMustBeLessThan5MB,
-                                  style: widget.fontFamily),
-                              duration: const Duration(seconds: 2),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                          return;
-                        }
-                        final newFile = {
-                          'question_name': widget.fieldName,
-                          'question_label': widget.fieldLabel,
-                          'file': bytes,
-                          'fileName': photo.name,
-                          'fileType': 'image',
-                          'mimeType': 'image/${photo.name.split('.').last}',
-                        };
-                        widget.onFilesUploaded(
-                            [...widget.uploadedFiles, newFile]);
+                        _processFile(
+                          bytes: bytes,
+                          fileName: photo.name,
+                          fileType: 'image',
+                          mimeType: 'image/${photo.name.split('.').last}',
+                        );
                       }
                     } catch (e) {
                       if (kDebugMode) {
@@ -2100,14 +2212,14 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                              StringConstants.errorTakingPhotoPleaseTryAgain,
-                              style: widget.fontFamily),
+                            StringConstants.errorTakingPhotoPleaseTryAgain,
+                            style: widget.fontFamily,
+                          ),
                           duration: const Duration(seconds: 2),
                         ),
                       );
                     } finally {
-                      hideLoadingDialog();
-                      photo = null;
+                      _hideLoadingDialog();
                     }
                   },
                 ),
@@ -2118,6 +2230,18 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     );
   }
 
+  /// The function `_getFileType` determines the type of file based on its extension.
+  ///
+  /// Args:
+  ///   fileName (String): It seems like you forgot to provide the `fileName` parameter for the
+  /// `_getFileType` function. Could you please provide the `fileName` parameter so that I can assist
+  /// you further with the function?
+  ///
+  /// Returns:
+  ///   The function `_getFileType` is returning a string that represents the type of file based on its
+  /// extension. The possible return values are 'pdf', 'document', 'spreadsheet', 'image', or the
+  /// default value from the `FileTypes` class if the extension does not match any of the predefined
+  /// types.
   String _getFileType(String fileName) {
     final extension = fileName.split('.').last.toLowerCase();
     switch (extension) {
@@ -2168,11 +2292,13 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                   size: 32,
                 ),
                 const SizedBox(width: 12),
-                Text(StringConstants.uploadFiles,
-                    style: widget.fontFamily.copyWith(
-                      color: widget.buttonTextColor,
-                      fontSize: 18,
-                    )),
+                Text(
+                  StringConstants.uploadFiles,
+                  style: widget.fontFamily.copyWith(
+                    color: widget.buttonTextColor,
+                    fontSize: 18,
+                  ),
+                ),
               ],
             ),
           ),
