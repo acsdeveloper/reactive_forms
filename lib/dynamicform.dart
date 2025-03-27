@@ -1360,101 +1360,99 @@ class _DynamicFormState extends State<DynamicForm> {
     // The controller handles the actual navigation
     print("moveToNextValidQuestion called");
   }
+void moveToPreviousValidQuestion() {
+  print("Backward navigation from index: ${controller.currentQuestionIndex}");
 
-  void moveToPreviousValidQuestion() {
-    print("Backward navigation from index: ${controller.currentQuestionIndex}");
-    
-    if (controller.currentQuestionIndex <= 0) {
-      print("Already at first question, cannot go back");
-      return;
-    }
-    
-    // Find the previous valid question
-    int previousIndex = findPreviousVisibleQuestionIndex();
-    
-    if (previousIndex != -1) {
-      print("Moving back to question at index: $previousIndex");
-      
-      // Update controller
-      controller.currentQuestionIndex = previousIndex;
-      
-      // Update PageView if using it
-      if (_pageController != null && _pageController.hasClients) {
-        _pageController.jumpToPage(previousIndex);
-      }
-      
-      // Force UI update
-      setState(() {
-        _calculateProgress();
-      });
-    } else {
-      print("No previous visible questions found, staying at index: ${controller.currentQuestionIndex}");
-    }
+  if (controller.currentQuestionIndex <= 0) {
+    print("Already at first question, cannot go back");
+    return;
   }
 
-  // Helper method to find the previous visible question
-  int findPreviousVisibleQuestionIndex() {
-    print("Finding previous visible question before ${controller.currentQuestionIndex}");
-    
-    // Check questions in reverse order starting from the current-1
-    for (int i = controller.currentQuestionIndex - 1; i >= 0; i--) {
-      final question = widget.formJson[i];
-      final questionName = question['name'];
-      
-      // If no conditions, this question should always be shown
-      if (question['showWhen'] == null) {
-        print("Question $questionName has no conditions - will be shown");
-        return i;
+  // Find the previous valid question
+  int previousIndex = findPreviousVisibleQuestionIndex();
+
+  if (previousIndex != -1) {
+    print("Moving back to question at index: $previousIndex");
+
+    // Update controller
+    controller.currentQuestionIndex = previousIndex;
+
+    // Update PageView if using it
+    if (_pageController.hasClients) {
+      _pageController.jumpToPage(previousIndex);
+    }
+
+    // Force UI update
+    setState(() {
+      _calculateProgress();
+    });
+  } else {
+    print("No previous visible questions found, staying at index: ${controller.currentQuestionIndex}");
+  }
+}
+
+// Helper method to find the previous visible question
+int findPreviousVisibleQuestionIndex() {
+  print("Finding previous visible question before ${controller.currentQuestionIndex}");
+
+  // Check questions in reverse order starting from the current-1
+  for (int i = controller.currentQuestionIndex - 1; i >= 0; i--) {
+    final question = widget.formJson[i];
+    final questionName = question['name'];
+
+    // If no conditions, this question should always be shown
+    if (question['showWhen'] == null) {
+      print("Question $questionName has no conditions - will be shown");
+      return i;
+    }
+
+    // Check if this question's conditions are met
+    final Map<String, dynamic> conditions = question['showWhen'];
+    bool shouldShow = true; // Start with true for AND logic between fields
+
+    print("Checking conditions for question $questionName: $conditions");
+
+    // Check each condition
+    conditions.forEach((dependentField, expectedValues) {
+      // Skip if the dependent field doesn't exist in the form
+      if (!controller.form.contains(dependentField)) {
+        print("Field $dependentField not found in form");
+        shouldShow = false;
+        return;
       }
-      
-      // Check if this question's conditions are met
-      final Map<String, dynamic> conditions = question['showWhen'];
-      bool shouldShow = true; // Start with true for AND logic between fields
-      
-      print("Checking conditions for question $questionName: $conditions");
-      
-      // Check each condition
-      conditions.forEach((dependentField, expectedValues) {
-        // Skip if the dependent field doesn't exist in the form
-        if (!controller.form.contains(dependentField)) {
-          print("Field $dependentField not found in form");
-          shouldShow = false;
-          return;
-        }
-        
-        // Get the value of the dependent field
-        final dependentControl = controller.form.control(dependentField);
-        final fieldValue = dependentControl.value;
-        
-        print("Field $dependentField has value: $fieldValue");
-        
-        // Check if the field value matches any expected value
-        bool fieldMatches = false;
-        if (expectedValues is List) {
-          fieldMatches = expectedValues.contains(fieldValue);
-          print("Checking if $fieldValue is in $expectedValues: $fieldMatches");
-        } else {
-          fieldMatches = (fieldValue == expectedValues);
-          print("Checking if $fieldValue equals $expectedValues: $fieldMatches");
-        }
-        
-        // For this question to show, ALL conditions must be met (or logic)
-        shouldShow = shouldShow || fieldMatches;
-      });
-      
-      // If this question's conditions are met, it should be shown
-      if (shouldShow) {
-        print("All conditions met for question $questionName, it will be shown");
-        return i;
+
+      // Get the value of the dependent field
+      final dependentControl = controller.form.control(dependentField);
+      final fieldValue = dependentControl.value;
+
+      print("Field $dependentField has value: $fieldValue");
+
+      // Check if the field value matches any expected value
+      bool fieldMatches = false;
+      if (expectedValues is List) {
+        fieldMatches = expectedValues.contains(fieldValue);
+        print("Checking if $fieldValue is in $expectedValues: $fieldMatches");
       } else {
-        print("Conditions not met for question $questionName, checking previous question");
+        fieldMatches = (fieldValue == expectedValues);
+        print("Checking if $fieldValue equals $expectedValues: $fieldMatches");
       }
+
+      // For this question to show, ALL conditions must be met (AND logic)
+      shouldShow = shouldShow && fieldMatches;
+    });
+
+    // If this question's conditions are met, it should be shown
+    if (shouldShow) {
+      print("All conditions met for question $questionName, it will be shown");
+      return i;
+    } else {
+      print("Conditions not met for question $questionName, checking previous question");
     }
-    
-    // If we get here, no previous questions should be shown
-    return -1;
   }
 
+  // If we get here, no previous questions should be shown
+  return -1;
+}
   void moveToIndex(int index) {
     if (index >= 0 && index < widget.formJson.length) {
       final nextField = widget.formJson[index];
