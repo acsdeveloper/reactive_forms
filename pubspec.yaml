@@ -42,6 +42,7 @@ dependencies:
   device_info_plus: ^9.1.1
   universal_html: ^2.2.4
   get: ^4.6.6
+  google_fonts: ^6.2.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:reactiveform/components/app_typographpy.dart';
 import '../models/form_field_model.dart';
 
 class MultiSelectFormField extends StatelessWidget {
@@ -146,77 +147,123 @@ class _MultiSelectBottomSheetState extends State<MultiSelectBottomSheet> {
   }
 
   @override
+  /// The function builds a draggable scrollable sheet with a header, search bar, and options list for
+  /// selecting values.
+  /// 
+  /// Args:
+  ///   context (BuildContext): The `context` parameter in Flutter represents the location of a widget
+  /// within the widget tree. It provides access to various properties and methods related to the
+  /// current build context, such as theme, localization, and navigation.
+  /// 
+  /// Returns:
+  ///   The `build` method is returning a `DraggableScrollableSheet` widget with various properties and
+  /// child widgets. The main structure includes a container with a top header containing a gray notch
+  /// and a "Done" button, a search bar, and an options list displayed in a ListView. The
+  /// `DraggableScrollableSheet` allows for a draggable bottom sheet that can be expanded or collapsed
+  /// within the specified
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.7,
+      initialChildSize: 0.75,
       minChildSize: 0.5,
       maxChildSize: 0.9,
       expand: false,
       builder: (context, scrollController) {
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        widget.title,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+          ),
+          child: Column(
+            children: [
+              // Top header with gray notch and Done button
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    Center(
+                      child: Container(
+                        height: 6,
+                        width: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(3),
                         ),
                       ),
-                      TextButton(
-                        onPressed: () => widget.onConfirm(_selectedValues),
-                        child: const Text('Done'),
-                      ),
-                    ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          widget.title,
+                          style: AppTypography.searchInput,
+                        ),
+                        TextButton(
+                          onPressed: () => widget.onConfirm(_selectedValues),
+                          child: Text(
+                            'Done',
+                            style: AppTypography.searchInput,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // Search bar
+              Padding(
+                padding: const EdgeInsets.only(left: 16.0, right: 16.0),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.zero,
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
+                  child: TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      hintText: 'Search',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                      hintText: 'Search...',
+                      border: InputBorder.none,
+                      hintStyle: AppTypography.searchHint,
+                      icon: const Icon(Icons.search),
                     ),
                     onChanged: _filterOptions,
                   ),
-                ],
+                ),
               ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: _filteredOptions.length,
-                itemBuilder: (context, index) {
-                  final option = _filteredOptions[index];
-                  final isSelected = _selectedValues.contains(option);
-                  
-                  return ListTile(
-                    title: Text(option),
-                    trailing: isSelected
-                        ? const Icon(Icons.check, color: Colors.blue)
-                        : null,
-                    onTap: () {
-                      setState(() {
-                        if (isSelected) {
-                          _selectedValues.remove(option);
-                        } else {
-                          _selectedValues.add(option);
-                        }
-                      });
+              const SizedBox(height: 8),
+              // Options List
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 20.0, right: 20.0),
+                  child: ListView.builder(
+                    controller: scrollController,
+                    itemCount: _filteredOptions.length,
+                    itemBuilder: (context, index) {
+                      final option = _filteredOptions[index];
+                      final isSelected = _selectedValues.contains(option);
+                      return ListTile(
+                        title: Text(option, style: AppTypography.searchInput),
+                        trailing: isSelected
+                            ? const Icon(Icons.check, color: Colors.black)
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedValues.remove(option);
+                            } else {
+                              _selectedValues.add(option);
+                            }
+                          });
+                        },
+                      );
                     },
-                  );
-                },
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -227,4 +274,4 @@ class _MultiSelectBottomSheetState extends State<MultiSelectBottomSheet> {
     _searchController.dispose();
     super.dispose();
   }
-} 
+}
