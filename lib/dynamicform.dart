@@ -508,6 +508,19 @@ class _DynamicFormState extends State<DynamicForm> {
     }
   }
 
+  /// The `_buildRadioField` function in Dart creates a widget for displaying radio options with
+  /// conditional file upload and comment fields based on the provided field parameters.
+  /// 
+  /// Args:
+  ///   field (Map<String, dynamic>): The `_buildRadioField` function you provided seems to be a Flutter
+  /// widget that builds a radio field based on the given `field` parameter. The `field` parameter is
+  /// expected to be a `Map<String, dynamic>` containing various configuration options for the radio
+  /// field.
+  /// 
+  /// Returns:
+  ///   The `_buildRadioField` function returns a Column widget containing various child widgets based
+  /// on the input field parameters. The returned widgets include RadioListTile widgets for options,
+  /// FileUploadWidget for attachments if specified, and a TextField for comments if specified.
   Widget _buildRadioField(Map<String, dynamic> field) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -525,6 +538,14 @@ class _DynamicFormState extends State<DynamicForm> {
                   value: option.toString(),
                   title: Text(option.toString(), style: widget.fontFamily),
                   contentPadding: EdgeInsets.zero,
+                  onChanged: (value) {
+                    if (widget.showOneByOne) {
+                      // Add a small delay to allow the value to be set before navigation
+                      Future.delayed(Duration(milliseconds: 100), () {
+                        moveToNextQuestion(context);
+                      });
+                    }
+                  },
                 ),
               ),
             );
@@ -867,6 +888,20 @@ class _DynamicFormState extends State<DynamicForm> {
     );
   }
 
+  /// The `_buildTextField` function creates a column with a text field, comments section, and file
+  /// upload widget based on the provided field configuration.
+  /// 
+  /// Args:
+  ///   field (Map<String, dynamic>): The `_buildTextField` function you provided is a Flutter widget
+  /// that creates a form field based on the input `field` parameter. The `field` parameter is a
+  /// `Map<String, dynamic>` that contains various configuration options for the form field. Here's a
+  /// breakdown of the possible keys in the `
+  /// 
+  /// Returns:
+  ///   The `_buildTextField` function returns a Column widget containing various child widgets based on
+  /// the input field configuration provided. The returned widgets include ReactiveTextField for user
+  /// input, Text widgets for labels and hints, FileUploadWidget for uploading files, and other related
+  /// widgets for comments and attachments.
   Widget _buildTextField(Map<String, dynamic> field) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -893,7 +928,13 @@ class _DynamicFormState extends State<DynamicForm> {
                   keyboardType: field['type'] == 'number'
                       ? TextInputType.number
                       : TextInputType.text,
-                  cursorColor: Colors.black, // Set the cursor color to black
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (widget.showOneByOne) {
+                      moveToNextQuestion(context);
+                    }
+                  },
+                  cursorColor: Colors.black,
                   decoration: InputDecoration(
                     enabledBorder: UnderlineInputBorder(
                       borderSide: BorderSide(

@@ -1,11 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
-import 'package:reactive_forms/src/validators/validators.dart';
 import 'package:reactiveform/components/app_snackbar.dart';
 import 'package:reactiveform/string_constants.dart';
 import 'package:reactiveform/models/form_field_model.dart';
-import 'package:universal_html/html.dart';
 
 
 class DynamicFormController extends ChangeNotifier {
