@@ -100,7 +100,7 @@ class _DynamicFormState extends State<DynamicForm> {
   // Calculate the progress based on visible questions
   void _calculateProgress() {
     List<int> visibleIndices = _getVisibleQuestionIndices();
-    
+
     int position = visibleIndices.indexOf(controller.currentQuestionIndex);
     if (position == -1 && visibleIndices.isNotEmpty) {
       // Find the closest position
@@ -112,11 +112,13 @@ class _DynamicFormState extends State<DynamicForm> {
       }
       if (position == -1) position = visibleIndices.length - 1;
     }
-    
+
     setState(() {
       currentVisibleQuestionIndex = position >= 0 ? position : 0;
-      totalVisibleQuestions = visibleIndices.isNotEmpty ? visibleIndices.length : 1;
-      print("Progress updated: ${currentVisibleQuestionIndex + 1}/$totalVisibleQuestions");
+      totalVisibleQuestions =
+          visibleIndices.isNotEmpty ? visibleIndices.length : 1;
+      print(
+          "Progress updated: ${currentVisibleQuestionIndex + 1}/$totalVisibleQuestions");
     });
   }
 
@@ -239,9 +241,10 @@ class _DynamicFormState extends State<DynamicForm> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(3),
                 child: LinearProgressIndicator(
-                  value: totalVisibleQuestions > 0 
-                    ? (currentVisibleQuestionIndex + 1) / totalVisibleQuestions 
-                    : 0,
+                  value: totalVisibleQuestions > 0
+                      ? (currentVisibleQuestionIndex + 1) /
+                          totalVisibleQuestions
+                      : 0,
                   backgroundColor: Colors.grey[200],
                   valueColor: AlwaysStoppedAnimation<Color>(
                     widget.primaryColor,
@@ -262,7 +265,8 @@ class _DynamicFormState extends State<DynamicForm> {
                   children: [
                     TextSpan(
                       text: field['label'],
-                      style: widget.fontFamily.copyWith(fontWeight: FontWeight.bold,color: Colors.black),
+                      style: widget.fontFamily.copyWith(
+                          fontWeight: FontWeight.bold, color: Colors.black),
                     ),
                     if (field['required'] == true)
                       TextSpan(
@@ -299,7 +303,7 @@ class _DynamicFormState extends State<DynamicForm> {
     if (field['showWhen'] != null) {
       return ReactiveFormConsumer(
         builder: (context, form, child) {
-          bool shouldShow = false;  // Initialize to false for OR logic
+          bool shouldShow = false; // Initialize to false for OR logic
           final conditions = field['showWhen'] as Map<String, dynamic>;
 
           conditions.forEach((dependentField, expectedValue) {
@@ -386,7 +390,8 @@ class _DynamicFormState extends State<DynamicForm> {
             final rawValue = controller.form.control(field['name']).value;
 
             if (rawValue is List) {
-              currentValue = List<String>.from(rawValue.map((e) => e.toString()));
+              currentValue =
+                  List<String>.from(rawValue.map((e) => e.toString()));
             } else if (rawValue != null && rawValue != "") {
               // Handle case when it's a single value
               currentValue = [rawValue.toString()];
@@ -469,7 +474,8 @@ class _DynamicFormState extends State<DynamicForm> {
             final rawValue = controller.form.control(field['name']).value;
 
             if (rawValue is List) {
-              currentValue = List<String>.from(rawValue.map((e) => e.toString()));
+              currentValue =
+                  List<String>.from(rawValue.map((e) => e.toString()));
             } else if (rawValue != null && rawValue != "") {
               // Handle case when it's a single value
               currentValue = [rawValue.toString()];
@@ -510,13 +516,13 @@ class _DynamicFormState extends State<DynamicForm> {
 
   /// The `_buildRadioField` function in Dart creates a widget for displaying radio options with
   /// conditional file upload and comment fields based on the provided field parameters.
-  /// 
+  ///
   /// Args:
   ///   field (Map<String, dynamic>): The `_buildRadioField` function you provided seems to be a Flutter
   /// widget that builds a radio field based on the given `field` parameter. The `field` parameter is
   /// expected to be a `Map<String, dynamic>` containing various configuration options for the radio
   /// field.
-  /// 
+  ///
   /// Returns:
   ///   The `_buildRadioField` function returns a Column widget containing various child widgets based
   /// on the input field parameters. The returned widgets include RadioListTile widgets for options,
@@ -611,7 +617,8 @@ class _DynamicFormState extends State<DynamicForm> {
                           controller.uploadedFiles[field['name']] ?? [],
                       onRemoveUploadedFile: (file) {
                         setState(() {
-                          controller.uploadedFiles[field['name']]!.remove(file);
+                          // For single file upload, set to empty list when file is removed
+                          controller.uploadedFiles[field['name']] = [];
                         });
                       },
                       isRequired: true,
@@ -656,7 +663,8 @@ class _DynamicFormState extends State<DynamicForm> {
                           controller.uploadedFiles[field['name']] ?? [],
                       onRemoveUploadedFile: (file) {
                         setState(() {
-                          controller.uploadedFiles[field['name']]!.remove(file);
+                          // For single file upload, set to empty list when file is removed
+                          controller.uploadedFiles[field['name']] = [];
                         });
                       },
                       isRequired: false,
@@ -696,7 +704,8 @@ class _DynamicFormState extends State<DynamicForm> {
               context: context,
               isScrollControlled: true,
               shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(15))),
+                  borderRadius:
+                      BorderRadius.vertical(top: Radius.circular(15))),
               builder: (context) => _DropdownSearch(
                 fontFamily: widget.fontFamily,
                 options: field['options'] as List<dynamic>,
@@ -813,7 +822,8 @@ class _DynamicFormState extends State<DynamicForm> {
                           controller.uploadedFiles[field['name']] ?? [],
                       onRemoveUploadedFile: (file) {
                         setState(() {
-                          controller.uploadedFiles[field['name']]!.remove(file);
+                          // For single file upload, set to empty list when file is removed
+                          controller.uploadedFiles[field['name']] = [];
                         });
                       },
                       isRequired: true,
@@ -858,7 +868,8 @@ class _DynamicFormState extends State<DynamicForm> {
                           controller.uploadedFiles[field['name']] ?? [],
                       onRemoveUploadedFile: (file) {
                         setState(() {
-                          controller.uploadedFiles[field['name']]!.remove(file);
+                          // For single file upload, set to empty list when file is removed
+                          controller.uploadedFiles[field['name']] = [];
                         });
                       },
                       isRequired: false,
@@ -890,13 +901,13 @@ class _DynamicFormState extends State<DynamicForm> {
 
   /// The `_buildTextField` function creates a column with a text field, comments section, and file
   /// upload widget based on the provided field configuration.
-  /// 
+  ///
   /// Args:
   ///   field (Map<String, dynamic>): The `_buildTextField` function you provided is a Flutter widget
   /// that creates a form field based on the input `field` parameter. The `field` parameter is a
   /// `Map<String, dynamic>` that contains various configuration options for the form field. Here's a
   /// breakdown of the possible keys in the `
-  /// 
+  ///
   /// Returns:
   ///   The `_buildTextField` function returns a Column widget containing various child widgets based on
   /// the input field configuration provided. The returned widgets include ReactiveTextField for user
@@ -974,7 +985,8 @@ class _DynamicFormState extends State<DynamicForm> {
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
-              hintText: field['commentHint'] ?? StringConstants.enterCommentsHere,
+              hintText:
+                  field['commentHint'] ?? StringConstants.enterCommentsHere,
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -984,7 +996,9 @@ class _DynamicFormState extends State<DynamicForm> {
                 : null,
           ),
         ],
-        if (field['hasAttachments'] == true || field['requireAttachmentsOn'] == true || field['requiredAttachmentsOn'] == true) ...[
+        if (field['hasAttachments'] == true ||
+            field['requireAttachmentsOn'] == true ||
+            field['requiredAttachmentsOn'] == true) ...[
           const SizedBox(height: 16),
           Row(
             children: [
@@ -992,7 +1006,8 @@ class _DynamicFormState extends State<DynamicForm> {
                 StringConstants.uploadFiles,
                 style: widget.fontFamily,
               ),
-              if (field['requireAttachmentsOn'] == true || field['requiredAttachmentsOn'] == true) ...[
+              if (field['requireAttachmentsOn'] == true ||
+                  field['requiredAttachmentsOn'] == true) ...[
                 const SizedBox(width: 4),
                 Text(
                   '*',
@@ -1019,10 +1034,12 @@ class _DynamicFormState extends State<DynamicForm> {
             uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
             onRemoveUploadedFile: (file) {
               setState(() {
-                controller.uploadedFiles[field['name']]!.remove(file);
+                // For single file upload, set to empty list when file is removed
+                controller.uploadedFiles[field['name']] = [];
               });
             },
-            isRequired: field['requireAttachmentsOn'] == true || field['requiredAttachmentsOn'] == true,
+            isRequired: field['requireAttachmentsOn'] == true ||
+                field['requiredAttachmentsOn'] == true,
           ),
         ],
       ],
@@ -1101,7 +1118,8 @@ class _DynamicFormState extends State<DynamicForm> {
             uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
             onRemoveUploadedFile: (file) {
               setState(() {
-                controller.uploadedFiles[field['name']]!.remove(file);
+                // For single file upload, set to empty list when file is removed
+                controller.uploadedFiles[field['name']] = [];
               });
             },
             isRequired: field['attachmentsRequired'] == true,
@@ -1156,7 +1174,8 @@ class _DynamicFormState extends State<DynamicForm> {
                   uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
                   onRemoveUploadedFile: (file) {
                     setState(() {
-                      controller.uploadedFiles[field['name']]!.remove(file);
+                      // For single file upload, set to empty list when file is removed
+                      controller.uploadedFiles[field['name']] = [];
                       // Update the form control value when files are removed
                       final remainingFiles =
                           controller.uploadedFiles[field['name']] ?? [];
@@ -1280,7 +1299,7 @@ class _DynamicFormState extends State<DynamicForm> {
       final control = controller.form.control(currentField['name']);
 
       // Check if the current field is required and empty
-      if ((currentField['required'] == true) &&
+      if ((currentField['required'] == true) && 
           (control.value == null || control.value.toString().isEmpty || control.value == 'null')) {
         control.markAsTouched();
         popuperror(StringConstants.pleaseFillInAllRequiredFields);
@@ -1293,7 +1312,8 @@ class _DynamicFormState extends State<DynamicForm> {
         if (!hasFiles) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${currentField['label']} ${StringConstants.isRequired}',
+              content: Text(
+                  '${currentField['label']} ${StringConstants.isRequired}',
                   style: widget.fontFamily),
               duration: const Duration(seconds: 2),
             ),
@@ -1324,7 +1344,8 @@ class _DynamicFormState extends State<DynamicForm> {
       } else {
         // Keep the uploaded files for answered questions
         if (controller.uploadedFiles.containsKey(fieldName)) {
-          cleanedUploadedFiles[fieldName] = controller.uploadedFiles[fieldName]!;
+          cleanedUploadedFiles[fieldName] =
+              controller.uploadedFiles[fieldName]!;
         }
       }
     }
@@ -1411,7 +1432,8 @@ class _DynamicFormState extends State<DynamicForm> {
                 (question) => question['name'] == targetQuestionName);
 
             if (targetIndex != -1) {
-              widget.formJson[targetIndex]['prevQuestion'] = currentField['name'];
+              widget.formJson[targetIndex]['prevQuestion'] =
+                  currentField['name'];
               moveToIndex(targetIndex);
             } else {
               moveToNextValidQuestion();
@@ -1428,103 +1450,106 @@ class _DynamicFormState extends State<DynamicForm> {
     // The controller handles the actual navigation
     print("moveToNextValidQuestion called");
   }
-void moveToPreviousValidQuestion() {
-  print("Backward navigation from index: ${controller.currentQuestionIndex}");
 
+  void moveToPreviousValidQuestion() {
+    print("Backward navigation from index: ${controller.currentQuestionIndex}");
 
-  if (controller.currentQuestionIndex <= 0) {
-    print("Already at first question, cannot go back");
-    return;
-  }
-
-  // Find the previous valid question
-  int previousIndex = findPreviousVisibleQuestionIndex();
-
-  if (previousIndex != -1) {
-    print("Moving back to question at index: $previousIndex");
-
-    // Update controller
-    controller.currentQuestionIndex = previousIndex;
-
-    // Update PageView if using it
-    if (_pageController.hasClients) {
-      _pageController.jumpToPage(previousIndex);
-
+    if (controller.currentQuestionIndex <= 0) {
+      print("Already at first question, cannot go back");
+      return;
     }
 
-    // Force UI update
-    setState(() {
-      _calculateProgress();
-    });
-  } else {
-    print("No previous visible questions found, staying at index: ${controller.currentQuestionIndex}");
+    // Find the previous valid question
+    int previousIndex = findPreviousVisibleQuestionIndex();
+
+    if (previousIndex != -1) {
+      print("Moving back to question at index: $previousIndex");
+
+      // Update controller
+      controller.currentQuestionIndex = previousIndex;
+
+      // Update PageView if using it
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(previousIndex);
+      }
+
+      // Force UI update
+      setState(() {
+        _calculateProgress();
+      });
+    } else {
+      print(
+          "No previous visible questions found, staying at index: ${controller.currentQuestionIndex}");
+    }
   }
-}
 
 // Helper method to find the previous visible question
-int findPreviousVisibleQuestionIndex() {
-  print("Finding previous visible question before ${controller.currentQuestionIndex}");
+  int findPreviousVisibleQuestionIndex() {
+    print(
+        "Finding previous visible question before ${controller.currentQuestionIndex}");
 
-  // Check questions in reverse order starting from the current-1
-  for (int i = controller.currentQuestionIndex - 1; i >= 0; i--) {
-    final question = widget.formJson[i];
-    final questionName = question['name'];
+    // Check questions in reverse order starting from the current-1
+    for (int i = controller.currentQuestionIndex - 1; i >= 0; i--) {
+      final question = widget.formJson[i];
+      final questionName = question['name'];
 
-    // If no conditions, this question should always be shown
-    if (question['showWhen'] == null) {
-      print("Question $questionName has no conditions - will be shown");
-      return i;
-    }
-
-    // Check if this question's conditions are met
-    final Map<String, dynamic> conditions = question['showWhen'];
-    bool shouldShow = true; // Start with true for AND logic between fields
-
-    print("Checking conditions for question $questionName: $conditions");
-
-    // Check each condition
-    conditions.forEach((dependentField, expectedValues) {
-      // Skip if the dependent field doesn't exist in the form
-      if (!controller.form.contains(dependentField)) {
-        print("Field $dependentField not found in form");
-        shouldShow = false;
-        return;
+      // If no conditions, this question should always be shown
+      if (question['showWhen'] == null) {
+        print("Question $questionName has no conditions - will be shown");
+        return i;
       }
 
-      // Get the value of the dependent field
-      final dependentControl = controller.form.control(dependentField);
-      final fieldValue = dependentControl.value;
+      // Check if this question's conditions are met
+      final Map<String, dynamic> conditions = question['showWhen'];
+      bool shouldShow = true; // Start with true for AND logic between fields
 
-      print("Field $dependentField has value: $fieldValue");
+      print("Checking conditions for question $questionName: $conditions");
 
-      // Check if the field value matches any expected value
-      bool fieldMatches = false;
-      if (expectedValues is List) {
-        fieldMatches = expectedValues.contains(fieldValue);
-        print("Checking if $fieldValue is in $expectedValues: $fieldMatches");
+      // Check each condition
+      conditions.forEach((dependentField, expectedValues) {
+        // Skip if the dependent field doesn't exist in the form
+        if (!controller.form.contains(dependentField)) {
+          print("Field $dependentField not found in form");
+          shouldShow = false;
+          return;
+        }
+
+        // Get the value of the dependent field
+        final dependentControl = controller.form.control(dependentField);
+        final fieldValue = dependentControl.value;
+
+        print("Field $dependentField has value: $fieldValue");
+
+        // Check if the field value matches any expected value
+        bool fieldMatches = false;
+        if (expectedValues is List) {
+          fieldMatches = expectedValues.contains(fieldValue);
+          print("Checking if $fieldValue is in $expectedValues: $fieldMatches");
+        } else {
+          fieldMatches = (fieldValue == expectedValues);
+          print(
+              "Checking if $fieldValue equals $expectedValues: $fieldMatches");
+        }
+
+        // For this question to show, ALL conditions must be met (AND logic)
+        shouldShow = shouldShow && fieldMatches;
+      });
+
+      // If this question's conditions are met, it should be shown
+      if (shouldShow) {
+        print(
+            "All conditions met for question $questionName, it will be shown");
+        return i;
       } else {
-        fieldMatches = (fieldValue == expectedValues);
-        print("Checking if $fieldValue equals $expectedValues: $fieldMatches");
-
+        print(
+            "Conditions not met for question $questionName, checking previous question");
       }
-
-      // For this question to show, ALL conditions must be met (AND logic)
-      shouldShow = shouldShow && fieldMatches;
-    });
-
-    // If this question's conditions are met, it should be shown
-    if (shouldShow) {
-      print("All conditions met for question $questionName, it will be shown");
-      return i;
-    } else {
-      print("Conditions not met for question $questionName, checking previous question");
     }
 
+    // If we get here, no previous questions should be shown
+    return -1;
   }
 
-  // If we get here, no previous questions should be shown
-  return -1;
-}
   void moveToIndex(int index) {
     if (index >= 0 && index < widget.formJson.length) {
       final nextField = widget.formJson[index];
@@ -1720,42 +1745,44 @@ int findPreviousVisibleQuestionIndex() {
     if (controller.currentQuestionIndex >= widget.formJson.length) {
       return true;
     }
-    
+
     // Get the name of the current question
     String questionName = _getCurrentQuestionName();
     if (questionName.isEmpty) {
       return true;
     }
-    
+
     // Check if control exists and is valid
     if (!controller.form.contains(questionName)) {
       return true;
     }
-    
+
     bool isValid = controller.form.control(questionName).valid;
-    
+
     // Get the current field definition
-    Map<String, dynamic>? currentField = widget.formJson[controller.currentQuestionIndex];
-    
+    Map<String, dynamic>? currentField =
+        widget.formJson[controller.currentQuestionIndex];
+
     if (currentField != null) {
       // Check for required attachments
-      if ((currentField['requireAttachmentsOn'] == true || 
-           currentField['requiredAttachmentsOn'] == true) && 
-          (controller.uploadedFiles[currentField['name']] == null || 
-           controller.uploadedFiles[currentField['name']]!.isEmpty)) {
+      if ((currentField['requireAttachmentsOn'] == true ||
+              currentField['requiredAttachmentsOn'] == true) &&
+          (controller.uploadedFiles[currentField['name']] == null ||
+              controller.uploadedFiles[currentField['name']]!.isEmpty)) {
         setState(() {
           _showAttachmentError = true;
         });
         return false;
       }
-      
+
       // For radio/checkbox fields, check if the selected value requires attachments
-      if (currentField['type'] == 'radio' || currentField['type'] == 'checkbox') {
+      if (currentField['type'] == 'radio' ||
+          currentField['type'] == 'checkbox') {
         var selectedValue = controller.form.control(currentField['name']).value;
-        if (currentField['requireAttachmentsOn'] is List && 
+        if (currentField['requireAttachmentsOn'] is List &&
             currentField['requireAttachmentsOn'].contains(selectedValue) &&
-            (controller.uploadedFiles[currentField['name']] == null || 
-             controller.uploadedFiles[currentField['name']]!.isEmpty)) {
+            (controller.uploadedFiles[currentField['name']] == null ||
+                controller.uploadedFiles[currentField['name']]!.isEmpty)) {
           setState(() {
             _showAttachmentError = true;
           });
@@ -1763,17 +1790,17 @@ int findPreviousVisibleQuestionIndex() {
         }
       }
     }
-    
+
     setState(() {
       _showAttachmentError = false;
     });
-    
+
     return isValid;
   }
 
   // Add an error message display for attachments
   Widget _buildErrorMessage() {
-    return _showAttachmentError 
+    return _showAttachmentError
         ? Container(
             padding: const EdgeInsets.all(8),
             margin: const EdgeInsets.only(bottom: 16),
@@ -2091,7 +2118,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
               : 'application/octet-stream'),
     };
 
-    widget.onFilesUploaded([...widget.uploadedFiles, newFile]);
+    // For single file upload, replace the existing files instead of adding to them
+    widget.onFilesUploaded([newFile]);
   }
 
   /// The `_pickAndUploadFile` function in Dart displays a modal bottom sheet with options to choose a
@@ -2139,7 +2167,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                         FileTypes.xls,
                         FileTypes.text,
                       ],
-                      allowMultiple: false,
+                      allowMultiple: false, // Ensure only single file selection
                       withData: true,
                       allowCompression: true,
                     );
@@ -2305,71 +2333,70 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // Check if a file is already uploaded
+    final bool hasUploadedFile = widget.uploadedFiles.isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          height: 60,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: widget.primaryColor,
-              foregroundColor: widget.buttonTextColor,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+        // Only show the upload button if no file is uploaded yet
+        if (!hasUploadedFile)
+          SizedBox(
+            width: double.infinity,
+            height: 60,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: widget.primaryColor,
+                foregroundColor: widget.buttonTextColor,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () => _pickAndUploadFile(context),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.upload_file_rounded,
+                    color: widget.buttonTextColor,
+                    size: 32,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    StringConstants.uploadFiles,
+                    style: widget.fontFamily.copyWith(
+                      color: widget.buttonTextColor,
+                      fontSize: 18,
+                    ),
+                  ),
+                ],
               ),
             ),
-            onPressed: () => _pickAndUploadFile(context),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.upload_file_rounded,
-                  color: widget.buttonTextColor,
-                  size: 32,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  StringConstants.uploadFiles,
-                  style: widget.fontFamily.copyWith(
-                    color: widget.buttonTextColor,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
           ),
-        ),
         const SizedBox(height: 16),
-        if (widget.uploadedFiles.isNotEmpty) ...[
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: widget.uploadedFiles.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final file = widget.uploadedFiles[index];
-              return Card(
-                margin: EdgeInsets.zero,
-                elevation: 1,
-                child: ListTile(
-                  leading: Icon(_getFileIcon(file['fileType'])),
-                  title: Text(
-                    file['fileName'],
-                    style: widget.fontFamily,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: () => widget.onRemoveUploadedFile(file),
-                  ),
-                ),
-              );
-            },
+        if (hasUploadedFile) ...[
+          // Display the single uploaded file with delete option
+          Card(
+            margin: EdgeInsets.zero,
+            elevation: 1,
+            child: ListTile(
+              leading: Icon(_getFileIcon(widget.uploadedFiles[0]['fileType'])),
+              title: Text(
+                widget.uploadedFiles[0]['fileName'],
+                style: widget.fontFamily,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () =>
+                    widget.onRemoveUploadedFile(widget.uploadedFiles[0]),
+              ),
+            ),
           ),
           const SizedBox(height: 8),
         ],
