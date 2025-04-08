@@ -25,6 +25,7 @@ class DynamicForm extends StatefulWidget {
   final TextStyle fontFamily;
   final Color fileUploadButtonColor;
   final Color fileUploadButtonTextColor;
+  final String? submitButtonText;
 
   const DynamicForm({
     required this.formJson,
@@ -37,6 +38,7 @@ class DynamicForm extends StatefulWidget {
     required this.fontFamily,
     this.fileUploadButtonColor = Colors.black,
     this.fileUploadButtonTextColor = Colors.white,
+    this.submitButtonText,
     Key? key,
   }) : super(key: key);
 
@@ -548,7 +550,10 @@ class _DynamicFormState extends State<DynamicForm> {
                     if (widget.showOneByOne) {
                       // Add a small delay to allow the value to be set before navigation
                       Future.delayed(Duration(milliseconds: 100), () {
-                        moveToNextQuestion(context);
+                        // Only proceed with auto-navigation if we're not on the submit page
+                        if (!isCurrentQuestionEffectivelyLast()) {
+                          moveToNextQuestion(context);
+                        }
                       });
                     }
                   },
@@ -683,7 +688,7 @@ class _DynamicFormState extends State<DynamicForm> {
             decoration: InputDecoration(
               labelText: field['commentLabel'] ?? StringConstants.comments,
               hintText:
-                  field['commentHint'] ?? StringConstants.enterCommentsHere,
+                  field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -695,6 +700,9 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   Widget _buildDropdownField(Map<String, dynamic> field) {
+    // Ensure we always have a valid options list even if none was provided
+    final List<dynamic> options = (field['options'] as List<dynamic>?) ?? [];
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -708,7 +716,7 @@ class _DynamicFormState extends State<DynamicForm> {
                       BorderRadius.vertical(top: Radius.circular(15))),
               builder: (context) => _DropdownSearch(
                 fontFamily: widget.fontFamily,
-                options: field['options'] as List<dynamic>,
+                options: options,
                 selectedValue: controller.form.control(field['name']).value,
                 onSelect: (value) {
                   controller.form.control(field['name']).value = value;
@@ -888,7 +896,7 @@ class _DynamicFormState extends State<DynamicForm> {
             decoration: InputDecoration(
               labelText: field['commentLabel'] ?? StringConstants.comments,
               hintText:
-                  field['commentHint'] ?? StringConstants.enterCommentsHere,
+                  field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -986,7 +994,7 @@ class _DynamicFormState extends State<DynamicForm> {
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
               hintText:
-                  field['commentHint'] ?? StringConstants.enterCommentsHere,
+                  field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -1061,6 +1069,15 @@ class _DynamicFormState extends State<DynamicForm> {
             'max': (error) =>
                 '${StringConstants.valueMustBeLessThanOrEqualTo} ${field['max']} ${StringConstants.characters}',
           },
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) {
+            if (widget.showOneByOne) {
+              // Only proceed with auto-navigation if we're not on the submit page
+              if (!isCurrentQuestionEffectivelyLast()) {
+                moveToNextQuestion(context);
+              }
+            }
+          },
           inputFormatters: [
             if (field['allowNegatives'] == false)
               FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
@@ -1132,7 +1149,7 @@ class _DynamicFormState extends State<DynamicForm> {
             decoration: InputDecoration(
               labelText: field['commentLabel'] ?? StringConstants.comments,
               hintText:
-                  field['commentHint'] ?? StringConstants.enterCommentsHere,
+                  field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -1210,7 +1227,7 @@ class _DynamicFormState extends State<DynamicForm> {
             decoration: InputDecoration(
               labelText: field['commentLabel'] ?? StringConstants.comments,
               hintText:
-                  field['commentHint'] ?? StringConstants.enterCommentsHere,
+                  field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -1256,7 +1273,7 @@ class _DynamicFormState extends State<DynamicForm> {
                       const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 ),
                 child: Text(
-                  StringConstants.submit,
+                  widget.submitButtonText ?? 'Submit',
                   style: widget.fontFamily.copyWith(
                     color: widget.buttonTextColor,
                     fontSize: 16,
@@ -1287,7 +1304,7 @@ class _DynamicFormState extends State<DynamicForm> {
         padding: const EdgeInsets.symmetric(vertical: 16),
         minimumSize: const Size(double.infinity, 50),
       ),
-      child: Text(StringConstants.submit,
+      child: Text(widget.submitButtonText ?? 'Submit',
           style: widget.fontFamily.copyWith(color: widget.buttonTextColor)),
     );
   }
