@@ -66,7 +66,11 @@ class DynamicFormController extends ChangeNotifier {
         );
         
         if (field['hasComments'] == true) {
-          controls['${fieldName}_comment'] = FormControl<String>(value: '');
+          // When hasComments is true, make the comment field mandatory
+          controls['${fieldName}_comment'] = FormControl<String>(
+            value: '',
+            validators: [Validators.required],
+          );
         }
       } else {
         // Initialize form controls for non-file fields
@@ -76,7 +80,11 @@ class DynamicFormController extends ChangeNotifier {
         );
         
         if (field['hasComments'] == true) {
-          controls['${fieldName}_comment'] = FormControl<String>(value: '');
+          // When hasComments is true, make the comment field mandatory
+          controls['${fieldName}_comment'] = FormControl<String>(
+            value: '',
+            validators: [Validators.required],
+          );
         }
         
         if (field['subQuestions'] != null) {
@@ -388,7 +396,7 @@ class DynamicFormController extends ChangeNotifier {
     final conditions = question['showWhen'] as Map<String, dynamic>;
     bool shouldShow = true;
     
-    conditions.forEach((dependentField, expectedValues) {
+    conditions.forEach((dependentField, expectedValue) {
       if (!form.contains(dependentField)) {
         shouldShow = false;
         return;
@@ -397,10 +405,19 @@ class DynamicFormController extends ChangeNotifier {
       final fieldValue = form.control(dependentField).value;
       bool fieldMatches = false;
       
-      if (expectedValues is List) {
-        fieldMatches = expectedValues.contains(fieldValue);
+      // Handle different types of field values and expected values
+      if (fieldValue is List && expectedValue is List) {
+        // If both are lists, check if there's any intersection
+        fieldMatches = fieldValue.any((v) => expectedValue.contains(v));
+      } else if (fieldValue is List) {
+        // If field value is a list but expected value is single, check if the list contains the expected value
+        fieldMatches = fieldValue.contains(expectedValue);
+      } else if (expectedValue is List) {
+        // If expected value is a list but field value is single, check if the expected list contains the field value
+        fieldMatches = expectedValue.contains(fieldValue);
       } else {
-        fieldMatches = (fieldValue == expectedValues);
+        // Simple equality check for single values
+        fieldMatches = (fieldValue == expectedValue);
       }
       
       shouldShow = shouldShow && fieldMatches;

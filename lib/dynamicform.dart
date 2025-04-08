@@ -549,10 +549,13 @@ class _DynamicFormState extends State<DynamicForm> {
                   onChanged: (value) {
                     if (widget.showOneByOne) {
                       // Add a small delay to allow the value to be set before navigation
-                      Future.delayed(Duration(milliseconds: 100), () {
+                      Future.delayed(const Duration(milliseconds: 300), () {
                         // Only proceed with auto-navigation if we're not on the submit page
                         if (!isCurrentQuestionEffectivelyLast()) {
-                          moveToNextQuestion(context);
+                          // First validate the current form section
+                          if (validateCurrentSection()) {
+                            moveToNextQuestion(context);
+                          }
                         }
                       });
                     }
@@ -683,16 +686,34 @@ class _DynamicFormState extends State<DynamicForm> {
           ),
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
+          Row(
+            children: [
+              Text(
+                field['commentLabel'] ?? StringConstants.comments,
+                style: widget.fontFamily,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '*',
+                style: widget.fontFamily.copyWith(
+                  color: const Color.fromARGB(255, 222, 75, 64),
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
-              labelText: field['commentLabel'] ?? StringConstants.comments,
-              hintText:
-                  field['commentHint'] ?? '',
+              // No labelText to avoid displaying "comments" in the field
+              hintText: field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
             maxLines: 3,
+            validationMessages: {
+              'required': (_) => StringConstants.requiredField,
+            },
           ),
         ],
       ],
@@ -721,6 +742,20 @@ class _DynamicFormState extends State<DynamicForm> {
                 onSelect: (value) {
                   controller.form.control(field['name']).value = value;
                   Navigator.pop(context);
+                  
+                  // Add auto-navigation with validation for dropdown fields
+                  if (widget.showOneByOne) {
+                    // Add a small delay to allow the value to be set before navigation
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      // Only proceed with auto-navigation if we're not on the submit page
+                      if (!isCurrentQuestionEffectivelyLast()) {
+                        // First validate the current form section
+                        if (validateCurrentSection()) {
+                          moveToNextQuestion(context);
+                        }
+                      }
+                    });
+                  }
                 },
                 primaryColor: widget.primaryColor,
               ),
@@ -891,16 +926,34 @@ class _DynamicFormState extends State<DynamicForm> {
           ),
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
+          Row(
+            children: [
+              Text(
+                field['commentLabel'] ?? StringConstants.comments,
+                style: widget.fontFamily,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '*',
+                style: widget.fontFamily.copyWith(
+                  color: const Color.fromARGB(255, 222, 75, 64),
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
-              labelText: field['commentLabel'] ?? StringConstants.comments,
-              hintText:
-                  field['commentHint'] ?? '',
+              // No labelText to avoid displaying "comments" in the field
+              hintText: field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
             maxLines: 3,
+            validationMessages: {
+              'required': (_) => StringConstants.requiredField,
+            },
           ),
         ],
       ],
@@ -950,7 +1003,13 @@ class _DynamicFormState extends State<DynamicForm> {
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) {
                     if (widget.showOneByOne) {
-                      moveToNextQuestion(context);
+                      // Only proceed with auto-navigation if we're not on the submit page and form is valid
+                      if (!isCurrentQuestionEffectivelyLast()) {
+                        // First validate the current form section
+                        if (validateCurrentSection()) {
+                          moveToNextQuestion(context);
+                        }
+                      }
                     }
                   },
                   cursorColor: Colors.black,
@@ -978,30 +1037,28 @@ class _DynamicFormState extends State<DynamicForm> {
                 field['commentLabel'] ?? StringConstants.comments,
                 style: widget.fontFamily,
               ),
-              if (field['commentsRequired'] == true) ...[
-                const SizedBox(width: 4),
-                Text(
-                  '*',
-                  style: widget.fontFamily.copyWith(
-                    color: const Color.fromARGB(255, 222, 75, 64),
-                    fontSize: 16,
-                  ),
+              const SizedBox(width: 4),
+              Text(
+                '*',
+                style: widget.fontFamily.copyWith(
+                  color: const Color.fromARGB(255, 222, 75, 64),
+                  fontSize: 16,
                 ),
-              ],
+              ),
             ],
           ),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
-              hintText:
-                  field['commentHint'] ?? '',
+              // No labelText to avoid displaying "comments" in the field
+              hintText: field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
             maxLines: 3,
-            validationMessages: field['commentsRequired'] == true
-                ? {'required': (_) => StringConstants.requiredField}
-                : null,
+            validationMessages: {
+              'required': (_) => StringConstants.requiredField,
+            },
           ),
         ],
         if (field['hasAttachments'] == true ||
@@ -1074,7 +1131,10 @@ class _DynamicFormState extends State<DynamicForm> {
             if (widget.showOneByOne) {
               // Only proceed with auto-navigation if we're not on the submit page
               if (!isCurrentQuestionEffectivelyLast()) {
-                moveToNextQuestion(context);
+                // First validate the current form section
+                if (validateCurrentSection()) {
+                  moveToNextQuestion(context);
+                }
               }
             }
           },
@@ -1147,9 +1207,8 @@ class _DynamicFormState extends State<DynamicForm> {
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
-              labelText: field['commentLabel'] ?? StringConstants.comments,
-              hintText:
-                  field['commentHint'] ?? '',
+              // No labelText to avoid displaying "comments" in the field
+              hintText: field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -1222,12 +1281,27 @@ class _DynamicFormState extends State<DynamicForm> {
         // Comments section if `hasComments` is true
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
+          Row(
+            children: [
+              Text(
+                field['commentLabel'] ?? StringConstants.comments,
+                style: widget.fontFamily,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '*',
+                style: widget.fontFamily.copyWith(
+                  color: const Color.fromARGB(255, 222, 75, 64),
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
-              labelText: field['commentLabel'] ?? StringConstants.comments,
-              hintText:
-                  field['commentHint'] ?? '',
+              // No labelText to avoid displaying "comments" in the field
+              hintText: field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
             ),
@@ -1466,6 +1540,32 @@ class _DynamicFormState extends State<DynamicForm> {
   void moveToNextValidQuestion() {
     // The controller handles the actual navigation
     print("moveToNextValidQuestion called");
+  }
+  
+  // Validates the current section of the form including comment fields
+  bool validateCurrentSection() {
+    if (controller.currentQuestionIndex >= widget.formJson.length) {
+      return false;
+    }
+    
+    final currentField = widget.formJson[controller.currentQuestionIndex];
+    final String fieldName = currentField['name'];
+    
+    // Check the main field
+    if (!controller.form.control(fieldName).valid) {
+      return false;
+    }
+    
+    // If field has comments, validate the comment field too
+    if (currentField['hasComments'] == true) {
+      final commentControlName = '${fieldName}_comment';
+      if (controller.form.contains(commentControlName) && 
+          !controller.form.control(commentControlName).valid) {
+        return false;
+      }
+    }
+    
+    return true;
   }
 
   void moveToPreviousValidQuestion() {
