@@ -50,15 +50,40 @@ class DynamicFormController extends ChangeNotifier {
           value: initialValue,
           validators: field['required'] == true ? [Validators.required] : [],
         );
+
+        // Add comment field for multiselect fields if hasComments is true
+        if (field['hasComments'] == true) {
+          controls['${fieldName}_comment'] = FormControl<String>(
+            value: '',
+            validators: [Validators.required],
+          );
+        }
       } else if (field['type'] == 'file') {
         uploadedFiles[fieldName] = []; // Initialize empty list for file uploads
         controls[fieldName] = FormControl<String>(value: '');
+
+        // Add comment field for file fields if hasComments is true
+        if (field['hasComments'] == true) {
+          controls['${fieldName}_comment'] = FormControl<String>(
+            value: '',
+            validators: [Validators.required],
+          );
+        }
       } else if (field['type'] == 'number') {
         // Special handling for number fields
         controls[fieldName] = FormControl<num>(
           value: null,
           validators: _getValidators(field['required'], field),
         );
+
+        // Add comment field for number fields if hasComments is true
+        if (field['hasComments'] == true) {
+          // When hasComments is true, make the comment field mandatory
+          controls['${fieldName}_comment'] = FormControl<String>(
+            value: '',
+            validators: [Validators.required],
+          );
+        }
       } else if (field['type'] == 'radio') {
         // Set default Yes/No options for radio type if no options provided
         if (field['options'] == null || (field['options'] as List).isEmpty) {

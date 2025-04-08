@@ -1180,6 +1180,22 @@ class _DynamicFormState extends State<DynamicForm> {
         ],
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
+          Row(
+            children: [
+              Text(
+                field['commentLabel'] ?? StringConstants.comments,
+                style: widget.fontFamily,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '*',
+                style: widget.fontFamily.copyWith(
+                  color: const Color.fromARGB(255, 222, 75, 64),
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
