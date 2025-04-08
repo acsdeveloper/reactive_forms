@@ -27,6 +27,8 @@ class StringConstants {
   static const String max = 'max';
   static const String comments = 'Comments';
   static const String enterComments = 'Enter your comments here';
+  static const String commentsAreRequired =
+      'Comments are required. Please provide your comments.';
 
   // Buttons
   static const String submit = 'Submit';

@@ -66,13 +66,14 @@ class _DynamicFormState extends State<DynamicForm> {
       formJson: widget.formJson,
       onSubmit: widget.onSubmit,
     );
-    
+
     // Add a listener to the controller to update the UI when the question changes
     controller.addListener(_onControllerChanged);
-    
+
     // Initialize PageController to the current question
-    _pageController = PageController(initialPage: controller.currentQuestionIndex);
-    
+    _pageController =
+        PageController(initialPage: controller.currentQuestionIndex);
+
     // Calculate initial progress
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _calculateProgress();
@@ -709,10 +710,19 @@ class _DynamicFormState extends State<DynamicForm> {
               hintText: field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
+              // Add error style
+              errorStyle: widget.fontFamily
+                  .copyWith(color: Colors.red[700], fontSize: 12),
             ),
             maxLines: 3,
             validationMessages: {
-              'required': (_) => StringConstants.requiredField,
+              'required': (_) => StringConstants.commentsAreRequired,
+            },
+            // Add onSubmitted to validate the form when user submits via keyboard
+            onSubmitted: (_) {
+              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+                validateCurrentSection();
+              }
             },
           ),
         ],
@@ -723,7 +733,7 @@ class _DynamicFormState extends State<DynamicForm> {
   Widget _buildDropdownField(Map<String, dynamic> field) {
     // Ensure we always have a valid options list even if none was provided
     final List<dynamic> options = (field['options'] as List<dynamic>?) ?? [];
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -742,7 +752,7 @@ class _DynamicFormState extends State<DynamicForm> {
                 onSelect: (value) {
                   controller.form.control(field['name']).value = value;
                   Navigator.pop(context);
-                  
+
                   // Add auto-navigation with validation for dropdown fields
                   if (widget.showOneByOne) {
                     // Add a small delay to allow the value to be set before navigation
@@ -949,10 +959,19 @@ class _DynamicFormState extends State<DynamicForm> {
               hintText: field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
+              // Add error style
+              errorStyle: widget.fontFamily
+                  .copyWith(color: Colors.red[700], fontSize: 12),
             ),
             maxLines: 3,
             validationMessages: {
-              'required': (_) => StringConstants.requiredField,
+              'required': (_) => StringConstants.commentsAreRequired,
+            },
+            // Add onSubmitted to validate the form when user submits via keyboard
+            onSubmitted: (_) {
+              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+                validateCurrentSection();
+              }
             },
           ),
         ],
@@ -1054,10 +1073,19 @@ class _DynamicFormState extends State<DynamicForm> {
               hintText: field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
+              // Add error style
+              errorStyle: widget.fontFamily
+                  .copyWith(color: Colors.red[700], fontSize: 12),
             ),
             maxLines: 3,
             validationMessages: {
-              'required': (_) => StringConstants.requiredField,
+              'required': (_) => StringConstants.commentsAreRequired,
+            },
+            // Add onSubmitted to validate the form when user submits via keyboard
+            onSubmitted: (_) {
+              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+                validateCurrentSection();
+              }
             },
           ),
         ],
@@ -1211,8 +1239,20 @@ class _DynamicFormState extends State<DynamicForm> {
               hintText: field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
+              // Add error style
+              errorStyle: widget.fontFamily
+                  .copyWith(color: Colors.red[700], fontSize: 12),
             ),
             maxLines: 3,
+            validationMessages: {
+              'required': (_) => StringConstants.commentsAreRequired,
+            },
+            // Add onSubmitted to validate the form when user submits via keyboard
+            onSubmitted: (_) {
+              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+                validateCurrentSection();
+              }
+            },
           ),
         ],
       ],
@@ -1304,8 +1344,20 @@ class _DynamicFormState extends State<DynamicForm> {
               hintText: field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
+              // Add error style
+              errorStyle: widget.fontFamily
+                  .copyWith(color: Colors.red[700], fontSize: 12),
             ),
             maxLines: 3,
+            validationMessages: {
+              'required': (_) => StringConstants.commentsAreRequired,
+            },
+            // Add onSubmitted to validate the form when user submits via keyboard
+            onSubmitted: (_) {
+              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+                validateCurrentSection();
+              }
+            },
           ),
         ],
       ],
@@ -1385,13 +1437,16 @@ class _DynamicFormState extends State<DynamicForm> {
 
   void _submitForm(BuildContext context) {
     // First validate the current question if in step-by-step mode
-    if (widget.showOneByOne && controller.currentQuestionIndex < widget.formJson.length) {
+    if (widget.showOneByOne &&
+        controller.currentQuestionIndex < widget.formJson.length) {
       final currentField = widget.formJson[controller.currentQuestionIndex];
       final control = controller.form.control(currentField['name']);
 
       // Check if the current field is required and empty
-      if ((currentField['required'] == true) && 
-          (control.value == null || control.value.toString().isEmpty || control.value == 'null')) {
+      if ((currentField['required'] == true) &&
+          (control.value == null ||
+              control.value.toString().isEmpty ||
+              control.value == 'null')) {
         control.markAsTouched();
         popuperror(StringConstants.pleaseFillInAllRequiredFields);
         return;
@@ -1399,7 +1454,8 @@ class _DynamicFormState extends State<DynamicForm> {
 
       // Check for required file uploads
       if (currentField['type'] == 'file' && currentField['required'] == true) {
-        final hasFiles = controller.uploadedFiles[currentField['name']]?.isNotEmpty ?? false;
+        final hasFiles =
+            controller.uploadedFiles[currentField['name']]?.isNotEmpty ?? false;
         if (!hasFiles) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -1541,30 +1597,30 @@ class _DynamicFormState extends State<DynamicForm> {
     // The controller handles the actual navigation
     print("moveToNextValidQuestion called");
   }
-  
+
   // Validates the current section of the form including comment fields
   bool validateCurrentSection() {
     if (controller.currentQuestionIndex >= widget.formJson.length) {
       return false;
     }
-    
+
     final currentField = widget.formJson[controller.currentQuestionIndex];
     final String fieldName = currentField['name'];
-    
+
     // Check the main field
     if (!controller.form.control(fieldName).valid) {
       return false;
     }
-    
+
     // If field has comments, validate the comment field too
     if (currentField['hasComments'] == true) {
       final commentControlName = '${fieldName}_comment';
-      if (controller.form.contains(commentControlName) && 
+      if (controller.form.contains(commentControlName) &&
           !controller.form.control(commentControlName).valid) {
         return false;
       }
     }
-    
+
     return true;
   }
 
@@ -2014,10 +2070,12 @@ class _DropdownSearchState extends State<_DropdownSearch> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton(
-                          onPressed: () => widget.onSelect(widget.selectedValue ?? ""),
+                          onPressed: () =>
+                              widget.onSelect(widget.selectedValue ?? ""),
                           child: Text(
                             'Done',
-                            style: AppTypography.searchInput,  // Assuming the style is defined in AppTypography
+                            style: AppTypography
+                                .searchInput, // Assuming the style is defined in AppTypography
                           ),
                         ),
                       ],
@@ -2033,14 +2091,15 @@ class _DropdownSearchState extends State<_DropdownSearch> {
                   padding: const EdgeInsets.symmetric(horizontal: 5),
                   decoration: BoxDecoration(
                     color: Colors.grey[300],
-                    borderRadius: BorderRadius.zero,  // No border radius
+                    borderRadius: BorderRadius.zero, // No border radius
                   ),
                   child: TextField(
                     controller: searchController,
                     decoration: InputDecoration(
                       hintText: 'Search...',
                       border: InputBorder.none,
-                      hintStyle: AppTypography.searchHint,  // Assuming the style is defined in AppTypography
+                      hintStyle: AppTypography
+                          .searchHint, // Assuming the style is defined in AppTypography
                       icon: const Icon(Icons.search),
                     ),
                     onChanged: _filterOptions,
@@ -2057,9 +2116,12 @@ class _DropdownSearchState extends State<_DropdownSearch> {
                     itemCount: filteredOptions.length,
                     itemBuilder: (context, index) {
                       final option = filteredOptions[index];
-                      final isSelected = widget.selectedValue == option.toString();
+                      final isSelected =
+                          widget.selectedValue == option.toString();
                       return ListTile(
-                        title: Text(option.toString(), style: AppTypography.searchInput),  // Assuming the style is defined in AppTypography
+                        title: Text(option.toString(),
+                            style: AppTypography
+                                .searchInput), // Assuming the style is defined in AppTypography
                         trailing: isSelected
                             ? const Icon(Icons.check, color: Colors.black)
                             : null,
@@ -2219,7 +2281,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     String? mimeType,
   }) {
     if (bytes.length > _maxFileSize) {
-      AppSnackBar(context).showErrorSnackBar(StringConstants.fileSizeMustBeLessThan2MB);
+      AppSnackBar(context)
+          .showErrorSnackBar(StringConstants.fileSizeMustBeLessThan2MB);
       return;
     }
 
