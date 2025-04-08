@@ -570,36 +570,40 @@ class _DynamicFormState extends State<DynamicForm> {
           ReactiveValueListenableBuilder(
             formControlName: field['name'],
             builder: (context, control, child) {
-              // First check if requireAttachmentsOn is specified
+              // Get the disabledOptions list if it exists
+              List<dynamic> disabledOptions =
+                  field['disableAttachmentsOn'] is List
+                      ? field['disableAttachmentsOn']
+                      : field['disableAttachmentsOn'] != null
+                          ? [field['disableAttachmentsOn']]
+                          : [];
+
+              // If the current value is in disabledOptions, don't show attachments
+              if (disabledOptions.contains(control.value)) {
+                return const SizedBox.shrink();
+              }
+
+              // Check if this option requires attachments to determine if it should be marked as required
+              bool isRequired = false;
               if (field['requireAttachmentsOn'] != null) {
-                // Handle both single value and array of values
                 List<dynamic> requiredOptions =
                     field['requireAttachmentsOn'] is List
                         ? field['requireAttachmentsOn']
                         : [field['requireAttachmentsOn']];
 
-                List<dynamic> disabledOptions =
-                    field['disableAttachmentsOn'] is List
-                        ? field['disableAttachmentsOn']
-                        : field['disableAttachmentsOn'] != null
-                            ? [field['disableAttachmentsOn']]
-                            : [];
+                isRequired = requiredOptions.contains(control.value);
+              }
 
-                final showAttachments =
-                    requiredOptions.contains(control.value) &&
-                        !disabledOptions.contains(control.value);
-
-                if (!showAttachments) return const SizedBox.shrink();
-
-                return Column(
-                  children: [
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Text(
-                          StringConstants.uploadFiles,
-                          style: widget.fontFamily,
-                        ),
+              return Column(
+                children: [
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text(
+                        StringConstants.uploadFiles,
+                        style: widget.fontFamily,
+                      ),
+                      if (isRequired) ...[
                         const SizedBox(width: 4),
                         Text(
                           '*',
@@ -609,80 +613,32 @@ class _DynamicFormState extends State<DynamicForm> {
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    FileUploadWidget(
-                      fieldName: field['name'],
-                      fieldLabel: field['label'],
-                      primaryColor: widget.primaryColor,
-                      fontFamily: widget.fontFamily,
-                      buttonTextColor: widget.buttonTextColor,
-                      onFilesUploaded: (files) {
-                        setState(() {
-                          controller.uploadedFiles[field['name']] = files;
-                        });
-                      },
-                      uploadedFiles:
-                          controller.uploadedFiles[field['name']] ?? [],
-                      onRemoveUploadedFile: (file) {
-                        setState(() {
-                          // For single file upload, set to empty list when file is removed
-                          controller.uploadedFiles[field['name']] = [];
-                        });
-                      },
-                      isRequired: true,
-                    ),
-                  ],
-                );
-              }
-              // If no requireAttachmentsOn, check showAttachmentsOn
-              else if (field['showAttachmentsOn'] != null) {
-                // Handle both single value and array of values
-                List<dynamic> showOptions = field['showAttachmentsOn'] is List
-                    ? field['showAttachmentsOn']
-                    : [field['showAttachmentsOn']];
-
-                List<dynamic> disabledOptions =
-                    field['disableAttachmentsOn'] is List
-                        ? field['disableAttachmentsOn']
-                        : field['disableAttachmentsOn'] != null
-                            ? [field['disableAttachmentsOn']]
-                            : [];
-
-                final showAttachments = showOptions.contains(control.value) &&
-                    !disabledOptions.contains(control.value);
-
-                if (!showAttachments) return const SizedBox.shrink();
-
-                return Column(
-                  children: [
-                    const SizedBox(height: 16),
-                    FileUploadWidget(
-                      fieldName: field['name'],
-                      fieldLabel: field['label'],
-                      primaryColor: widget.primaryColor,
-                      fontFamily: widget.fontFamily,
-                      buttonTextColor: widget.buttonTextColor,
-                      onFilesUploaded: (files) {
-                        setState(() {
-                          controller.uploadedFiles[field['name']] = files;
-                        });
-                      },
-                      uploadedFiles:
-                          controller.uploadedFiles[field['name']] ?? [],
-                      onRemoveUploadedFile: (file) {
-                        setState(() {
-                          // For single file upload, set to empty list when file is removed
-                          controller.uploadedFiles[field['name']] = [];
-                        });
-                      },
-                      isRequired: false,
-                    ),
-                  ],
-                );
-              }
-
-              return const SizedBox.shrink();
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  FileUploadWidget(
+                    fieldName: field['name'],
+                    fieldLabel: field['label'],
+                    primaryColor: widget.primaryColor,
+                    fontFamily: widget.fontFamily,
+                    buttonTextColor: widget.buttonTextColor,
+                    onFilesUploaded: (files) {
+                      setState(() {
+                        controller.uploadedFiles[field['name']] = files;
+                      });
+                    },
+                    uploadedFiles:
+                        controller.uploadedFiles[field['name']] ?? [],
+                    onRemoveUploadedFile: (file) {
+                      setState(() {
+                        // For single file upload, set to empty list when file is removed
+                        controller.uploadedFiles[field['name']] = [];
+                      });
+                    },
+                    isRequired: isRequired,
+                  ),
+                ],
+              );
             },
           ),
         if (field['hasComments'] == true) ...[
@@ -819,36 +775,40 @@ class _DynamicFormState extends State<DynamicForm> {
           ReactiveValueListenableBuilder(
             formControlName: field['name'],
             builder: (context, control, child) {
-              // First check if requireAttachmentsOn is specified
+              // Get the disabledOptions list if it exists
+              List<dynamic> disabledOptions =
+                  field['disableAttachmentsOn'] is List
+                      ? field['disableAttachmentsOn']
+                      : field['disableAttachmentsOn'] != null
+                          ? [field['disableAttachmentsOn']]
+                          : [];
+
+              // If the current value is in disabledOptions, don't show attachments
+              if (disabledOptions.contains(control.value)) {
+                return const SizedBox.shrink();
+              }
+
+              // Check if this option requires attachments to determine if it should be marked as required
+              bool isRequired = false;
               if (field['requireAttachmentsOn'] != null) {
-                // Handle both single value and array of values
                 List<dynamic> requiredOptions =
                     field['requireAttachmentsOn'] is List
                         ? field['requireAttachmentsOn']
                         : [field['requireAttachmentsOn']];
 
-                List<dynamic> disabledOptions =
-                    field['disableAttachmentsOn'] is List
-                        ? field['disableAttachmentsOn']
-                        : field['disableAttachmentsOn'] != null
-                            ? [field['disableAttachmentsOn']]
-                            : [];
+                isRequired = requiredOptions.contains(control.value);
+              }
 
-                final showAttachments =
-                    requiredOptions.contains(control.value) &&
-                        !disabledOptions.contains(control.value);
-
-                if (!showAttachments) return const SizedBox.shrink();
-
-                return Column(
-                  children: [
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Text(
-                          StringConstants.uploadFiles,
-                          style: widget.fontFamily,
-                        ),
+              return Column(
+                children: [
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text(
+                        StringConstants.uploadFiles,
+                        style: widget.fontFamily,
+                      ),
+                      if (isRequired) ...[
                         const SizedBox(width: 4),
                         Text(
                           '*',
@@ -858,80 +818,32 @@ class _DynamicFormState extends State<DynamicForm> {
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    FileUploadWidget(
-                      fieldName: field['name'],
-                      fieldLabel: field['label'],
-                      primaryColor: widget.primaryColor,
-                      fontFamily: widget.fontFamily,
-                      buttonTextColor: widget.buttonTextColor,
-                      onFilesUploaded: (files) {
-                        setState(() {
-                          controller.uploadedFiles[field['name']] = files;
-                        });
-                      },
-                      uploadedFiles:
-                          controller.uploadedFiles[field['name']] ?? [],
-                      onRemoveUploadedFile: (file) {
-                        setState(() {
-                          // For single file upload, set to empty list when file is removed
-                          controller.uploadedFiles[field['name']] = [];
-                        });
-                      },
-                      isRequired: true,
-                    ),
-                  ],
-                );
-              }
-              // If no requireAttachmentsOn, check showAttachmentsOn
-              else if (field['showAttachmentsOn'] != null) {
-                // Handle both single value and array of values
-                List<dynamic> showOptions = field['showAttachmentsOn'] is List
-                    ? field['showAttachmentsOn']
-                    : [field['showAttachmentsOn']];
-
-                List<dynamic> disabledOptions =
-                    field['disableAttachmentsOn'] is List
-                        ? field['disableAttachmentsOn']
-                        : field['disableAttachmentsOn'] != null
-                            ? [field['disableAttachmentsOn']]
-                            : [];
-
-                final showAttachments = showOptions.contains(control.value) &&
-                    !disabledOptions.contains(control.value);
-
-                if (!showAttachments) return const SizedBox.shrink();
-
-                return Column(
-                  children: [
-                    const SizedBox(height: 16),
-                    FileUploadWidget(
-                      fieldName: field['name'],
-                      fieldLabel: field['label'],
-                      primaryColor: widget.primaryColor,
-                      fontFamily: widget.fontFamily,
-                      buttonTextColor: widget.buttonTextColor,
-                      onFilesUploaded: (files) {
-                        setState(() {
-                          controller.uploadedFiles[field['name']] = files;
-                        });
-                      },
-                      uploadedFiles:
-                          controller.uploadedFiles[field['name']] ?? [],
-                      onRemoveUploadedFile: (file) {
-                        setState(() {
-                          // For single file upload, set to empty list when file is removed
-                          controller.uploadedFiles[field['name']] = [];
-                        });
-                      },
-                      isRequired: false,
-                    ),
-                  ],
-                );
-              }
-
-              return const SizedBox.shrink();
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  FileUploadWidget(
+                    fieldName: field['name'],
+                    fieldLabel: field['label'],
+                    primaryColor: widget.primaryColor,
+                    fontFamily: widget.fontFamily,
+                    buttonTextColor: widget.buttonTextColor,
+                    onFilesUploaded: (files) {
+                      setState(() {
+                        controller.uploadedFiles[field['name']] = files;
+                      });
+                    },
+                    uploadedFiles:
+                        controller.uploadedFiles[field['name']] ?? [],
+                    onRemoveUploadedFile: (file) {
+                      setState(() {
+                        // For single file upload, set to empty list when file is removed
+                        controller.uploadedFiles[field['name']] = [];
+                      });
+                    },
+                    isRequired: isRequired,
+                  ),
+                ],
+              );
             },
           ),
         if (field['hasComments'] == true) ...[
@@ -1113,26 +1025,45 @@ class _DynamicFormState extends State<DynamicForm> {
             ],
           ),
           const SizedBox(height: 8),
-          FileUploadWidget(
-            fieldName: field['name'],
-            fieldLabel: field['label'],
-            primaryColor: widget.primaryColor,
-            fontFamily: widget.fontFamily,
-            buttonTextColor: widget.buttonTextColor,
-            onFilesUploaded: (files) {
-              setState(() {
-                controller.uploadedFiles[field['name']] = files;
-              });
+          ReactiveValueListenableBuilder(
+            formControlName: field['name'],
+            builder: (context, control, child) {
+              // Check if this value requires attachments
+              bool isRequired = field['requireAttachmentsOn'] == true ||
+                  field['requiredAttachmentsOn'] == true;
+
+              // Check if requireAttachmentsOn contains specific values
+              if (field['requireAttachmentsOn'] != null &&
+                  field['requireAttachmentsOn'] is List) {
+                final selectedValue = control.value;
+                final requiredOptions = field['requireAttachmentsOn'];
+
+                if (requiredOptions.contains(selectedValue)) {
+                  isRequired = true;
+                }
+              }
+
+              return FileUploadWidget(
+                fieldName: field['name'],
+                fieldLabel: field['label'],
+                primaryColor: widget.primaryColor,
+                fontFamily: widget.fontFamily,
+                buttonTextColor: widget.buttonTextColor,
+                onFilesUploaded: (files) {
+                  setState(() {
+                    controller.uploadedFiles[field['name']] = files;
+                  });
+                },
+                uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+                onRemoveUploadedFile: (file) {
+                  setState(() {
+                    // For single file upload, set to empty list when file is removed
+                    controller.uploadedFiles[field['name']] = [];
+                  });
+                },
+                isRequired: isRequired,
+              );
             },
-            uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
-            onRemoveUploadedFile: (file) {
-              setState(() {
-                // For single file upload, set to empty list when file is removed
-                controller.uploadedFiles[field['name']] = [];
-              });
-            },
-            isRequired: field['requireAttachmentsOn'] == true ||
-                field['requiredAttachmentsOn'] == true,
           ),
         ],
       ],
@@ -1209,26 +1140,43 @@ class _DynamicFormState extends State<DynamicForm> {
             ],
           ),
           const SizedBox(height: 8),
-          FileUploadWidget(
-            fieldName: field['name'],
-            fieldLabel: field['label'],
-            primaryColor: widget.primaryColor,
-            fontFamily: widget.fontFamily,
-            buttonTextColor: widget.buttonTextColor,
-            onFilesUploaded: (files) {
-              setState(() {
-                controller.uploadedFiles[field['name']] = files;
-              });
-            },
-            uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
-            onRemoveUploadedFile: (file) {
-              setState(() {
-                // For single file upload, set to empty list when file is removed
-                controller.uploadedFiles[field['name']] = [];
-              });
-            },
-            isRequired: field['attachmentsRequired'] == true,
-          ),
+          ReactiveValueListenableBuilder(
+              formControlName: field['name'],
+              builder: (context, control, child) {
+                // Check if this value requires attachments (if requireAttachmentsOn is set)
+                bool isRequired = field['attachmentsRequired'] == true;
+                if (field['requireAttachmentsOn'] != null) {
+                  final selectedValue = control.value;
+                  final requiredOptions = field['requireAttachmentsOn'] is List
+                      ? field['requireAttachmentsOn']
+                      : [field['requireAttachmentsOn']];
+
+                  if (requiredOptions.contains(selectedValue)) {
+                    isRequired = true;
+                  }
+                }
+
+                return FileUploadWidget(
+                  fieldName: field['name'],
+                  fieldLabel: field['label'],
+                  primaryColor: widget.primaryColor,
+                  fontFamily: widget.fontFamily,
+                  buttonTextColor: widget.buttonTextColor,
+                  onFilesUploaded: (files) {
+                    setState(() {
+                      controller.uploadedFiles[field['name']] = files;
+                    });
+                  },
+                  uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+                  onRemoveUploadedFile: (file) {
+                    setState(() {
+                      // For single file upload, set to empty list when file is removed
+                      controller.uploadedFiles[field['name']] = [];
+                    });
+                  },
+                  isRequired: isRequired,
+                );
+              }),
         ],
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
@@ -1937,7 +1885,7 @@ class _DynamicFormState extends State<DynamicForm> {
         widget.formJson[controller.currentQuestionIndex];
 
     if (currentField != null) {
-      // Check for required attachments
+      // Check for attachments that are globally required
       if ((currentField['requireAttachmentsOn'] == true ||
               currentField['requiredAttachmentsOn'] == true) &&
           (controller.uploadedFiles[currentField['name']] == null ||
@@ -1948,19 +1896,19 @@ class _DynamicFormState extends State<DynamicForm> {
         return false;
       }
 
-      // For radio/checkbox fields, check if the selected value requires attachments
-      if (currentField['type'] == 'radio' ||
-          currentField['type'] == 'checkbox') {
-        var selectedValue = controller.form.control(currentField['name']).value;
-        if (currentField['requireAttachmentsOn'] is List &&
-            currentField['requireAttachmentsOn'].contains(selectedValue) &&
-            (controller.uploadedFiles[currentField['name']] == null ||
-                controller.uploadedFiles[currentField['name']]!.isEmpty)) {
-          setState(() {
-            _showAttachmentError = true;
-          });
-          return false;
-        }
+      // For fields with specific values requiring attachments
+      var selectedValue = controller.form.control(currentField['name']).value;
+
+      // Check if requireAttachmentsOn contains a list of values and the selected value is in that list
+      if (currentField['requireAttachmentsOn'] != null &&
+          currentField['requireAttachmentsOn'] is List &&
+          currentField['requireAttachmentsOn'].contains(selectedValue) &&
+          (controller.uploadedFiles[currentField['name']] == null ||
+              controller.uploadedFiles[currentField['name']]!.isEmpty)) {
+        setState(() {
+          _showAttachmentError = true;
+        });
+        return false;
       }
     }
 

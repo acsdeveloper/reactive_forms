@@ -279,15 +279,15 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    // Check if file upload is required for RADIO fields with requireAttachmentsOn
+    // Check if file upload is required based on requireAttachmentsOn
     if (field['hasAttachments'] == true &&
-        field['requireAttachmentsOn'] != null &&
-        field['requireAttachmentsOn'].isNotEmpty) {
+        field['requireAttachmentsOn'] != null) {
       final selectedValue = currentControl.value;
       final requireAttachmentsOn = field['requireAttachmentsOn'] is List
           ? field['requireAttachmentsOn']
           : [field['requireAttachmentsOn']];
 
+      // Only validate if the current selected value is in the requireAttachmentsOn list
       if (requireAttachmentsOn.contains(selectedValue)) {
         // Check if files are uploaded
         if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
@@ -478,10 +478,17 @@ class DynamicFormController extends ChangeNotifier {
       return true;
     }
 
-    // Attachment validation
-    if (field['requireAttachmentsOn'] == currentControl.value &&
-        (uploadedFiles[fieldName]?.isEmpty ?? true)) {
-      return true;
+    // Attachment validation - only if requireAttachmentsOn matches the current value
+    if (field['requireAttachmentsOn'] != null) {
+      final selectedValue = currentControl.value;
+      final requireAttachmentsOn = field['requireAttachmentsOn'] is List
+          ? field['requireAttachmentsOn']
+          : [field['requireAttachmentsOn']];
+
+      if (requireAttachmentsOn.contains(selectedValue) &&
+          (uploadedFiles[fieldName]?.isEmpty ?? true)) {
+        return true;
+      }
     }
 
     // Sub-questions validation
@@ -539,8 +546,16 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    if (field['requireAttachmentsOn'] == control.value) {
-      return StringConstants.uploadRequiredFiles;
+    // Check if requireAttachmentsOn matches the selected value
+    if (field['requireAttachmentsOn'] != null) {
+      final selectedValue = control.value;
+      final requireAttachmentsOn = field['requireAttachmentsOn'] is List
+          ? field['requireAttachmentsOn']
+          : [field['requireAttachmentsOn']];
+
+      if (requireAttachmentsOn.contains(selectedValue)) {
+        return StringConstants.uploadRequiredFiles;
+      }
     }
 
     return StringConstants.pleaseAnswerAllRequiredSubQuestions;
