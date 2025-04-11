@@ -283,19 +283,37 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    // Add scenario for 'file' type with 'required' set to true
-    if (field['type'] == 'file' && field['required'] == true) {
-      // Check if files are uploaded
-      if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
-        AppSnackBar(context).showErrorSnackBar(StringConstants.fileIsRequired);
-        notifyListeners();
-        return false;
+    // Check if file upload is required based on enableAttachmentsOn or requireAttachmentsOn
+    bool fileUploadRequired = false;
+
+    // Check requireAttachmentsOn first
+    if (field['requireAttachmentsOn'] != null) {
+      final selectedValue = currentControl.value;
+      final requireAttachmentsOn = field['requireAttachmentsOn'] is List
+          ? field['requireAttachmentsOn']
+          : [field['requireAttachmentsOn']];
+
+      // Only validate if the current selected value is in the requireAttachmentsOn list
+      if (requireAttachmentsOn.contains(selectedValue)) {
+        fileUploadRequired = true;
       }
     }
 
-    // Check if file upload is required for TEXT fields with requiredAttachmentsOn = true
-    if (field['type'] == 'text' && field['requiredAttachmentsOn'] == true) {
-      // Check if files are uploaded
+    // Then check enableAttachmentsOn (now works the same as requireAttachmentsOn)
+    if (!fileUploadRequired && field['enableAttachmentsOn'] != null) {
+      final selectedValue = currentControl.value;
+      final enabledOptions = field['enableAttachmentsOn'] is List
+          ? field['enableAttachmentsOn']
+          : [field['enableAttachmentsOn']];
+
+      // Check if the selected value is in the enabledOptions
+      if (enabledOptions.contains(selectedValue)) {
+        fileUploadRequired = true;
+      }
+    }
+
+    // If files are required, check if they're uploaded
+    if (fileUploadRequired) {
       if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
         AppSnackBar(context)
             .showErrorSnackBar(StringConstants.uploadRequiredFiles);
@@ -304,57 +322,13 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    // Check if file upload is required based on hasAttachments and enableAttachmentsOn
-    if (field['hasAttachments'] == true) {
-      // Check if enableAttachmentsOn is specified
-      if (field['enableAttachmentsOn'] != null) {
-        final selectedValue = currentControl.value;
-        final enabledOptions = field['enableAttachmentsOn'] is List
-            ? field['enableAttachmentsOn']
-            : [field['enableAttachmentsOn']];
-
-        // If enabledOptions is empty, require attachments for all values
-        if (enabledOptions.isEmpty) {
-          if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
-            AppSnackBar(context)
-                .showErrorSnackBar(StringConstants.uploadRequiredFiles);
-            notifyListeners();
-            return false;
-          }
-        }
-        // Otherwise, only require attachments if the selected value is in enabledOptions
-        else if (enabledOptions.contains(selectedValue)) {
-          if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
-            AppSnackBar(context)
-                .showErrorSnackBar(StringConstants.uploadRequiredFiles);
-            notifyListeners();
-            return false;
-          }
-        }
-      } else {
-        // If enableAttachmentsOn is not specified, require attachments for all values
-        if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
-          AppSnackBar(context)
-              .showErrorSnackBar(StringConstants.uploadRequiredFiles);
-          notifyListeners();
-          return false;
-        }
-      }
-    } else if (field['requireAttachmentsOn'] != null) {
-      final selectedValue = currentControl.value;
-      final requireAttachmentsOn = field['requireAttachmentsOn'] is List
-          ? field['requireAttachmentsOn']
-          : [field['requireAttachmentsOn']];
-
-      // Only validate if the current selected value is in the requireAttachmentsOn list
-      if (requireAttachmentsOn.contains(selectedValue)) {
-        // Check if files are uploaded
-        if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
-          AppSnackBar(context)
-              .showErrorSnackBar(StringConstants.uploadRequiredFiles);
-          notifyListeners();
-          return false;
-        }
+    // Support legacy approach (maintain backward compatibility)
+    if (field['requiredAttachmentsOn'] == true) {
+      if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
+        AppSnackBar(context)
+            .showErrorSnackBar(StringConstants.uploadRequiredFiles);
+        notifyListeners();
+        return false;
       }
     }
 
@@ -537,45 +511,40 @@ class DynamicFormController extends ChangeNotifier {
       return true;
     }
 
-    // Attachment validation - if hasAttachments is true and value is in enableAttachmentsOn
-    if (field['hasAttachments'] == true) {
-      final selectedValue = currentControl.value;
+    // Attachment validation - check if file is required based on selected value
+    bool fileRequired = false;
+    final selectedValue = currentControl.value;
 
-      // Check if enableAttachmentsOn is specified
-      if (field['enableAttachmentsOn'] != null) {
-        final enabledOptions = field['enableAttachmentsOn'] is List
-            ? field['enableAttachmentsOn']
-            : [field['enableAttachmentsOn']];
-
-        // If enabledOptions is empty, require for all values
-        if (enabledOptions.isEmpty) {
-          if (uploadedFiles[fieldName]?.isEmpty ?? true) {
-            return true;
-          }
-        }
-        // Otherwise, only validate if the selected value is in enabledOptions
-        else if (enabledOptions.contains(selectedValue) &&
-            (uploadedFiles[fieldName]?.isEmpty ?? true)) {
-          return true;
-        }
-      } else {
-        // If no enableAttachmentsOn, require for all values
-        if (uploadedFiles[fieldName]?.isEmpty ?? true) {
-          return true;
-        }
-      }
-    }
-    // Otherwise check if requireAttachmentsOn matches the current value
-    else if (field['requireAttachmentsOn'] != null) {
-      final selectedValue = currentControl.value;
+    // Check requireAttachmentsOn
+    if (field['requireAttachmentsOn'] != null) {
       final requireAttachmentsOn = field['requireAttachmentsOn'] is List
           ? field['requireAttachmentsOn']
           : [field['requireAttachmentsOn']];
 
-      if (requireAttachmentsOn.contains(selectedValue) &&
-          (uploadedFiles[fieldName]?.isEmpty ?? true)) {
-        return true;
+      if (requireAttachmentsOn.contains(selectedValue)) {
+        fileRequired = true;
       }
+    }
+
+    // Check enableAttachmentsOn (now works the same as requireAttachmentsOn)
+    if (!fileRequired && field['enableAttachmentsOn'] != null) {
+      final enabledOptions = field['enableAttachmentsOn'] is List
+          ? field['enableAttachmentsOn']
+          : [field['enableAttachmentsOn']];
+
+      if (enabledOptions.contains(selectedValue)) {
+        fileRequired = true;
+      }
+    }
+
+    // Also handle the case when requiredAttachmentsOn is true
+    if (field['requiredAttachmentsOn'] == true) {
+      fileRequired = true;
+    }
+
+    // If file is required, check if it's uploaded
+    if (fileRequired && (uploadedFiles[fieldName]?.isEmpty ?? true)) {
+      return true;
     }
 
     // Sub-questions validation
@@ -633,39 +602,39 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    // Check if hasAttachments is true and value is in enableAttachmentsOn
-    if (field['hasAttachments'] == true) {
-      final selectedValue = control.value;
+    // Check if file upload is required based on the selected value
+    bool fileRequired = false;
+    final selectedValue = control.value;
 
-      // Check if enableAttachmentsOn is specified
-      if (field['enableAttachmentsOn'] != null) {
-        final enabledOptions = field['enableAttachmentsOn'] is List
-            ? field['enableAttachmentsOn']
-            : [field['enableAttachmentsOn']];
-
-        // If enabledOptions is empty, show error for all values
-        if (enabledOptions.isEmpty) {
-          return StringConstants.uploadRequiredFiles;
-        }
-        // Otherwise, only show error if the selected value is in enabledOptions
-        else if (enabledOptions.contains(selectedValue)) {
-          return StringConstants.uploadRequiredFiles;
-        }
-      } else {
-        // If no enableAttachmentsOn, show error for all values
-        return StringConstants.uploadRequiredFiles;
-      }
-    }
-    // Otherwise check if requireAttachmentsOn contains the selected value
-    else if (field['requireAttachmentsOn'] != null) {
-      final selectedValue = control.value;
+    // Check requireAttachmentsOn
+    if (field['requireAttachmentsOn'] != null) {
       final requireAttachmentsOn = field['requireAttachmentsOn'] is List
           ? field['requireAttachmentsOn']
           : [field['requireAttachmentsOn']];
 
       if (requireAttachmentsOn.contains(selectedValue)) {
-        return StringConstants.uploadRequiredFiles;
+        fileRequired = true;
       }
+    }
+
+    // Check enableAttachmentsOn (now works the same as requireAttachmentsOn)
+    if (!fileRequired && field['enableAttachmentsOn'] != null) {
+      final enabledOptions = field['enableAttachmentsOn'] is List
+          ? field['enableAttachmentsOn']
+          : [field['enableAttachmentsOn']];
+
+      if (enabledOptions.contains(selectedValue)) {
+        fileRequired = true;
+      }
+    }
+
+    // Also handle the case when requiredAttachmentsOn is true
+    if (field['requiredAttachmentsOn'] == true) {
+      fileRequired = true;
+    }
+
+    if (fileRequired) {
+      return StringConstants.uploadRequiredFiles;
     }
 
     return StringConstants.pleaseAnswerAllRequiredSubQuestions;

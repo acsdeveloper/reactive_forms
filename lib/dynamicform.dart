@@ -583,29 +583,32 @@ class _DynamicFormState extends State<DynamicForm> {
                 return const SizedBox.shrink();
               }
 
-              // Check if enableAttachmentsOn is specified
-              bool shouldShowAttachment = true;
-              if (field['enableAttachmentsOn'] != null) {
+              // Check if this option requires attachments (from either enableAttachmentsOn or requireAttachmentsOn)
+              bool isRequired = false;
+
+              // Check requireAttachmentsOn
+              if (field['requireAttachmentsOn'] != null) {
+                List<dynamic> requiredOptions =
+                    field['requireAttachmentsOn'] is List
+                        ? field['requireAttachmentsOn']
+                        : [field['requireAttachmentsOn']];
+
+                if (requiredOptions.contains(control.value)) {
+                  isRequired = true;
+                }
+              }
+
+              // Check enableAttachmentsOn (now works the same as requireAttachmentsOn)
+              if (!isRequired && field['enableAttachmentsOn'] != null) {
                 List<dynamic> enabledOptions =
                     field['enableAttachmentsOn'] is List
                         ? field['enableAttachmentsOn']
                         : [field['enableAttachmentsOn']];
 
-                // If enabledOptions is empty, show attachments for all values
-                if (enabledOptions.isNotEmpty) {
-                  // Only show for enabled options
-                  shouldShowAttachment = enabledOptions.contains(control.value);
-
-                  // If not in the enabled list, don't show the attachment UI
-                  if (!shouldShowAttachment) {
-                    return const SizedBox.shrink();
-                  }
+                if (enabledOptions.contains(control.value)) {
+                  isRequired = true;
                 }
-                // Otherwise, if enabledOptions is empty, show attachments for all values
               }
-
-              // If we get here, we should show the attachment UI and it's required
-              bool isRequired = true;
 
               return Column(
                 children: [
@@ -616,15 +619,16 @@ class _DynamicFormState extends State<DynamicForm> {
                         StringConstants.uploadFiles,
                         style: widget.fontFamily,
                       ),
-                      // Always show the asterisk since it's always required
-                      const SizedBox(width: 4),
-                      Text(
-                        '*',
-                        style: widget.fontFamily.copyWith(
-                          color: const Color.fromARGB(255, 222, 75, 64),
-                          fontSize: 16,
+                      if (isRequired) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          '*',
+                          style: widget.fontFamily.copyWith(
+                            color: const Color.fromARGB(255, 222, 75, 64),
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -800,29 +804,32 @@ class _DynamicFormState extends State<DynamicForm> {
                 return const SizedBox.shrink();
               }
 
-              // Check if enableAttachmentsOn is specified
-              bool shouldShowAttachment = true;
-              if (field['enableAttachmentsOn'] != null) {
+              // Check if this option requires attachments (from either enableAttachmentsOn or requireAttachmentsOn)
+              bool isRequired = false;
+
+              // Check requireAttachmentsOn
+              if (field['requireAttachmentsOn'] != null) {
+                List<dynamic> requiredOptions =
+                    field['requireAttachmentsOn'] is List
+                        ? field['requireAttachmentsOn']
+                        : [field['requireAttachmentsOn']];
+
+                if (requiredOptions.contains(control.value)) {
+                  isRequired = true;
+                }
+              }
+
+              // Check enableAttachmentsOn (now works the same as requireAttachmentsOn)
+              if (!isRequired && field['enableAttachmentsOn'] != null) {
                 List<dynamic> enabledOptions =
                     field['enableAttachmentsOn'] is List
                         ? field['enableAttachmentsOn']
                         : [field['enableAttachmentsOn']];
 
-                // If enabledOptions is empty, show attachments for all values
-                if (enabledOptions.isNotEmpty) {
-                  // Only show for enabled options
-                  shouldShowAttachment = enabledOptions.contains(control.value);
-
-                  // If not in the enabled list, don't show the attachment UI
-                  if (!shouldShowAttachment) {
-                    return const SizedBox.shrink();
-                  }
+                if (enabledOptions.contains(control.value)) {
+                  isRequired = true;
                 }
-                // Otherwise, if enabledOptions is empty, show attachments for all values
               }
-
-              // If we get here, we should show the attachment UI and it's required
-              bool isRequired = true;
 
               return Column(
                 children: [
@@ -833,15 +840,16 @@ class _DynamicFormState extends State<DynamicForm> {
                         StringConstants.uploadFiles,
                         style: widget.fontFamily,
                       ),
-                      // Always show the asterisk since it's always required
-                      const SizedBox(width: 4),
-                      Text(
-                        '*',
-                        style: widget.fontFamily.copyWith(
-                          color: const Color.fromARGB(255, 222, 75, 64),
-                          fontSize: 16,
+                      if (isRequired) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          '*',
+                          style: widget.fontFamily.copyWith(
+                            color: const Color.fromARGB(255, 222, 75, 64),
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -1035,9 +1043,8 @@ class _DynamicFormState extends State<DynamicForm> {
                 StringConstants.uploadFiles,
                 style: widget.fontFamily,
               ),
-              // Always show required asterisk if hasAttachments is true
-              if (field['hasAttachments'] == true ||
-                  field['requireAttachmentsOn'] == true ||
+              // Show asterisk if required
+              if (field['requireAttachmentsOn'] == true ||
                   field['requiredAttachmentsOn'] == true) ...[
                 const SizedBox(width: 4),
                 Text(
@@ -1054,36 +1061,27 @@ class _DynamicFormState extends State<DynamicForm> {
           ReactiveValueListenableBuilder(
             formControlName: field['name'],
             builder: (context, control, child) {
-              // Check if enableAttachmentsOn is specified when hasAttachments is true
-              if (field['hasAttachments'] == true &&
-                  field['enableAttachmentsOn'] != null) {
-                List<dynamic> enabledOptions =
-                    field['enableAttachmentsOn'] is List
-                        ? field['enableAttachmentsOn']
-                        : [field['enableAttachmentsOn']];
+              // File upload is required if requireAttachmentsOn is true or requiredAttachmentsOn is true
+              bool isRequired = field['requireAttachmentsOn'] == true ||
+                  field['requiredAttachmentsOn'] == true;
 
-                // If enabledOptions is empty, show attachments for all values
-                if (enabledOptions.isNotEmpty) {
-                  // Only show for enabled options
-                  bool shouldShowAttachment =
-                      enabledOptions.contains(control.value);
+              // Check if enableAttachmentsOn contains the selected value (like requireAttachmentsOn)
+              if (!isRequired && field['enableAttachmentsOn'] != null) {
+                if (field['enableAttachmentsOn'] is List) {
+                  final selectedValue = control.value;
+                  final enabledOptions = field['enableAttachmentsOn'];
 
-                  // If not in the enabled list, don't show the attachment UI
-                  if (!shouldShowAttachment) {
-                    return const SizedBox.shrink();
+                  if (enabledOptions.contains(selectedValue)) {
+                    isRequired = true;
                   }
+                } else if (field['enableAttachmentsOn'] == true) {
+                  isRequired = true;
                 }
-                // Otherwise, if enabledOptions is empty, show attachments for all values
               }
 
-              // File upload is required if hasAttachments is true
-              bool isRequired = field['hasAttachments'] == true;
-
-              // Also required if requireAttachmentsOn matches the value
+              // Check requireAttachmentsOn values
               if (!isRequired && field['requireAttachmentsOn'] != null) {
-                if (field['requireAttachmentsOn'] == true) {
-                  isRequired = true;
-                } else if (field['requireAttachmentsOn'] is List) {
+                if (field['requireAttachmentsOn'] is List) {
                   final selectedValue = control.value;
                   final requiredOptions = field['requireAttachmentsOn'];
 
@@ -1091,11 +1089,6 @@ class _DynamicFormState extends State<DynamicForm> {
                     isRequired = true;
                   }
                 }
-              }
-
-              // Also required if requiredAttachmentsOn is true
-              if (field['requiredAttachmentsOn'] == true) {
-                isRequired = true;
               }
 
               return FileUploadWidget(
@@ -1182,9 +1175,8 @@ class _DynamicFormState extends State<DynamicForm> {
                 StringConstants.uploadFiles,
                 style: widget.fontFamily,
               ),
-              // Always show required asterisk if hasAttachments is true
-              if (field['hasAttachments'] == true ||
-                  field['attachmentsRequired'] == true) ...[
+              // Show asterisk only if required
+              if (field['attachmentsRequired'] == true) ...[
                 const SizedBox(width: 4),
                 Text(
                   '*',
@@ -1200,33 +1192,22 @@ class _DynamicFormState extends State<DynamicForm> {
           ReactiveValueListenableBuilder(
               formControlName: field['name'],
               builder: (context, control, child) {
-                // Check if enableAttachmentsOn is specified when hasAttachments is true
-                if (field['hasAttachments'] == true &&
-                    field['enableAttachmentsOn'] != null) {
-                  List<dynamic> enabledOptions =
-                      field['enableAttachmentsOn'] is List
-                          ? field['enableAttachmentsOn']
-                          : [field['enableAttachmentsOn']];
+                // File upload is required if attachmentsRequired is true
+                bool isRequired = field['attachmentsRequired'] == true;
 
-                  // If enabledOptions is empty, show attachments for all values
-                  if (enabledOptions.isNotEmpty) {
-                    // Only show for enabled options
-                    bool shouldShowAttachment =
-                        enabledOptions.contains(control.value);
+                // Check if enableAttachmentsOn contains the selected value (like requireAttachmentsOn)
+                if (!isRequired && field['enableAttachmentsOn'] != null) {
+                  final selectedValue = control.value;
+                  final enabledOptions = field['enableAttachmentsOn'] is List
+                      ? field['enableAttachmentsOn']
+                      : [field['enableAttachmentsOn']];
 
-                    // If not in the enabled list, don't show the attachment UI
-                    if (!shouldShowAttachment) {
-                      return const SizedBox.shrink();
-                    }
+                  if (enabledOptions.contains(selectedValue)) {
+                    isRequired = true;
                   }
-                  // Otherwise, if enabledOptions is empty, show attachments for all values
                 }
 
-                // File upload is required if hasAttachments is true
-                bool isRequired = field['hasAttachments'] == true ||
-                    field['attachmentsRequired'] == true;
-
-                // Also required if requireAttachmentsOn matches the value
+                // Also check requireAttachmentsOn
                 if (!isRequired && field['requireAttachmentsOn'] != null) {
                   final selectedValue = control.value;
                   final requiredOptions = field['requireAttachmentsOn'] is List
@@ -1986,61 +1967,40 @@ class _DynamicFormState extends State<DynamicForm> {
       // Get the current value
       var selectedValue = controller.form.control(currentField['name']).value;
 
-      // Check if hasAttachments is true and if we should validate based on enableAttachmentsOn
-      if (currentField['hasAttachments'] == true) {
-        // Check if enableAttachmentsOn is specified
-        if (currentField['enableAttachmentsOn'] != null) {
-          List<dynamic> enabledOptions =
-              currentField['enableAttachmentsOn'] is List
-                  ? currentField['enableAttachmentsOn']
-                  : [currentField['enableAttachmentsOn']];
+      // Check if file is required based on the selected values
+      bool fileRequired = false;
 
-          // If enabledOptions is empty, validate for all values
-          if (enabledOptions.isEmpty) {
-            if (controller.uploadedFiles[currentField['name']] == null ||
-                controller.uploadedFiles[currentField['name']]!.isEmpty) {
-              setState(() {
-                _showAttachmentError = true;
-              });
-              return false;
-            }
-          }
-          // Only validate if the selected value is in enabledOptions
-          else if (enabledOptions.contains(selectedValue) &&
-              (controller.uploadedFiles[currentField['name']] == null ||
-                  controller.uploadedFiles[currentField['name']]!.isEmpty)) {
-            setState(() {
-              _showAttachmentError = true;
-            });
-            return false;
-          }
-        } else {
-          // If no enableAttachmentsOn, validate for all values
-          if (controller.uploadedFiles[currentField['name']] == null ||
-              controller.uploadedFiles[currentField['name']]!.isEmpty) {
-            setState(() {
-              _showAttachmentError = true;
-            });
-            return false;
+      // Check requireAttachmentsOn
+      if (currentField['requireAttachmentsOn'] != null) {
+        if (currentField['requireAttachmentsOn'] == true) {
+          fileRequired = true;
+        } else if (currentField['requireAttachmentsOn'] is List) {
+          List<dynamic> requiredOptions = currentField['requireAttachmentsOn'];
+
+          if (requiredOptions.contains(selectedValue)) {
+            fileRequired = true;
           }
         }
       }
 
-      // Check for other conditions that require attachments
-      if ((currentField['requireAttachmentsOn'] == true ||
-              currentField['requiredAttachmentsOn'] == true) &&
-          (controller.uploadedFiles[currentField['name']] == null ||
-              controller.uploadedFiles[currentField['name']]!.isEmpty)) {
-        setState(() {
-          _showAttachmentError = true;
-        });
-        return false;
+      // Check enableAttachmentsOn (now works like requireAttachmentsOn)
+      if (!fileRequired && currentField['enableAttachmentsOn'] != null) {
+        if (currentField['enableAttachmentsOn'] is List) {
+          List<dynamic> enabledOptions = currentField['enableAttachmentsOn'];
+
+          if (enabledOptions.contains(selectedValue)) {
+            fileRequired = true;
+          }
+        }
       }
 
-      // Check if requireAttachmentsOn contains a list of values and the selected value is in that list
-      if (currentField['requireAttachmentsOn'] != null &&
-          currentField['requireAttachmentsOn'] is List &&
-          currentField['requireAttachmentsOn'].contains(selectedValue) &&
+      // Check requiredAttachmentsOn (legacy support)
+      if (currentField['requiredAttachmentsOn'] == true) {
+        fileRequired = true;
+      }
+
+      // If file is required, check if it's uploaded
+      if (fileRequired &&
           (controller.uploadedFiles[currentField['name']] == null ||
               controller.uploadedFiles[currentField['name']]!.isEmpty)) {
         setState(() {
