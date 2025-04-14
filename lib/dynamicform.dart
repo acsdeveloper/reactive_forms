@@ -1111,7 +1111,7 @@ class _DynamicFormState extends State<DynamicForm> {
               ),
               // Show asterisk if required
               if (field['requireAttachmentsOn'] == true ||
-                  field['requiredAttachmentsOn'] == true) ...[
+                  field['hasAttachments'] == true) ...[
                 const SizedBox(width: 4),
                 Text(
                   '*',
@@ -2692,8 +2692,9 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Add a clear label with red asterisk for required uploads
-        if (widget.isRequired)
+        // Only show the upload label when hasUploadedFile is true (file card is shown)
+        // This avoids duplicating the label that parent components already show
+        if (widget.isRequired && hasUploadedFile)
           Padding(
             padding: const EdgeInsets.only(bottom: 8.0),
             child: Row(
@@ -2740,29 +2741,13 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     size: 32,
                   ),
                   const SizedBox(width: 12),
-                  if (widget.isRequired) ...[
-                    Text(
-                      StringConstants.uploadFiles,
-                      style: widget.fontFamily.copyWith(
-                        color: widget.buttonTextColor,
-                        fontSize: 18,
-                      ),
+                  Text(
+                    "Select File",
+                    style: widget.fontFamily.copyWith(
+                      color: widget.buttonTextColor,
+                      fontSize: 18,
                     ),
-                    Text(
-                      " *",
-                      style: widget.fontFamily.copyWith(
-                        color: const Color.fromARGB(255, 222, 75, 64),
-                        fontSize: 18,
-                      ),
-                    ),
-                  ] else
-                    Text(
-                      StringConstants.uploadFiles,
-                      style: widget.fontFamily.copyWith(
-                        color: widget.buttonTextColor,
-                        fontSize: 18,
-                      ),
-                    ),
+                  ),
                 ],
               ),
             ),
