@@ -583,7 +583,8 @@ class _DynamicFormState extends State<DynamicForm> {
                 return const SizedBox.shrink();
               }
 
-              // Check if this option requires attachments (from either enableAttachmentsOn or requireAttachmentsOn)
+              // Check if the value is in requireAttachmentsOn or enableAttachmentsOn
+              bool shouldShowAttachments = false;
               bool isRequired = false;
 
               // Check requireAttachmentsOn
@@ -594,19 +595,51 @@ class _DynamicFormState extends State<DynamicForm> {
                         : [field['requireAttachmentsOn']];
 
                 if (requiredOptions.contains(control.value)) {
+                  shouldShowAttachments = true;
                   isRequired = true;
                 }
               }
 
-              // Check enableAttachmentsOn (now works the same as requireAttachmentsOn)
-              if (!isRequired && field['enableAttachmentsOn'] != null) {
+              // Check enableAttachmentsOn (works the same as requireAttachmentsOn for visibility)
+              if (!shouldShowAttachments &&
+                  field['enableAttachmentsOn'] != null) {
                 List<dynamic> enabledOptions =
                     field['enableAttachmentsOn'] is List
                         ? field['enableAttachmentsOn']
                         : [field['enableAttachmentsOn']];
 
                 if (enabledOptions.contains(control.value)) {
+                  shouldShowAttachments = true;
                   isRequired = true;
+                }
+              }
+
+              // If the value is not in requireAttachmentsOn or enableAttachmentsOn, don't show upload
+              if (!shouldShowAttachments) {
+                // NEW CHECK: If hasAttachments is true and none of the above conditions applied, check if we should still show attachments
+                if (field['hasAttachments'] == true) {
+                  // Check if requireAttachmentsOn is empty or null
+                  bool isRequireAttachmentsOnEmpty =
+                      field['requireAttachmentsOn'] == null ||
+                          (field['requireAttachmentsOn'] is List &&
+                              (field['requireAttachmentsOn'] as List).isEmpty);
+
+                  // Check if enableAttachmentsOn is empty or null
+                  bool isEnableAttachmentsOnEmpty =
+                      field['enableAttachmentsOn'] == null ||
+                          (field['enableAttachmentsOn'] is List &&
+                              (field['enableAttachmentsOn'] as List).isEmpty);
+
+                  // If both are empty or null, show file uploads and make them required
+                  if (isRequireAttachmentsOnEmpty &&
+                      isEnableAttachmentsOnEmpty) {
+                    shouldShowAttachments = true;
+                    isRequired = true;
+                  } else {
+                    return const SizedBox.shrink();
+                  }
+                } else {
+                  return const SizedBox.shrink();
                 }
               }
 
@@ -804,7 +837,8 @@ class _DynamicFormState extends State<DynamicForm> {
                 return const SizedBox.shrink();
               }
 
-              // Check if this option requires attachments (from either enableAttachmentsOn or requireAttachmentsOn)
+              // Check if the value is in requireAttachmentsOn or enableAttachmentsOn
+              bool shouldShowAttachments = false;
               bool isRequired = false;
 
               // Check requireAttachmentsOn
@@ -815,19 +849,51 @@ class _DynamicFormState extends State<DynamicForm> {
                         : [field['requireAttachmentsOn']];
 
                 if (requiredOptions.contains(control.value)) {
+                  shouldShowAttachments = true;
                   isRequired = true;
                 }
               }
 
-              // Check enableAttachmentsOn (now works the same as requireAttachmentsOn)
-              if (!isRequired && field['enableAttachmentsOn'] != null) {
+              // Check enableAttachmentsOn (works the same as requireAttachmentsOn for visibility)
+              if (!shouldShowAttachments &&
+                  field['enableAttachmentsOn'] != null) {
                 List<dynamic> enabledOptions =
                     field['enableAttachmentsOn'] is List
                         ? field['enableAttachmentsOn']
                         : [field['enableAttachmentsOn']];
 
                 if (enabledOptions.contains(control.value)) {
+                  shouldShowAttachments = true;
                   isRequired = true;
+                }
+              }
+
+              // If the value is not in requireAttachmentsOn or enableAttachmentsOn, don't show upload
+              if (!shouldShowAttachments) {
+                // NEW CHECK: If hasAttachments is true and none of the above conditions applied, check if we should still show attachments
+                if (field['hasAttachments'] == true) {
+                  // Check if requireAttachmentsOn is empty or null
+                  bool isRequireAttachmentsOnEmpty =
+                      field['requireAttachmentsOn'] == null ||
+                          (field['requireAttachmentsOn'] is List &&
+                              (field['requireAttachmentsOn'] as List).isEmpty);
+
+                  // Check if enableAttachmentsOn is empty or null
+                  bool isEnableAttachmentsOnEmpty =
+                      field['enableAttachmentsOn'] == null ||
+                          (field['enableAttachmentsOn'] is List &&
+                              (field['enableAttachmentsOn'] as List).isEmpty);
+
+                  // If both are empty or null, show file uploads and make them required
+                  if (isRequireAttachmentsOnEmpty &&
+                      isEnableAttachmentsOnEmpty) {
+                    shouldShowAttachments = true;
+                    isRequired = true;
+                  } else {
+                    return const SizedBox.shrink();
+                  }
+                } else {
+                  return const SizedBox.shrink();
                 }
               }
 
@@ -1061,33 +1127,74 @@ class _DynamicFormState extends State<DynamicForm> {
           ReactiveValueListenableBuilder(
             formControlName: field['name'],
             builder: (context, control, child) {
-              // File upload is required if requireAttachmentsOn is true or requiredAttachmentsOn is true
-              bool isRequired = field['requireAttachmentsOn'] == true ||
-                  field['requiredAttachmentsOn'] == true;
+              // Check if the value should show attachments and if it's required
+              bool shouldShowAttachments = false;
+              bool isRequired = false;
 
-              // Check if enableAttachmentsOn contains the selected value (like requireAttachmentsOn)
-              if (!isRequired && field['enableAttachmentsOn'] != null) {
+              // Always show if requireAttachmentsOn or requiredAttachmentsOn is true (boolean flag)
+              if (field['requireAttachmentsOn'] == true ||
+                  field['requiredAttachmentsOn'] == true) {
+                shouldShowAttachments = true;
+                isRequired = true;
+              }
+
+              // Check if value is in requireAttachmentsOn list
+              if (!shouldShowAttachments &&
+                  field['requireAttachmentsOn'] != null &&
+                  field['requireAttachmentsOn'] is List) {
+                final selectedValue = control.value;
+                final requiredOptions = field['requireAttachmentsOn'];
+
+                if (requiredOptions.contains(selectedValue)) {
+                  shouldShowAttachments = true;
+                  isRequired = true;
+                }
+              }
+
+              // Check if value is in enableAttachmentsOn list
+              if (!shouldShowAttachments &&
+                  field['enableAttachmentsOn'] != null) {
                 if (field['enableAttachmentsOn'] is List) {
                   final selectedValue = control.value;
                   final enabledOptions = field['enableAttachmentsOn'];
 
                   if (enabledOptions.contains(selectedValue)) {
+                    shouldShowAttachments = true;
                     isRequired = true;
                   }
                 } else if (field['enableAttachmentsOn'] == true) {
+                  shouldShowAttachments = true;
                   isRequired = true;
                 }
               }
 
-              // Check requireAttachmentsOn values
-              if (!isRequired && field['requireAttachmentsOn'] != null) {
-                if (field['requireAttachmentsOn'] is List) {
-                  final selectedValue = control.value;
-                  final requiredOptions = field['requireAttachmentsOn'];
+              // If nothing requires attachments for this value, don't show the upload
+              if (!shouldShowAttachments && field['hasAttachments'] != true) {
+                return const SizedBox.shrink();
+              }
 
-                  if (requiredOptions.contains(selectedValue)) {
-                    isRequired = true;
-                  }
+              // Special case: if hasAttachments is explicitly true and none of the above conditions applied
+              // Check if we still want to show uploads in this case
+              if (!shouldShowAttachments && field['hasAttachments'] == true) {
+                // Check if requireAttachmentsOn is empty or null
+                bool isRequireAttachmentsOnEmpty =
+                    field['requireAttachmentsOn'] == null ||
+                        (field['requireAttachmentsOn'] is List &&
+                            (field['requireAttachmentsOn'] as List).isEmpty);
+
+                // Check if enableAttachmentsOn is empty or null
+                bool isEnableAttachmentsOnEmpty =
+                    field['enableAttachmentsOn'] == null ||
+                        (field['enableAttachmentsOn'] is List &&
+                            (field['enableAttachmentsOn'] as List).isEmpty);
+
+                // If both are empty or null, show file uploads and make them required
+                if (isRequireAttachmentsOnEmpty && isEnableAttachmentsOnEmpty) {
+                  shouldShowAttachments = true;
+                  isRequired = true;
+                } else {
+                  // If we want to hide attachments for values not in requireAttachmentsOn/enableAttachmentsOn
+                  return const SizedBox.shrink();
                 }
               }
 
@@ -1991,6 +2098,26 @@ class _DynamicFormState extends State<DynamicForm> {
           if (enabledOptions.contains(selectedValue)) {
             fileRequired = true;
           }
+        }
+      }
+
+      // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and enableAttachmentsOn are empty or null, make file upload mandatory
+      if (!fileRequired && currentField['hasAttachments'] == true) {
+        // Check if requireAttachmentsOn is empty or null
+        bool isRequireAttachmentsOnEmpty =
+            currentField['requireAttachmentsOn'] == null ||
+                (currentField['requireAttachmentsOn'] is List &&
+                    (currentField['requireAttachmentsOn'] as List).isEmpty);
+
+        // Check if enableAttachmentsOn is empty or null
+        bool isEnableAttachmentsOnEmpty =
+            currentField['enableAttachmentsOn'] == null ||
+                (currentField['enableAttachmentsOn'] is List &&
+                    (currentField['enableAttachmentsOn'] as List).isEmpty);
+
+        // If both are empty or null, file upload is required
+        if (isRequireAttachmentsOnEmpty && isEnableAttachmentsOnEmpty) {
+          fileRequired = true;
         }
       }
 

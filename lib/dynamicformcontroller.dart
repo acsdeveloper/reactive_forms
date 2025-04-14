@@ -312,6 +312,25 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
+    // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and enableAttachmentsOn are empty or null, make file upload mandatory
+    if (!fileUploadRequired && field['hasAttachments'] == true) {
+      // Check if requireAttachmentsOn is empty or null
+      bool isRequireAttachmentsOnEmpty =
+          field['requireAttachmentsOn'] == null ||
+              (field['requireAttachmentsOn'] is List &&
+                  (field['requireAttachmentsOn'] as List).isEmpty);
+
+      // Check if enableAttachmentsOn is empty or null
+      bool isEnableAttachmentsOnEmpty = field['enableAttachmentsOn'] == null ||
+          (field['enableAttachmentsOn'] is List &&
+              (field['enableAttachmentsOn'] as List).isEmpty);
+
+      // If both are empty or null, make file upload mandatory
+      if (isRequireAttachmentsOnEmpty && isEnableAttachmentsOnEmpty) {
+        fileUploadRequired = true;
+      }
+    }
+
     // If files are required, check if they're uploaded
     if (fileUploadRequired) {
       if (uploadedFiles[currentFieldName]?.isEmpty ?? true) {
@@ -537,6 +556,25 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
+    // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and enableAttachmentsOn are empty or null, make file upload mandatory
+    if (!fileRequired && field['hasAttachments'] == true) {
+      // Check if requireAttachmentsOn is empty or null
+      bool isRequireAttachmentsOnEmpty =
+          field['requireAttachmentsOn'] == null ||
+              (field['requireAttachmentsOn'] is List &&
+                  (field['requireAttachmentsOn'] as List).isEmpty);
+
+      // Check if enableAttachmentsOn is empty or null
+      bool isEnableAttachmentsOnEmpty = field['enableAttachmentsOn'] == null ||
+          (field['enableAttachmentsOn'] is List &&
+              (field['enableAttachmentsOn'] as List).isEmpty);
+
+      // If both are empty or null, make file upload mandatory
+      if (isRequireAttachmentsOnEmpty && isEnableAttachmentsOnEmpty) {
+        fileRequired = true;
+      }
+    }
+
     // Also handle the case when requiredAttachmentsOn is true
     if (field['requiredAttachmentsOn'] == true) {
       fileRequired = true;
@@ -624,6 +662,25 @@ class DynamicFormController extends ChangeNotifier {
           : [field['enableAttachmentsOn']];
 
       if (enabledOptions.contains(selectedValue)) {
+        fileRequired = true;
+      }
+    }
+
+    // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and enableAttachmentsOn are empty or null, make file upload mandatory
+    if (!fileRequired && field['hasAttachments'] == true) {
+      // Check if requireAttachmentsOn is empty or null
+      bool isRequireAttachmentsOnEmpty =
+          field['requireAttachmentsOn'] == null ||
+              (field['requireAttachmentsOn'] is List &&
+                  (field['requireAttachmentsOn'] as List).isEmpty);
+
+      // Check if enableAttachmentsOn is empty or null
+      bool isEnableAttachmentsOnEmpty = field['enableAttachmentsOn'] == null ||
+          (field['enableAttachmentsOn'] is List &&
+              (field['enableAttachmentsOn'] as List).isEmpty);
+
+      // If both are empty or null, make file upload mandatory
+      if (isRequireAttachmentsOnEmpty && isEnableAttachmentsOnEmpty) {
         fileRequired = true;
       }
     }
