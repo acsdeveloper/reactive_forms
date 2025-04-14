@@ -2692,6 +2692,27 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Add a clear label with red asterisk for required uploads
+        if (widget.isRequired)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Row(
+              children: [
+                Text(
+                  StringConstants.uploadFiles,
+                  style: widget.fontFamily,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '*',
+                  style: widget.fontFamily.copyWith(
+                    color: const Color.fromARGB(255, 222, 75, 64),
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
         const SizedBox(height: 8),
         // Only show the upload button if no file is uploaded yet
         if (!hasUploadedFile)
@@ -2719,13 +2740,29 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     size: 32,
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    StringConstants.uploadFiles,
-                    style: widget.fontFamily.copyWith(
-                      color: widget.buttonTextColor,
-                      fontSize: 18,
+                  if (widget.isRequired) ...[
+                    Text(
+                      StringConstants.uploadFiles,
+                      style: widget.fontFamily.copyWith(
+                        color: widget.buttonTextColor,
+                        fontSize: 18,
+                      ),
                     ),
-                  ),
+                    Text(
+                      " *",
+                      style: widget.fontFamily.copyWith(
+                        color: const Color.fromARGB(255, 222, 75, 64),
+                        fontSize: 18,
+                      ),
+                    ),
+                  ] else
+                    Text(
+                      StringConstants.uploadFiles,
+                      style: widget.fontFamily.copyWith(
+                        color: widget.buttonTextColor,
+                        fontSize: 18,
+                      ),
+                    ),
                 ],
               ),
             ),
