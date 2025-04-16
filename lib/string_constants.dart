@@ -45,7 +45,7 @@ class StringConstants {
   static const String processing = 'Processing...';
 
   // Navigation
-  static const String back = 'Back';
+  static const String back = 'Previous';
   static const String next = 'Next';
   static const String cancel = 'Cancel';
   

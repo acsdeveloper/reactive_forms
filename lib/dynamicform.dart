@@ -1511,18 +1511,28 @@ class _DynamicFormState extends State<DynamicForm> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             if (controller.currentQuestionIndex > 0)
-              IconButton(
+              ElevatedButton(
                 onPressed: () {
                   setState(() {
                     moveToPreviousValidQuestion();
                   });
                 },
-                icon: const Icon(Icons.arrow_back_ios),
-                color: buttonColor,
-                iconSize: 30,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                child: Text(
+                  StringConstants.back,
+                  style: widget.fontFamily.copyWith(
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
+                ),
               )
             else
-              const SizedBox(width: 48),
+              const SizedBox(width: 100),
             if (shouldShowSubmit)
               ElevatedButton(
                 onPressed: () => _submitForm(context),
@@ -1541,13 +1551,23 @@ class _DynamicFormState extends State<DynamicForm> {
                 ),
               )
             else
-              IconButton(
+              ElevatedButton(
                 onPressed: () {
                   moveToNextQuestion(context);
                 },
-                icon: const Icon(Icons.arrow_forward_ios),
-                color: buttonColor,
-                iconSize: 30,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                child: Text(
+                  StringConstants.next,
+                  style: widget.fontFamily.copyWith(
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
+                ),
               ),
           ],
         );
