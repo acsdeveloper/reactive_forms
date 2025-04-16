@@ -288,6 +288,9 @@ class DynamicFormController extends ChangeNotifier {
       // Get the selected value
       final selectedValue = currentControl.value;
 
+      // Check if this is a multiselect field
+      final bool isMultiselect = field['type'] == 'multiselect';
+
       // Get the disabledOptions list if it exists
       List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
           ? field['disableAttachmentsOn']
@@ -295,8 +298,18 @@ class DynamicFormController extends ChangeNotifier {
               ? [field['disableAttachmentsOn']]
               : [];
 
-      // If the current value is in disabledOptions, don't require file upload
-      bool isAttachmentDisabled = disabledOptions.contains(selectedValue);
+      // For multiselect, check if any selected value is in disabledOptions
+      // For other field types, check if the single selected value is in disabledOptions
+      bool isAttachmentDisabled = false;
+
+      if (isMultiselect && selectedValue is List) {
+        // For multiselect: check if any selected value is in disabledOptions
+        isAttachmentDisabled =
+            selectedValue.any((value) => disabledOptions.contains(value));
+      } else {
+        // For dropdown/radio: direct check
+        isAttachmentDisabled = disabledOptions.contains(selectedValue);
+      }
 
       // Only check attachment validation if attachments are not disabled for this value
       if (!isAttachmentDisabled) {
@@ -309,19 +322,29 @@ class DynamicFormController extends ChangeNotifier {
               ? field['requireAttachmentsOn']
               : [field['requireAttachmentsOn']];
 
-          if (requireAttachmentsOn.contains(selectedValue)) {
-            fileRequired = true;
+          if (isMultiselect && selectedValue is List) {
+            // For multiselect: check if any selected value is in requireAttachmentsOn
+            fileRequired = selectedValue
+                .any((value) => requireAttachmentsOn.contains(value));
+          } else {
+            // For dropdown/radio: direct check
+            fileRequired = requireAttachmentsOn.contains(selectedValue);
           }
         }
 
-        // Check enableAttachmentsOn (now works the same as requireAttachmentsOn)
+        // Check enableAttachmentsOn (works same as requireAttachmentsOn)
         if (!fileRequired && field['enableAttachmentsOn'] != null) {
           final enabledOptions = field['enableAttachmentsOn'] is List
               ? field['enableAttachmentsOn']
               : [field['enableAttachmentsOn']];
 
-          if (enabledOptions.contains(selectedValue)) {
-            fileRequired = true;
+          if (isMultiselect && selectedValue is List) {
+            // For multiselect: check if any selected value is in enabledOptions
+            fileRequired =
+                selectedValue.any((value) => enabledOptions.contains(value));
+          } else {
+            // For dropdown/radio: direct check
+            fileRequired = enabledOptions.contains(selectedValue);
           }
         }
 
@@ -350,7 +373,7 @@ class DynamicFormController extends ChangeNotifier {
           fileRequired = true;
         }
 
-        // If file is required, check if it's uploaded
+        // If files are required, check if they're uploaded
         if (fileRequired &&
             (uploadedFiles[currentFieldName]?.isEmpty ?? true)) {
           AppSnackBar(context)
@@ -380,7 +403,6 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    // DYNAMIC NAVIGATION LOGIC
     // Find the next question that should be shown based on current answers
     int nextQuestionIndex = findNextVisibleQuestionIndex();
 
@@ -545,6 +567,9 @@ class DynamicFormController extends ChangeNotifier {
       // Get the selected value
       final selectedValue = currentControl.value;
 
+      // Check if this is a multiselect field
+      final bool isMultiselect = field['type'] == 'multiselect';
+
       // Get the disabledOptions list if it exists
       List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
           ? field['disableAttachmentsOn']
@@ -552,8 +577,18 @@ class DynamicFormController extends ChangeNotifier {
               ? [field['disableAttachmentsOn']]
               : [];
 
-      // If the current value is in disabledOptions, don't require file upload
-      bool isAttachmentDisabled = disabledOptions.contains(selectedValue);
+      // For multiselect, check if any selected value is in disabledOptions
+      // For other field types, check if the single selected value is in disabledOptions
+      bool isAttachmentDisabled = false;
+
+      if (isMultiselect && selectedValue is List) {
+        // For multiselect: check if any selected value is in disabledOptions
+        isAttachmentDisabled =
+            selectedValue.any((value) => disabledOptions.contains(value));
+      } else {
+        // For dropdown/radio: direct check
+        isAttachmentDisabled = disabledOptions.contains(selectedValue);
+      }
 
       // Only check attachment validation if attachments are not disabled for this value
       if (!isAttachmentDisabled) {
@@ -566,8 +601,13 @@ class DynamicFormController extends ChangeNotifier {
               ? field['requireAttachmentsOn']
               : [field['requireAttachmentsOn']];
 
-          if (requireAttachmentsOn.contains(selectedValue)) {
-            fileRequired = true;
+          if (isMultiselect && selectedValue is List) {
+            // For multiselect: check if any selected value is in requireAttachmentsOn
+            fileRequired = selectedValue
+                .any((value) => requireAttachmentsOn.contains(value));
+          } else {
+            // For dropdown/radio: direct check
+            fileRequired = requireAttachmentsOn.contains(selectedValue);
           }
         }
 
@@ -577,8 +617,13 @@ class DynamicFormController extends ChangeNotifier {
               ? field['enableAttachmentsOn']
               : [field['enableAttachmentsOn']];
 
-          if (enabledOptions.contains(selectedValue)) {
-            fileRequired = true;
+          if (isMultiselect && selectedValue is List) {
+            // For multiselect: check if any selected value is in enabledOptions
+            fileRequired =
+                selectedValue.any((value) => enabledOptions.contains(value));
+          } else {
+            // For dropdown/radio: direct check
+            fileRequired = enabledOptions.contains(selectedValue);
           }
         }
 
@@ -675,6 +720,9 @@ class DynamicFormController extends ChangeNotifier {
       bool fileRequired = false;
       final selectedValue = control.value;
 
+      // Check if this is a multiselect field
+      final bool isMultiselect = field['type'] == 'multiselect';
+
       // Get the disabledOptions list if it exists
       List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
           ? field['disableAttachmentsOn']
@@ -682,8 +730,18 @@ class DynamicFormController extends ChangeNotifier {
               ? [field['disableAttachmentsOn']]
               : [];
 
-      // If the current value is in disabledOptions, don't require file upload
-      bool isAttachmentDisabled = disabledOptions.contains(selectedValue);
+      // For multiselect, check if any selected value is in disabledOptions
+      // For other field types, check if the single selected value is in disabledOptions
+      bool isAttachmentDisabled = false;
+
+      if (isMultiselect && selectedValue is List) {
+        // For multiselect: check if any selected value is in disabledOptions
+        isAttachmentDisabled =
+            selectedValue.any((value) => disabledOptions.contains(value));
+      } else {
+        // For dropdown/radio: direct check
+        isAttachmentDisabled = disabledOptions.contains(selectedValue);
+      }
 
       // Only proceed with attachment validation if attachments are not disabled for this value
       if (!isAttachmentDisabled) {
@@ -693,8 +751,13 @@ class DynamicFormController extends ChangeNotifier {
               ? field['requireAttachmentsOn']
               : [field['requireAttachmentsOn']];
 
-          if (requireAttachmentsOn.contains(selectedValue)) {
-            fileRequired = true;
+          if (isMultiselect && selectedValue is List) {
+            // For multiselect: check if any selected value is in requireAttachmentsOn
+            fileRequired = selectedValue
+                .any((value) => requireAttachmentsOn.contains(value));
+          } else {
+            // For dropdown/radio: direct check
+            fileRequired = requireAttachmentsOn.contains(selectedValue);
           }
         }
 
@@ -704,8 +767,13 @@ class DynamicFormController extends ChangeNotifier {
               ? field['enableAttachmentsOn']
               : [field['enableAttachmentsOn']];
 
-          if (enabledOptions.contains(selectedValue)) {
-            fileRequired = true;
+          if (isMultiselect && selectedValue is List) {
+            // For multiselect: check if any selected value is in enabledOptions
+            fileRequired =
+                selectedValue.any((value) => enabledOptions.contains(value));
+          } else {
+            // For dropdown/radio: direct check
+            fileRequired = enabledOptions.contains(selectedValue);
           }
         }
 

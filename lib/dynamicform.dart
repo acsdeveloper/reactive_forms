@@ -382,51 +382,246 @@ class _DynamicFormState extends State<DynamicForm> {
       case FieldType.file:
         return _buildFileField(field);
       case 'multiselect':
-        return ReactiveFormField<List<String>, List<String>>(
-          formControlName: field['name'],
-          validationMessages: {
-            'required': (_) => 'Please select at least one option',
-          },
-          builder: (ReactiveFormFieldState<List<String>, List<String>> state) {
-            // Get current control value, ensuring it's a List<String>
-            List<String> currentValue = [];
-            final rawValue = controller.form.control(field['name']).value;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ReactiveFormField<List<String>, List<String>>(
+              formControlName: field['name'],
+              validationMessages: {
+                'required': (_) => 'Please select at least one option',
+              },
+              builder:
+                  (ReactiveFormFieldState<List<String>, List<String>> state) {
+                // Get current control value, ensuring it's a List<String>
+                List<String> currentValue = [];
+                final rawValue = controller.form.control(field['name']).value;
 
-            if (rawValue is List) {
-              currentValue =
-                  List<String>.from(rawValue.map((e) => e.toString()));
-            } else if (rawValue != null && rawValue != "") {
-              // Handle case when it's a single value
-              currentValue = [rawValue.toString()];
-            }
-
-            return MultiSelectFormField(
-              field: FormFieldModel.fromJson(field),
-              onChanged: (List<String> value) {
-                // Force direct update to the FormGroup's value
-                controller.form.patchValue({field['name']: value});
-
-                // Explicitly update control to ensure type consistency
-                final control = controller.form.control(field['name']);
-                if (control is FormControl<dynamic>) {
-                  control.updateValue(value);
+                if (rawValue is List) {
+                  currentValue =
+                      List<String>.from(rawValue.map((e) => e.toString()));
+                } else if (rawValue != null && rawValue != "") {
+                  // Handle case when it's a single value
+                  currentValue = [rawValue.toString()];
                 }
 
-                // Debug info
-                print(
-                    'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
-                print('Current form value: ${controller.form.value}');
+                return MultiSelectFormField(
+                  field: FormFieldModel.fromJson(field),
+                  onChanged: (List<String> value) {
+                    // Force direct update to the FormGroup's value
+                    controller.form.patchValue({field['name']: value});
 
-                state.didChange(value);
-                state.control.markAsTouched();
+                    // Explicitly update control to ensure type consistency
+                    final control = controller.form.control(field['name']);
+                    if (control is FormControl<dynamic>) {
+                      control.updateValue(value);
+                    }
+
+                    // Debug info
+                    print(
+                        'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
+                    print('Current form value: ${controller.form.value}');
+
+                    state.didChange(value);
+                    state.control.markAsTouched();
+                  },
+                  value: currentValue,
+                  hasError: state.control.touched && !state.control.valid,
+                  errorText: state.control.touched && !state.control.valid
+                      ? 'Please select at least one option'
+                      : null,
+                );
               },
-              value: currentValue,
-              hasError: state.control.touched && !state.control.valid,
-              errorText: state.control.touched && !state.control.valid
-                  ? 'Please select at least one option'
-                  : null,
-            );
-          },
+            ),
+            // Add support for file uploads
+            if (field['hasAttachments'] == true)
+              ReactiveValueListenableBuilder(
+                formControlName: field['name'],
+                builder: (context, control, child) {
+                  // Get the disabledOptions list if it exists
+                  List<dynamic> disabledOptions =
+                      field['disableAttachmentsOn'] is List
+                          ? field['disableAttachmentsOn']
+                          : field['disableAttachmentsOn'] != null
+                              ? [field['disableAttachmentsOn']]
+                              : [];
+
+                  // For multiselect: check if any selected value is in disabledOptions
+                  final selectedValues = control.value is List
+                      ? control.value as List
+                      : control.value != null
+                          ? [control.value]
+                          : [];
+
+                  bool isAttachmentDisabled = false;
+                  if (selectedValues.isNotEmpty) {
+                    isAttachmentDisabled = selectedValues
+                        .any((value) => disabledOptions.contains(value));
+                  }
+
+                  // If the current value is in disabledOptions, don't show attachments
+                  if (isAttachmentDisabled) {
+                    return const SizedBox.shrink();
+                  }
+
+                  // Check if the value is in requireAttachmentsOn or enableAttachmentsOn
+                  bool shouldShowAttachments = false;
+                  bool isRequired = false;
+
+                  // Check requireAttachmentsOn
+                  if (field['requireAttachmentsOn'] != null) {
+                    List<dynamic> requiredOptions =
+                        field['requireAttachmentsOn'] is List
+                            ? field['requireAttachmentsOn']
+                            : [field['requireAttachmentsOn']];
+
+                    if (selectedValues.isNotEmpty) {
+                      if (selectedValues
+                          .any((value) => requiredOptions.contains(value))) {
+                        shouldShowAttachments = true;
+                        isRequired = true;
+                      }
+                    }
+                  }
+
+                  // Check enableAttachmentsOn (works the same as requireAttachmentsOn for visibility)
+                  if (!shouldShowAttachments &&
+                      field['enableAttachmentsOn'] != null) {
+                    List<dynamic> enabledOptions =
+                        field['enableAttachmentsOn'] is List
+                            ? field['enableAttachmentsOn']
+                            : [field['enableAttachmentsOn']];
+
+                    if (selectedValues.isNotEmpty) {
+                      if (selectedValues
+                          .any((value) => enabledOptions.contains(value))) {
+                        shouldShowAttachments = true;
+                        isRequired = true;
+                      }
+                    }
+                  }
+
+                  // If the value is not in requireAttachmentsOn or enableAttachmentsOn, don't show upload
+                  if (!shouldShowAttachments) {
+                    // NEW CHECK: If hasAttachments is true and none of the above conditions applied, check if we should still show attachments
+                    if (field['hasAttachments'] == true) {
+                      // Check if requireAttachmentsOn is empty or null
+                      bool isRequireAttachmentsOnEmpty =
+                          field['requireAttachmentsOn'] == null ||
+                              (field['requireAttachmentsOn'] is List &&
+                                  (field['requireAttachmentsOn'] as List)
+                                      .isEmpty);
+
+                      // Check if enableAttachmentsOn is empty or null
+                      bool isEnableAttachmentsOnEmpty =
+                          field['enableAttachmentsOn'] == null ||
+                              (field['enableAttachmentsOn'] is List &&
+                                  (field['enableAttachmentsOn'] as List)
+                                      .isEmpty);
+
+                      // If both are empty or null, show file uploads and make them required
+                      if (isRequireAttachmentsOnEmpty &&
+                          isEnableAttachmentsOnEmpty) {
+                        shouldShowAttachments = true;
+                        isRequired = true;
+                      } else {
+                        return const SizedBox.shrink();
+                      }
+                    } else {
+                      return const SizedBox.shrink();
+                    }
+                  }
+
+                  return Column(
+                    children: [
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Text(
+                            StringConstants.uploadFiles,
+                            style: widget.fontFamily,
+                          ),
+                          if (isRequired) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              '*',
+                              style: widget.fontFamily.copyWith(
+                                color: const Color.fromARGB(255, 222, 75, 64),
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      FileUploadWidget(
+                        fieldName: field['name'],
+                        fieldLabel: field['label'],
+                        primaryColor: widget.primaryColor,
+                        fontFamily: widget.fontFamily,
+                        buttonTextColor: widget.buttonTextColor,
+                        onFilesUploaded: (files) {
+                          setState(() {
+                            controller.uploadedFiles[field['name']] = files;
+                          });
+                        },
+                        uploadedFiles:
+                            controller.uploadedFiles[field['name']] ?? [],
+                        onRemoveUploadedFile: (file) {
+                          setState(() {
+                            // For single file upload, set to empty list when file is removed
+                            controller.uploadedFiles[field['name']] = [];
+                          });
+                        },
+                        isRequired: isRequired,
+                      ),
+                    ],
+                  );
+                },
+              ),
+            // Add support for comments
+            if (field['hasComments'] == true) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text(
+                    field['commentLabel'] ?? StringConstants.comments,
+                    style: widget.fontFamily,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '*',
+                    style: widget.fontFamily.copyWith(
+                      color: const Color.fromARGB(255, 222, 75, 64),
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+              ReactiveTextField(
+                formControlName: '${field['name']}_comment',
+                decoration: InputDecoration(
+                  // No labelText to avoid displaying "comments" in the field
+                  hintText: field['commentHint'] ?? '',
+                  labelStyle: widget.fontFamily,
+                  hintStyle: widget.fontFamily,
+                  // Add error style
+                  errorStyle: widget.fontFamily
+                      .copyWith(color: Colors.red[700], fontSize: 12),
+                ),
+                maxLines: 3,
+                validationMessages: {
+                  'required': (_) => StringConstants.commentsAreRequired,
+                },
+                // Add onSubmitted to validate the form when user submits via keyboard
+                onSubmitted: (_) {
+                  if (widget.showOneByOne &&
+                      !isCurrentQuestionEffectivelyLast()) {
+                    validateCurrentSection();
+                  }
+                },
+              ),
+            ],
+          ],
         );
       default:
         return const SizedBox.shrink();
