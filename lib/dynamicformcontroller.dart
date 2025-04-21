@@ -284,7 +284,8 @@ class DynamicFormController extends ChangeNotifier {
     }
 
     // Skip all attachment validation if hasAttachments is explicitly set to false
-    if (field['hasAttachments'] != false) {
+    // or if field type is text (NEW CONDITION)
+    if (field['hasAttachments'] != false && field['type'] != 'text') {
       // Get the selected value
       final selectedValue = currentControl.value;
 
@@ -332,7 +333,7 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        // Check enableAttachmentsOn (works same as requireAttachmentsOn)
+        // Check enableAttachmentsOn (now works the same as requireAttachmentsOn)
         if (!fileRequired && field['enableAttachmentsOn'] != null) {
           final enabledOptions = field['enableAttachmentsOn'] is List
               ? field['enableAttachmentsOn']
@@ -563,7 +564,8 @@ class DynamicFormController extends ChangeNotifier {
     }
 
     // Skip all attachment validation if hasAttachments is explicitly set to false
-    if (field['hasAttachments'] != false) {
+    // or if field type is text (NEW CONDITION)
+    if (field['hasAttachments'] != false && field['type'] != 'text') {
       // Get the selected value
       final selectedValue = currentControl.value;
 
@@ -715,7 +717,8 @@ class DynamicFormController extends ChangeNotifier {
     }
 
     // Skip all attachment validation if hasAttachments is explicitly set to false
-    if (field['hasAttachments'] != false) {
+    // or if field type is text (NEW CONDITION)
+    if (field['hasAttachments'] != false && field['type'] != 'text') {
       // Check if file upload is required based on the selected value
       bool fileRequired = false;
       final selectedValue = control.value;

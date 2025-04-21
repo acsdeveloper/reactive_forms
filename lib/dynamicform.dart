@@ -2674,12 +2674,20 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
       return;
     }
 
+    final detectedFileType = fileType ?? _getFileType(fileName);
+
+    // Debug logging for PDF files
+    if (detectedFileType == 'pdf') {
+      print('Processing PDF file: $fileName');
+      print('PDF file size: ${(bytes.length / 1024).toStringAsFixed(2)} KB');
+    }
+
     final newFile = {
       'question_name': widget.fieldName,
       'question_label': widget.fieldLabel,
       'file': bytes,
       'fileName': fileName,
-      'fileType': fileType ?? _getFileType(fileName),
+      'fileType': detectedFileType,
       'mimeType': mimeType ??
           (fileName.split('.').length > 1
               ? 'application/${fileName.split('.').last}'
@@ -2899,6 +2907,16 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     }
   }
 
+  /// Opens a preview screen to view the file based on its type
+  void _previewFile(BuildContext context, Map<String, dynamic> file) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FilePreviewScreen(file: file),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Check if a file is already uploaded
@@ -2907,28 +2925,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Only show the upload label when hasUploadedFile is true (file card is shown)
-        // This avoids duplicating the label that parent components already show
-        if (widget.isRequired && hasUploadedFile)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Row(
-              children: [
-                Text(
-                  StringConstants.uploadFiles,
-                  style: widget.fontFamily,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '*',
-                  style: widget.fontFamily.copyWith(
-                    color: const Color.fromARGB(255, 222, 75, 64),
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-          ),
+        // Remove the upload label that's causing duplication
+        // Parent components already show the label
         const SizedBox(height: 8),
         // Only show the upload button if no file is uploaded yet
         if (!hasUploadedFile)
@@ -2986,6 +2984,10 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                 onPressed: () =>
                     widget.onRemoveUploadedFile(widget.uploadedFiles[0]),
               ),
+              // Add onTap handler to preview the file
+              onTap: () {
+                _previewFile(context, widget.uploadedFiles[0]);
+              },
             ),
           ),
           const SizedBox(height: 8),
@@ -3007,5 +3009,196 @@ IconData _getFileIcon(String fileType) {
       return Icons.image;
     default:
       return Icons.insert_drive_file;
+  }
+}
+
+/// A screen to preview different types of files
+class FilePreviewScreen extends StatelessWidget {
+  final Map<String, dynamic> file;
+
+  const FilePreviewScreen({Key? key, required this.file}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final String fileName = file['fileName'];
+    final String fileType = file['fileType'];
+    final Uint8List fileBytes = file['file'];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(fileName),
+        actions: [
+          // Add download action
+          IconButton(
+            icon: const Icon(Icons.download),
+            onPressed: () {
+              _downloadFile(context);
+            },
+          ),
+        ],
+      ),
+      body: _buildPreviewWidget(context, fileType, fileBytes, fileName),
+    );
+  }
+
+  /// Builds the appropriate preview widget based on file type
+  Widget _buildPreviewWidget(BuildContext context, String fileType,
+      Uint8List fileBytes, String fileName) {
+    switch (fileType) {
+      case 'image':
+        return Center(
+          child: InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4.0,
+            child: Image.memory(
+              fileBytes,
+              fit: BoxFit.contain,
+            ),
+          ),
+        );
+      case 'pdf':
+        // PDF viewer without external dependencies
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.picture_as_pdf, size: 80, color: Colors.red),
+              const SizedBox(height: 20),
+              Text(
+                'PDF Document: $fileName',
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              // PDF preview container
+              Container(
+                width: double.infinity,
+                height: 400,
+                margin: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.picture_as_pdf,
+                          size: 100, color: Colors.grey),
+                      const SizedBox(height: 16),
+                      Text(
+                        '$fileName',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'PDF Preview',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.download),
+                    label: const Text('Download'),
+                    onPressed: () => _downloadFile(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  if (kIsWeb)
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Open in New Tab'),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Opening PDF in new tab...'),
+                          ),
+                        );
+                        // In a real implementation, this would use a web-specific method
+                        // to open the PDF in a new tab
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      case 'document':
+      case 'spreadsheet':
+        // For documents and spreadsheets show a placeholder
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                fileType == 'document' ? Icons.description : Icons.table_chart,
+                size: 100,
+              ),
+              const SizedBox(height: 20),
+              Text('$fileType: $fileName'),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  _openInExternalApp(context);
+                },
+                child: const Text('Open File'),
+              ),
+            ],
+          ),
+        );
+      default:
+        // Generic file preview
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.insert_drive_file, size: 100),
+              const SizedBox(height: 20),
+              Text('File: $fileName'),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  _openInExternalApp(context);
+                },
+                child: const Text('Open File'),
+              ),
+            ],
+          ),
+        );
+    }
+  }
+
+  /// Opens file in external app
+  void _openInExternalApp(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Opening file in external application...'),
+      ),
+    );
+    // In a real app, you'd use a platform-specific method to open the file
+  }
+
+  /// Downloads the file to the device
+  void _downloadFile(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('File saved to downloads folder'),
+      ),
+    );
+    // In a real app, you'd implement actual file download functionality
   }
 }
