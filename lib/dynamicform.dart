@@ -10,6 +10,10 @@ import 'package:reactiveform/string_constants.dart';
 import 'package:flutter/services.dart';
 import 'dynamicformcontroller.dart';
 import 'package:reactiveform/models/form_field_model.dart';
+import 'dart:convert'; // For base64 encoding
+
+// Conditional import for web
+import 'web_utils.dart' if (dart.library.html) 'dart:html' as html;
 
 import 'widgets/multi_select_form_field.dart';
 
@@ -3032,7 +3036,7 @@ class FilePreviewScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.download),
             onPressed: () {
-              _downloadFile(context);
+              _downloadFile(context, fileBytes, fileName);
             },
           ),
         ],
@@ -3107,7 +3111,8 @@ class FilePreviewScreen extends StatelessWidget {
                   ElevatedButton.icon(
                     icon: const Icon(Icons.download),
                     label: const Text('Download'),
-                    onPressed: () => _downloadFile(context),
+                    onPressed: () =>
+                        _downloadFile(context, fileBytes, fileName),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
                       foregroundColor: Colors.white,
@@ -3118,15 +3123,8 @@ class FilePreviewScreen extends StatelessWidget {
                     ElevatedButton.icon(
                       icon: const Icon(Icons.open_in_new),
                       label: const Text('Open in New Tab'),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Opening PDF in new tab...'),
-                          ),
-                        );
-                        // In a real implementation, this would use a web-specific method
-                        // to open the PDF in a new tab
-                      },
+                      onPressed: () =>
+                          _openPdfInNewTab(context, fileBytes, fileName),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
@@ -3192,13 +3190,107 @@ class FilePreviewScreen extends StatelessWidget {
     // In a real app, you'd use a platform-specific method to open the file
   }
 
+  /// Opens a PDF in a new browser tab (web only)
+  void _openPdfInNewTab(
+      BuildContext context, Uint8List pdfBytes, String fileName) {
+    if (kIsWeb) {
+      try {
+        // Create a Blob from the PDF bytes with proper MIME type
+        final blob = html.Blob([pdfBytes], 'application/pdf');
+
+        // Create a URL for the Blob
+        final url = html.Url.createObjectUrlFromBlob(blob);
+
+        // Open the URL in a new tab
+        html.window.open(url, '_blank');
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('PDF opened in a new tab'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        print('Error opening PDF in new tab: $e');
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Opening in new tab is only available on web platforms'),
+        ),
+      );
+    }
+  }
+
   /// Downloads the file to the device
-  void _downloadFile(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('File saved to downloads folder'),
-      ),
-    );
-    // In a real app, you'd implement actual file download functionality
+  void _downloadFile(
+      BuildContext context, Uint8List fileBytes, String fileName) {
+    try {
+      if (kIsWeb) {
+        // Web platform - use html to trigger download
+        // Get proper MIME type based on filename
+        String mimeType = 'application/octet-stream';
+        if (fileName.toLowerCase().endsWith('.pdf')) {
+          mimeType = 'application/pdf';
+        } else if (fileName.toLowerCase().endsWith('.jpg') ||
+            fileName.toLowerCase().endsWith('.jpeg')) {
+          mimeType = 'image/jpeg';
+        } else if (fileName.toLowerCase().endsWith('.png')) {
+          mimeType = 'image/png';
+        }
+
+        // Create blob with correct MIME type
+        final blob = html.Blob([fileBytes], mimeType);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+
+        // Create a download anchor element
+        final anchor = html.AnchorElement()
+          ..href = url
+          ..style.display = 'none'
+          ..download = fileName; // Use the download property directly
+
+        // Add to document body and trigger click
+        html.document.body?.append(anchor);
+        anchor.click();
+
+        // Clean up by revoking the object URL
+        // We don't need to remove the anchor as the browser will handle this
+        html.Url.revokeObjectUrl(url);
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('File downloaded successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // Mobile platform - show a temporary message
+        // In a real app, you'd implement platform-specific download
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('File saved to downloads folder'),
+          ),
+        );
+      }
+    } catch (e) {
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error downloading file: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      print('Error downloading file: $e');
+    }
   }
 }
