@@ -284,13 +284,16 @@ class DynamicFormController extends ChangeNotifier {
     }
 
     // Skip all attachment validation if hasAttachments is explicitly set to false
-    // or if field type is text (NEW CONDITION)
-    if (field['hasAttachments'] != false && field['type'] != 'text') {
+    if (field['hasAttachments'] != false) {
       // Get the selected value
       final selectedValue = currentControl.value;
 
       // Check if this is a multiselect field
       final bool isMultiselect = field['type'] == 'multiselect';
+
+      // Special handling for text fields with hasAttachments=true
+      bool isTextWithAttachments =
+          field['type'] == 'text' && field['hasAttachments'] == true;
 
       // Get the disabledOptions list if it exists
       List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
@@ -349,24 +352,9 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and enableAttachmentsOn are empty or null, make file upload mandatory
-        if (!fileRequired && field['hasAttachments'] == true) {
-          // Check if requireAttachmentsOn is empty or null
-          bool isRequireAttachmentsOnEmpty =
-              field['requireAttachmentsOn'] == null ||
-                  (field['requireAttachmentsOn'] is List &&
-                      (field['requireAttachmentsOn'] as List).isEmpty);
-
-          // Check if enableAttachmentsOn is empty or null
-          bool isEnableAttachmentsOnEmpty =
-              field['enableAttachmentsOn'] == null ||
-                  (field['enableAttachmentsOn'] is List &&
-                      (field['enableAttachmentsOn'] as List).isEmpty);
-
-          // If both are empty or null, make file upload mandatory
-          if (isRequireAttachmentsOnEmpty && isEnableAttachmentsOnEmpty) {
-            fileRequired = true;
-          }
+        // If it's a text field with hasAttachments=true, file upload is mandatory
+        if (!fileRequired && isTextWithAttachments) {
+          fileRequired = true;
         }
 
         // Also handle the case when requiredAttachmentsOn is true
@@ -564,13 +552,16 @@ class DynamicFormController extends ChangeNotifier {
     }
 
     // Skip all attachment validation if hasAttachments is explicitly set to false
-    // or if field type is text (NEW CONDITION)
-    if (field['hasAttachments'] != false && field['type'] != 'text') {
+    if (field['hasAttachments'] != false) {
       // Get the selected value
       final selectedValue = currentControl.value;
 
       // Check if this is a multiselect field
       final bool isMultiselect = field['type'] == 'multiselect';
+
+      // Special handling for text fields with hasAttachments=true
+      bool isTextWithAttachments =
+          field['type'] == 'text' && field['hasAttachments'] == true;
 
       // Get the disabledOptions list if it exists
       List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
@@ -629,24 +620,9 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and enableAttachmentsOn are empty or null, make file upload mandatory
-        if (!fileRequired && field['hasAttachments'] == true) {
-          // Check if requireAttachmentsOn is empty or null
-          bool isRequireAttachmentsOnEmpty =
-              field['requireAttachmentsOn'] == null ||
-                  (field['requireAttachmentsOn'] is List &&
-                      (field['requireAttachmentsOn'] as List).isEmpty);
-
-          // Check if enableAttachmentsOn is empty or null
-          bool isEnableAttachmentsOnEmpty =
-              field['enableAttachmentsOn'] == null ||
-                  (field['enableAttachmentsOn'] is List &&
-                      (field['enableAttachmentsOn'] as List).isEmpty);
-
-          // If both are empty or null, make file upload mandatory
-          if (isRequireAttachmentsOnEmpty && isEnableAttachmentsOnEmpty) {
-            fileRequired = true;
-          }
+        // If it's a text field with hasAttachments=true, file upload is mandatory
+        if (!fileRequired && isTextWithAttachments) {
+          fileRequired = true;
         }
 
         // Also handle the case when requiredAttachmentsOn is true
@@ -717,14 +693,17 @@ class DynamicFormController extends ChangeNotifier {
     }
 
     // Skip all attachment validation if hasAttachments is explicitly set to false
-    // or if field type is text (NEW CONDITION)
-    if (field['hasAttachments'] != false && field['type'] != 'text') {
+    if (field['hasAttachments'] != false) {
       // Check if file upload is required based on the selected value
       bool fileRequired = false;
       final selectedValue = control.value;
 
       // Check if this is a multiselect field
       final bool isMultiselect = field['type'] == 'multiselect';
+
+      // Special handling for text fields with hasAttachments=true
+      bool isTextWithAttachments =
+          field['type'] == 'text' && field['hasAttachments'] == true;
 
       // Get the disabledOptions list if it exists
       List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
@@ -780,24 +759,9 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and enableAttachmentsOn are empty or null, make file upload mandatory
-        if (!fileRequired && field['hasAttachments'] == true) {
-          // Check if requireAttachmentsOn is empty or null
-          bool isRequireAttachmentsOnEmpty =
-              field['requireAttachmentsOn'] == null ||
-                  (field['requireAttachmentsOn'] is List &&
-                      (field['requireAttachmentsOn'] as List).isEmpty);
-
-          // Check if enableAttachmentsOn is empty or null
-          bool isEnableAttachmentsOnEmpty =
-              field['enableAttachmentsOn'] == null ||
-                  (field['enableAttachmentsOn'] is List &&
-                      (field['enableAttachmentsOn'] as List).isEmpty);
-
-          // If both are empty or null, make file upload mandatory
-          if (isRequireAttachmentsOnEmpty && isEnableAttachmentsOnEmpty) {
-            fileRequired = true;
-          }
+        // If it's a text field with hasAttachments=true, file upload is mandatory
+        if (!fileRequired && isTextWithAttachments) {
+          fileRequired = true;
         }
 
         // Also handle the case when requiredAttachmentsOn is true

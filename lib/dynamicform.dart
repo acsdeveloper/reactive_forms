@@ -1375,25 +1375,33 @@ class _DynamicFormState extends State<DynamicForm> {
               // Special case: if hasAttachments is explicitly true and none of the above conditions applied
               // Check if we still want to show uploads in this case
               if (!shouldShowAttachments && field['hasAttachments'] == true) {
-                // Check if requireAttachmentsOn is empty or null
-                bool isRequireAttachmentsOnEmpty =
-                    field['requireAttachmentsOn'] == null ||
-                        (field['requireAttachmentsOn'] is List &&
-                            (field['requireAttachmentsOn'] as List).isEmpty);
-
-                // Check if enableAttachmentsOn is empty or null
-                bool isEnableAttachmentsOnEmpty =
-                    field['enableAttachmentsOn'] == null ||
-                        (field['enableAttachmentsOn'] is List &&
-                            (field['enableAttachmentsOn'] as List).isEmpty);
-
-                // If both are empty or null, show file uploads and make them required
-                if (isRequireAttachmentsOnEmpty && isEnableAttachmentsOnEmpty) {
+                // If this is a text field with hasAttachments=true, make uploads required
+                if (field['type'] == 'text') {
                   shouldShowAttachments = true;
                   isRequired = true;
                 } else {
-                  // If we want to hide attachments for values not in requireAttachmentsOn/enableAttachmentsOn
-                  return const SizedBox.shrink();
+                  // For other field types, keep the existing logic
+                  // Check if requireAttachmentsOn is empty or null
+                  bool isRequireAttachmentsOnEmpty =
+                      field['requireAttachmentsOn'] == null ||
+                          (field['requireAttachmentsOn'] is List &&
+                              (field['requireAttachmentsOn'] as List).isEmpty);
+
+                  // Check if enableAttachmentsOn is empty or null
+                  bool isEnableAttachmentsOnEmpty =
+                      field['enableAttachmentsOn'] == null ||
+                          (field['enableAttachmentsOn'] is List &&
+                              (field['enableAttachmentsOn'] as List).isEmpty);
+
+                  // If both are empty or null, show file uploads and make them required
+                  if (isRequireAttachmentsOnEmpty &&
+                      isEnableAttachmentsOnEmpty) {
+                    shouldShowAttachments = true;
+                    isRequired = true;
+                  } else {
+                    // If we want to hide attachments for values not in requireAttachmentsOn/enableAttachmentsOn
+                    return const SizedBox.shrink();
+                  }
                 }
               }
 
@@ -2322,21 +2330,28 @@ class _DynamicFormState extends State<DynamicForm> {
 
       // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and enableAttachmentsOn are empty or null, make file upload mandatory
       if (!fileRequired && currentField['hasAttachments'] == true) {
-        // Check if requireAttachmentsOn is empty or null
-        bool isRequireAttachmentsOnEmpty =
-            currentField['requireAttachmentsOn'] == null ||
-                (currentField['requireAttachmentsOn'] is List &&
-                    (currentField['requireAttachmentsOn'] as List).isEmpty);
-
-        // Check if enableAttachmentsOn is empty or null
-        bool isEnableAttachmentsOnEmpty =
-            currentField['enableAttachmentsOn'] == null ||
-                (currentField['enableAttachmentsOn'] is List &&
-                    (currentField['enableAttachmentsOn'] as List).isEmpty);
-
-        // If both are empty or null, file upload is required
-        if (isRequireAttachmentsOnEmpty && isEnableAttachmentsOnEmpty) {
+        // Check if this is a text field
+        if (currentField['type'] == 'text') {
+          // For text fields with hasAttachments=true, always make file upload mandatory
           fileRequired = true;
+        } else {
+          // For other field types, keep the existing logic
+          // Check if requireAttachmentsOn is empty or null
+          bool isRequireAttachmentsOnEmpty =
+              currentField['requireAttachmentsOn'] == null ||
+                  (currentField['requireAttachmentsOn'] is List &&
+                      (currentField['requireAttachmentsOn'] as List).isEmpty);
+
+          // Check if enableAttachmentsOn is empty or null
+          bool isEnableAttachmentsOnEmpty =
+              currentField['enableAttachmentsOn'] == null ||
+                  (currentField['enableAttachmentsOn'] is List &&
+                      (currentField['enableAttachmentsOn'] as List).isEmpty);
+
+          // If both are empty or null, file upload is required
+          if (isRequireAttachmentsOnEmpty && isEnableAttachmentsOnEmpty) {
+            fileRequired = true;
+          }
         }
       }
 
