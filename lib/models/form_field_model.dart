@@ -22,6 +22,7 @@ class FormFieldModel {
   final Map<String, dynamic>? branching;
   final int? min;
   final int? max;
+  final String? groupWith;
 
   FormFieldModel({
     required this.name,
@@ -38,6 +39,7 @@ class FormFieldModel {
     this.branching,
     this.min,
     this.max,
+    this.groupWith,
   });
 
   factory FormFieldModel.fromJson(Map<String, dynamic> json) {
@@ -87,6 +89,7 @@ class FormFieldModel {
         branching: json['branching'] as Map<String, dynamic>?,
         min: json['min'] != null ? int.tryParse(json['min'].toString()) : null,
         max: json['max'] != null ? int.tryParse(json['max'].toString()) : null,
+        groupWith: json['groupWith']?.toString(),
       );
     } catch (e) {
       print('Error parsing field ${json['name']}: $e');
@@ -109,4 +112,4 @@ class FormFieldModel {
         return value;
     }
   }
-} 
+}

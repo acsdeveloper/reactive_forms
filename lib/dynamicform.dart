@@ -62,6 +62,13 @@ class _DynamicFormState extends State<DynamicForm> {
   late PageController _pageController;
   final _progressKey = GlobalKey();
   bool _showAttachmentError = false;
+  List<Map<String, dynamic>> _internalFields = [];
+  // grouping helpers
+  List<int> _groupAnchors =
+      []; // indices in _internalFields representing first field of each group
+  Map<int, List<int>> _anchorToFieldIndices = {};
+  int _currentGroupPointer =
+      0; // points into _groupAnchors when showOneByOne=true
 
   @override
   void initState() {
@@ -70,6 +77,8 @@ class _DynamicFormState extends State<DynamicForm> {
       formJson: widget.formJson,
       onSubmit: widget.onSubmit,
     );
+
+    _internalFields = List<Map<String, dynamic>>.from(widget.formJson);
 
     // Add a listener to the controller to update the UI when the question changes
     controller.addListener(_onControllerChanged);
@@ -82,6 +91,8 @@ class _DynamicFormState extends State<DynamicForm> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _calculateProgress();
     });
+
+    _recomputeGroupStructure();
   }
 
   @override
@@ -141,7 +152,7 @@ class _DynamicFormState extends State<DynamicForm> {
         continue;
       }
 
-      bool shouldShow = true;
+      bool shouldShow = true; // Initialize to false for OR logic
       final conditions = question['showWhen'] as Map<String, dynamic>;
 
       conditions.forEach((field, expectedValues) {
@@ -186,18 +197,23 @@ class _DynamicFormState extends State<DynamicForm> {
       child: ReactiveForm(
         formGroup: controller.form,
         child: Scaffold(
-          body: SingleChildScrollView(
-            key: ValueKey(
-                '${StringConstants.form}${controller.currentQuestionIndex}'),
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (widget.showOneByOne) ..._buildOneByOneFields(),
-                if (!widget.showOneByOne) ..._buildAllFields(),
-                if (_showAttachmentError) _buildErrorMessage(),
-              ],
-            ),
+          floatingActionButton: _buildAddButton(),
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                key: ValueKey(
+                    '${StringConstants.form}${controller.currentQuestionIndex}'),
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.showOneByOne) ..._buildOneByOneFields(),
+                    if (!widget.showOneByOne) ..._buildAllFields(),
+                    if (_showAttachmentError) _buildErrorMessage(),
+                  ],
+                ),
+              );
+            },
           ),
           bottomNavigationBar: _buildBottomNavigation(buttonColor),
         ),
@@ -215,95 +231,28 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   List<Widget> _buildAllFields() {
-    return widget.formJson
-        .map((field) => Column(
-              children: [
-                _buildField(field),
-                const Divider(height: 32, thickness: 1),
-              ],
-            ))
-        .toList();
+    return _buildGroupedCards();
   }
 
   List<Widget> _buildOneByOneFields() {
-    if (controller.currentQuestionIndex >= widget.formJson.length) {
-      return [];
+    if (_groupAnchors.isEmpty) return [];
+
+    final anchor = _groupAnchors[_currentGroupPointer];
+    final List<int> fieldIndices = _anchorToFieldIndices[anchor] ?? [anchor];
+
+    List<Widget> widgets = [];
+
+    for (int idx in fieldIndices) {
+      final field = _internalFields[idx];
+      widgets.add(_buildField(field));
+      widgets.add(const Divider(height: 32, thickness: 1));
     }
 
-    final field = widget.formJson[controller.currentQuestionIndex];
+    if (widgets.isNotEmpty) {
+      widgets.removeLast(); // remove trailing divider
+    }
 
-    return [
-      Padding(
-        padding: const EdgeInsets.only(bottom: 16.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '${StringConstants.questionNumber} ${currentVisibleQuestionIndex + 1}',
-              style: widget.fontFamily.copyWith(fontWeight: FontWeight.bold),
-            ),
-            SizedBox(
-              width: 100,
-              height: 6,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(3),
-                child: LinearProgressIndicator(
-                  value: totalVisibleQuestions > 0
-                      ? (currentVisibleQuestionIndex + 1) /
-                          totalVisibleQuestions
-                      : 0,
-                  backgroundColor: Colors.grey[200],
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    widget.primaryColor,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      Padding(
-        padding: const EdgeInsets.only(bottom: 16.0),
-        child: Row(
-          children: [
-            Expanded(
-              child: RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: field['label'],
-                      style: widget.fontFamily.copyWith(
-                          fontWeight: FontWeight.bold, color: Colors.black),
-                    ),
-                    if (field['required'] == true)
-                      TextSpan(
-                        text: ' *',
-                        style: widget.fontFamily.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.red,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      if (field['description'] != null)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
-          child: Text(
-            field['description'],
-            style: widget.fontFamily,
-          ),
-        ),
-      KeyedSubtree(
-        key: ValueKey(controller.currentQuestionIndex),
-        child: _buildField(field),
-      ),
-      const SizedBox(height: 20),
-    ];
+    return widgets;
   }
 
   Widget _buildField(Map<String, dynamic> field) {
@@ -314,6 +263,11 @@ class _DynamicFormState extends State<DynamicForm> {
           final conditions = field['showWhen'] as Map<String, dynamic>;
 
           conditions.forEach((dependentField, expectedValue) {
+            if (!controller.form.contains(dependentField)) {
+              shouldShow = false;
+              return;
+            }
+
             final dependentControl = form.control(dependentField);
             final currentValue = dependentControl.value;
 
@@ -345,38 +299,51 @@ class _DynamicFormState extends State<DynamicForm> {
       Map<String, dynamic> field, AbstractControl<dynamic> control) {
     switch (field['type']) {
       case 'option':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (field['options'] != null)
-              ...field['options']
+      case 'radio':
+        {
+          // Fallback to default Yes/No if options are missing or empty
+          final List<dynamic> rawOptions =
+              (field['options'] as List<dynamic>?) ?? ['Yes', 'No'];
+          final List<String> options =
+              rawOptions.isEmpty ? ['Yes', 'No'] : rawOptions.cast<String>();
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  if (field['label'] != null)
+                    Text(field['label'], style: widget.fontFamily),
+                  if (field['required'] == true)
+                    Text(' *',
+                        style: widget.fontFamily.copyWith(color: Colors.red)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              ...options
                   .map<Widget>(
                     (option) => RadioListTile<String>(
-                      title: Text(option.toString(), style: widget.fontFamily),
-                      value: option.toString(),
+                      title: Text(option, style: widget.fontFamily),
+                      value: option,
                       groupValue: control.value,
                       activeColor: widget.primaryColor,
                       onChanged: (value) {
-                        setState(() {
-                          control.value = value;
-                        });
+                        control.value = value;
+                        if (widget.showOneByOne &&
+                            !isCurrentQuestionEffectivelyLast()) {
+                          Future.delayed(const Duration(milliseconds: 300), () {
+                            if (validateCurrentSection()) {
+                              moveToNextQuestion(context);
+                            }
+                          });
+                        }
                       },
                     ),
                   )
                   .toList(),
-            if (control.touched && control.hasErrors)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Text(
-                  control.errors.toString(),
-                  style: widget.fontFamily
-                      .copyWith(color: Colors.red[700], fontSize: 12),
-                ),
-              ),
-          ],
-        );
-      case FieldType.radio:
-        return _buildRadioField(field);
+            ],
+          );
+        }
       case FieldType.dropdown:
         return _buildDropdownField(field);
       case FieldType.text:
@@ -389,6 +356,15 @@ class _DynamicFormState extends State<DynamicForm> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                if (field['label'] != null)
+                  Text(field['label'], style: widget.fontFamily),
+                if (field['required'] == true)
+                  Text(' *',
+                      style: widget.fontFamily.copyWith(color: Colors.red)),
+              ],
+            ),
             ReactiveFormField<List<String>, List<String>>(
               formControlName: field['name'],
               validationMessages: {
@@ -730,41 +706,45 @@ class _DynamicFormState extends State<DynamicForm> {
   /// on the input field parameters. The returned widgets include RadioListTile widgets for options,
   /// FileUploadWidget for attachments if specified, and a TextField for comments if specified.
   Widget _buildRadioField(Map<String, dynamic> field) {
+    // Fallback to default Yes/No if options are missing or empty
+    final List<dynamic> rawOptions =
+        (field['options'] as List<dynamic>?) ?? ['Yes', 'No'];
+    final List<String> options =
+        rawOptions.isEmpty ? ['Yes', 'No'] : rawOptions.cast<String>();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: (field['options'] as List<dynamic>).map<Widget>((option) {
-            return Container(
-              padding: EdgeInsets.zero,
-              margin: const EdgeInsets.symmetric(vertical: 4.0),
-              child: Transform.translate(
-                offset: const Offset(-12, 0),
-                child: ReactiveRadioListTile<String>(
-                  formControlName: field['name'],
-                  value: option.toString(),
-                  title: Text(option.toString(), style: widget.fontFamily),
-                  contentPadding: EdgeInsets.zero,
-                  onChanged: (value) {
-                    if (widget.showOneByOne) {
-                      // Add a small delay to allow the value to be set before navigation
-                      Future.delayed(const Duration(milliseconds: 300), () {
-                        // Only proceed with auto-navigation if we're not on the submit page
-                        if (!isCurrentQuestionEffectivelyLast()) {
-                          // First validate the current form section
-                          if (validateCurrentSection()) {
-                            moveToNextQuestion(context);
-                          }
-                        }
-                      });
-                    }
-                  },
-                ),
-              ),
-            );
-          }).toList(),
+        Row(
+          children: [
+            if (field['label'] != null)
+              Text(field['label'], style: widget.fontFamily),
+            if (field['required'] == true)
+              Text(' *', style: widget.fontFamily.copyWith(color: Colors.red)),
+          ],
         ),
+        const SizedBox(height: 4),
+        ...options
+            .map<Widget>(
+              (option) => RadioListTile<String>(
+                title: Text(option, style: widget.fontFamily),
+                value: option,
+                groupValue: controller.form.control(field['name']).value,
+                activeColor: widget.primaryColor,
+                onChanged: (value) {
+                  controller.form.control(field['name']).value = value;
+                  if (widget.showOneByOne &&
+                      !isCurrentQuestionEffectivelyLast()) {
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      if (validateCurrentSection()) {
+                        moveToNextQuestion(context);
+                      }
+                    });
+                  }
+                },
+              ),
+            )
+            .toList(),
         if (field['hasAttachments'] == true)
           ReactiveValueListenableBuilder(
             formControlName: field['name'],
@@ -941,6 +921,15 @@ class _DynamicFormState extends State<DynamicForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          children: [
+            if (field['label'] != null)
+              Text(field['label'], style: widget.fontFamily),
+            if (field['required'] == true)
+              Text(' *', style: widget.fontFamily.copyWith(color: Colors.red)),
+          ],
+        ),
+        const SizedBox(height: 4),
         InkWell(
           onTap: () {
             showModalBottomSheet(
@@ -1220,6 +1209,20 @@ class _DynamicFormState extends State<DynamicForm> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    if (field['label'] != null)
+                      Text(
+                        field['label'],
+                        style: widget.fontFamily,
+                      ),
+                    if (field['required'] == true)
+                      Text(
+                        ' *',
+                        style: widget.fontFamily.copyWith(color: Colors.red),
+                      ),
+                  ],
+                ),
                 ReactiveTextField(
                   formControlName: field['name'],
                   validationMessages: {
@@ -1436,6 +1439,20 @@ class _DynamicFormState extends State<DynamicForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          children: [
+            if (field['label'] != null)
+              Text(
+                field['label'],
+                style: widget.fontFamily,
+              ),
+            if (field['required'] == true)
+              Text(
+                ' *',
+                style: widget.fontFamily.copyWith(color: Colors.red),
+              ),
+          ],
+        ),
         ReactiveTextField<num>(
           formControlName: field['name'],
           keyboardType: TextInputType.number,
@@ -1760,7 +1777,7 @@ class _DynamicFormState extends State<DynamicForm> {
             else
               ElevatedButton(
                 onPressed: () {
-                  moveToNextQuestion(context);
+                  _moveToNextStep(context);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
@@ -1809,7 +1826,8 @@ class _DynamicFormState extends State<DynamicForm> {
               control.value.toString().isEmpty ||
               control.value == 'null')) {
         control.markAsTouched();
-        popuperror(StringConstants.pleaseFillInAllRequiredFields);
+        AppSnackBar(
+            StringConstants.pleaseFillInAllRequiredFields as BuildContext);
         return;
       }
 
@@ -1917,363 +1935,41 @@ class _DynamicFormState extends State<DynamicForm> {
     return total;
   }
 
-  void updateQuestionSequence(int index) {
-    _calculateProgress();
+  // --- Duplicate navigation helpers removed (see consolidated implementations later in class) ---
+  void _moveToNextStep(BuildContext context) {
+    if (_currentGroupPointer < _groupAnchors.length - 1) {
+      setState(() {
+        _currentGroupPointer++;
+        controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+      });
+    }
   }
 
   void moveToNextQuestion(BuildContext context) {
-    // Use validateAndProceed instead of manual validation
-    if (controller.validateAndProceed(context)) {
-      setState(() {
-        final currentField = widget.formJson[controller.currentQuestionIndex];
-        final control = controller.form.control(currentField['name']);
-        visitedQuestions.add(currentField['name']);
-
-        if (currentField['branching'] != null &&
-            currentField['branching'][control.value] != null) {
-          final targetQuestionName = currentField['branching'][control.value];
-
-          if (visitedQuestions.contains(targetQuestionName)) {
-            moveToNextValidQuestion();
-          } else {
-            final targetIndex = widget.formJson.indexWhere(
-                (question) => question['name'] == targetQuestionName);
-
-            if (targetIndex != -1) {
-              widget.formJson[targetIndex]['prevQuestion'] =
-                  currentField['name'];
-              moveToIndex(targetIndex);
-            } else {
-              moveToNextValidQuestion();
-            }
-          }
-        } else {
-          moveToNextValidQuestion();
-        }
-      });
-    }
-  }
-
-  void moveToNextValidQuestion() {
-    // The controller handles the actual navigation
-    print("moveToNextValidQuestion called");
-  }
-
-  // Validates the current section of the form including comment fields
-  bool validateCurrentSection() {
-    if (controller.currentQuestionIndex >= widget.formJson.length) {
-      return false;
-    }
-
-    final currentField = widget.formJson[controller.currentQuestionIndex];
-    final String fieldName = currentField['name'];
-
-    // Check the main field
-    if (!controller.form.control(fieldName).valid) {
-      return false;
-    }
-
-    // If field has comments, validate the comment field too
-    if (currentField['hasComments'] == true) {
-      final commentControlName = '${fieldName}_comment';
-      if (controller.form.contains(commentControlName) &&
-          !controller.form.control(commentControlName).valid) {
-        return false;
-      }
-    }
-
-    return true;
+    _moveToNextStep(context);
   }
 
   void moveToPreviousValidQuestion() {
-    print("Backward navigation from index: ${controller.currentQuestionIndex}");
-
-    if (controller.currentQuestionIndex <= 0) {
-      print("Already at first question, cannot go back");
-      return;
-    }
-
-    // Find the previous valid question
-    int previousIndex = findPreviousVisibleQuestionIndex();
-
-    if (previousIndex != -1) {
-      print("Moving back to question at index: $previousIndex");
-
-      // Update controller
-      controller.currentQuestionIndex = previousIndex;
-
-      // Update PageView if using it
-      if (_pageController.hasClients) {
-        _pageController.jumpToPage(previousIndex);
-      }
-
-      // Force UI update
+    if (_currentGroupPointer > 0) {
       setState(() {
-        _calculateProgress();
+        _currentGroupPointer--;
+        controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
       });
-    } else {
-      print(
-          "No previous visible questions found, staying at index: ${controller.currentQuestionIndex}");
     }
   }
 
-// Helper method to find the previous visible question
-  int findPreviousVisibleQuestionIndex() {
-    print(
-        "Finding previous visible question before ${controller.currentQuestionIndex}");
-
-    // Check questions in reverse order starting from the current-1
-    for (int i = controller.currentQuestionIndex - 1; i >= 0; i--) {
-      final question = widget.formJson[i];
-      final questionName = question['name'];
-
-      // If no conditions, this question should always be shown
-      if (question['showWhen'] == null) {
-        print("Question $questionName has no conditions - will be shown");
-        return i;
-      }
-
-      // Check if this question's conditions are met
-      final Map<String, dynamic> conditions = question['showWhen'];
-      bool shouldShow = true; // Start with true for AND logic between fields
-
-      print("Checking conditions for question $questionName: $conditions");
-
-      // Check each condition
-      conditions.forEach((dependentField, expectedValues) {
-        // Skip if the dependent field doesn't exist in the form
-        if (!controller.form.contains(dependentField)) {
-          print("Field $dependentField not found in form");
-          shouldShow = false;
-          return;
-        }
-
-        // Get the value of the dependent field
-        final dependentControl = controller.form.control(dependentField);
-        final fieldValue = dependentControl.value;
-
-        print("Field $dependentField has value: $fieldValue");
-
-        // Check if the field value matches any expected value
-        bool fieldMatches = false;
-        if (expectedValues is List) {
-          fieldMatches = expectedValues.contains(fieldValue);
-          print("Checking if $fieldValue is in $expectedValues: $fieldMatches");
-        } else {
-          fieldMatches = (fieldValue == expectedValues);
-          print(
-              "Checking if $fieldValue equals $expectedValues: $fieldMatches");
-        }
-
-        // For this question to show, ALL conditions must be met (AND logic)
-        shouldShow = shouldShow && fieldMatches;
-      });
-
-      // If this question's conditions are met, it should be shown
-      if (shouldShow) {
-        print(
-            "All conditions met for question $questionName, it will be shown");
-        return i;
-      } else {
-        print(
-            "Conditions not met for question $questionName, checking previous question");
-      }
-    }
-
-    // If we get here, no previous questions should be shown
-    return -1;
-  }
-
-  void moveToIndex(int index) {
-    if (index >= 0 && index < widget.formJson.length) {
-      final nextField = widget.formJson[index];
-
-      // Check if this field should be shown based on showWhen
-      if (nextField['showWhen'] != null) {
-        bool shouldShow = true;
-        final conditions = nextField['showWhen'] as Map<String, dynamic>;
-
-        conditions.forEach((dependentField, expectedValue) {
-          final dependentControl = controller.form.control(dependentField);
-          final currentValue = dependentControl.value;
-
-          if (expectedValue is List) {
-            shouldShow = shouldShow && expectedValue.contains(currentValue);
-          } else {
-            shouldShow = shouldShow && currentValue == expectedValue;
-          }
-        });
-
-        if (!shouldShow) {
-          // Skip this question and find the next valid one
-          moveToNextValidQuestion();
-          return;
-        }
-      }
-
-      // This question should be shown
-      updateQuestionSequence(index);
-      controller.currentQuestionIndex = index;
-    }
-  }
-
-  // Helper method to check if current question is effectively the last visible one
   bool isCurrentQuestionEffectivelyLast() {
-    int nextVisibleIndex = findNextVisibleQuestionIndex();
-    return nextVisibleIndex == -1;
+    return _currentGroupPointer >= _groupAnchors.length - 1;
   }
 
-  void popuperror(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${message} ${StringConstants.isRequired}',
-          style: widget.fontFamily,
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  // Reset the form navigation to ensure we start at the beginning
-  void resetNavigation() {
-    controller.currentQuestionIndex = 0;
-    updateQuestionSequence(0);
-  }
-
-  // Update how the back button works to use the hardcoded navigation
-  Widget _buildBackButton() {
-    return TextButton.icon(
-      icon: Icon(Icons.arrow_back, color: widget.primaryColor),
-      label: Text(
-        'Back',
-        style: TextStyle(color: widget.primaryColor),
-      ),
-      onPressed: controller.currentQuestionIndex > 0
-          ? () {
-              print("Back button tapped!");
-              moveToPreviousValidQuestion();
-            }
-          : null,
-    );
-  }
-
-  // Completely rebuild the progress indicator widget
-  Widget _buildProgressIndicator({Key? key}) {
-    // Calculate values directly here to ensure they're current
-    double progress = totalVisibleQuestions > 0
-        ? (currentVisibleQuestionIndex + 1) / totalVisibleQuestions
-        : 0;
-
-    print(
-        "RENDERING progress bar: ${currentVisibleQuestionIndex + 1}/$totalVisibleQuestions");
-
-    // Use RepaintBoundary to force redraw
-    return RepaintBoundary(
-      key: key,
-      child: Column(
-        children: [
-          SizedBox(
-            width: double.infinity,
-            height: 10,
-            child: LinearProgressIndicator(
-              value: progress.clamp(0.0, 1.0),
-              color: widget.primaryColor,
-              backgroundColor: Colors.grey[300],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Text(
-              'Question ${currentVisibleQuestionIndex + 1} of $totalVisibleQuestions',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Add this helper method to find the next visible question
   int findNextVisibleQuestionIndex() {
-    print(
-        "Finding next visible question after ${controller.currentQuestionIndex}");
-
-    // Check questions sequentially starting from the next one
-    for (int i = controller.currentQuestionIndex + 1;
-        i < widget.formJson.length;
-        i++) {
-      final question = widget.formJson[i];
-      final questionName = question['name'];
-
-      // If no conditions, this question should always be shown
-      if (question['showWhen'] == null) {
-        print("Question $questionName has no conditions - will be shown");
-        return i;
-      }
-
-      // Check if this question's conditions are met
-      final Map<String, dynamic> conditions = question['showWhen'];
-      bool shouldShow = true; // Start with true for AND logic between fields
-
-      print("Checking conditions for $questionName: $conditions");
-
-      // Check each condition
-      conditions.forEach((dependentField, expectedValues) {
-        // Skip if the dependent field doesn't exist in the form
-        if (!controller.form.contains(dependentField)) {
-          print("Field $dependentField not found in form");
-          shouldShow = false;
-          return;
-        }
-
-        // Get the value of the dependent field
-        final dependentControl = controller.form.control(dependentField);
-        final fieldValue = dependentControl.value;
-
-        print("Field $dependentField has value: $fieldValue");
-
-        // Check if the field value matches any expected value
-        bool fieldMatches = false;
-        if (expectedValues is List) {
-          fieldMatches = expectedValues.contains(fieldValue);
-          print("Checking if $fieldValue is in $expectedValues: $fieldMatches");
-        } else {
-          fieldMatches = (fieldValue == expectedValues);
-          print(
-              "Checking if $fieldValue equals $expectedValues: $fieldMatches");
-        }
-
-        // For this question to show, ALL conditions must be met (AND logic)
-        shouldShow = shouldShow && fieldMatches;
-      });
-
-      // If this question's conditions are met, it should be shown
-      if (shouldShow) {
-        print("All conditions met for $questionName, it will be shown");
-        return i;
-      } else {
-        print("Conditions not met for $questionName, checking next question");
-      }
+    // simply return next anchor or -1
+    if (_currentGroupPointer < _groupAnchors.length - 1) {
+      return _groupAnchors[_currentGroupPointer + 1];
     }
-
-    // No more questions should be shown
     return -1;
   }
 
-  // Add this helper method to get the current question name
-  String _getCurrentQuestionName() {
-    if (controller.currentQuestionIndex < widget.formJson.length) {
-      return widget.formJson[controller.currentQuestionIndex]['name'];
-    }
-    return '';
-  }
-
-  // Fix the _validateCurrentStep method to use widget.formJson
   bool _validateCurrentStep() {
     // Make sure we have a valid question index
     if (controller.currentQuestionIndex >= widget.formJson.length) {
@@ -2378,7 +2074,10 @@ class _DynamicFormState extends State<DynamicForm> {
     return isValid;
   }
 
-  // Add an error message display for attachments
+  bool validateCurrentSection() {
+    return _validateCurrentStep();
+  }
+
   Widget _buildErrorMessage() {
     return _showAttachmentError
         ? Container(
@@ -2394,6 +2093,144 @@ class _DynamicFormState extends State<DynamicForm> {
             ),
           )
         : const SizedBox.shrink();
+  }
+
+  Widget _buildAddButton() {
+    return FloatingActionButton(
+      onPressed: _addNewSet,
+      child: const Icon(Icons.add),
+    );
+  }
+
+  void _addNewSet() {
+    if (_groupAnchors.isEmpty) return;
+
+    final anchor = _groupAnchors[_currentGroupPointer];
+    final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+    if (indices.isEmpty) return;
+
+    final millis = DateTime.now().millisecondsSinceEpoch;
+    final List<Map<String, dynamic>> newFields = [];
+
+    // Duplicate the anchor field first BUT keep it linked to the **existing** anchor
+    // by setting its `groupWith` to the original anchor name. This way, the new
+    // duplicate stays within the same page/card.
+    final Map<String, dynamic> anchorFieldCopy =
+        Map<String, dynamic>.from(_internalFields[indices.first]);
+    final String baseAnchorName = anchorFieldCopy['name'];
+    anchorFieldCopy['name'] = '${baseAnchorName}_$millis';
+    anchorFieldCopy['groupWith'] = baseAnchorName;
+    newFields.add(anchorFieldCopy);
+
+    // Duplicate the remaining group fields and keep their groupWith pointing to the same base anchor
+    for (int i = 1; i < indices.length; i++) {
+      final Map<String, dynamic> fieldCopy =
+          Map<String, dynamic>.from(_internalFields[indices[i]]);
+      fieldCopy['name'] = '${fieldCopy['name']}_$millis';
+      fieldCopy['groupWith'] = baseAnchorName;
+      newFields.add(fieldCopy);
+    }
+
+    // Insert the duplicated fields immediately after the current group in the
+    // internal list so that they appear right below the original card.
+    final insertPosition = indices.last + 1;
+
+    setState(() {
+      _internalFields.insertAll(insertPosition, newFields);
+      controller.addFormControls(newFields);
+      _recomputeGroupStructure(); // refresh mappings; anchor set remains the same
+      // Do NOT move _currentGroupPointer – remain on the same page
+    });
+  }
+
+  void _removeSet(List<String> names) {
+    setState(() {
+      _internalFields.removeWhere((f) => names.contains(f['name']));
+      controller.removeFormControls(names);
+      _recomputeGroupStructure();
+      if (_currentGroupPointer >= _groupAnchors.length) {
+        _currentGroupPointer =
+            _groupAnchors.isEmpty ? 0 : _groupAnchors.length - 1;
+      }
+    });
+  }
+
+  List<Widget> _buildGroupedCards() {
+    List<Widget> cards = [];
+
+    // Iterate over each anchor that defines a group
+    for (int anchor in _groupAnchors) {
+      final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+
+      // Collect field maps for this group (anchor comes first)
+      final groupFields = indices.map((i) => _internalFields[i]).toList();
+
+      cards.add(
+        Card(
+          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              children: [
+                ...groupFields.map(_buildField).toList(),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: () => _removeSet(
+                        groupFields.map((e) => e['name'] as String).toList()),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return cards;
+  }
+
+  // --- Group logic -------------------------------------------------
+  void _recomputeGroupStructure() {
+    _groupAnchors.clear();
+    _anchorToFieldIndices.clear();
+
+    Map<String, int> firstAnchorOfGroup = {};
+
+    for (int i = 0; i < _internalFields.length; i++) {
+      final field = _internalFields[i];
+      final String groupKey = field['groupWith']?.toString() ?? field['name'];
+
+      int anchor;
+      if (firstAnchorOfGroup.containsKey(groupKey)) {
+        anchor = firstAnchorOfGroup[groupKey]!;
+      } else {
+        anchor = i;
+        firstAnchorOfGroup[groupKey] = i;
+        _groupAnchors.add(i);
+      }
+
+      _anchorToFieldIndices.putIfAbsent(anchor, () => []).add(i);
+    }
+
+    // Ensure current pointer is within range
+    if (_currentGroupPointer >= _groupAnchors.length) {
+      _currentGroupPointer =
+          _groupAnchors.isEmpty ? 0 : _groupAnchors.length - 1;
+    }
+
+    // update controller index to current anchor so external validation logic stays valid
+    if (_groupAnchors.isNotEmpty) {
+      controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+    }
+  }
+
+  String _getCurrentQuestionName() {
+    if (controller.currentQuestionIndex < widget.formJson.length) {
+      return widget.formJson[controller.currentQuestionIndex]['name'];
+    }
+    return '';
   }
 }
 
