@@ -128,8 +128,12 @@ class DynamicFormController extends ChangeNotifier {
     form = FormGroup(controls);
 
     // Debug: Print initial form values
-    print('Initial form values: ${form.value}');
+    if (kDebugMode) {
+      print('Initial form values: ${form.value}');
+    }
   }
+
+  // Form control removal is handled by the removeFormControls method below
 
   List<Validator<dynamic>> _getValidators(
       bool validators, Map<String, dynamic>? field) {
@@ -166,7 +170,6 @@ class DynamicFormController extends ChangeNotifier {
     for (var field in formJson) {
       final fieldName = field['name'];
       final control = form.control(fieldName);
-      
 
       if (!control.valid && field['required'] == true) {
         isValid = false;
@@ -508,8 +511,7 @@ class DynamicFormController extends ChangeNotifier {
           fileRequired = true;
         }
 
-        if (fileRequired &&
-            (uploadedFiles[fieldName]?.isEmpty ?? true)) {
+        if (fileRequired && (uploadedFiles[fieldName]?.isEmpty ?? true)) {
           return true;
         }
       }
@@ -692,24 +694,24 @@ class DynamicFormController extends ChangeNotifier {
               validators: f['required'] == true ? [Validators.required] : []);
 
           if (f['hasComments'] == true) {
-            newControls['${n}_comment'] =
-                FormControl<String>(value: '', validators: [Validators.required]);
+            newControls['${n}_comment'] = FormControl<String>(
+                value: '', validators: [Validators.required]);
           }
         } else if (f['type'] == 'file') {
           uploadedFiles[n] = [];
           newControls[n] = FormControl<String>(value: '');
 
           if (f['hasComments'] == true) {
-            newControls['${n}_comment'] =
-                FormControl<String>(value: '', validators: [Validators.required]);
+            newControls['${n}_comment'] = FormControl<String>(
+                value: '', validators: [Validators.required]);
           }
         } else if (f['type'] == 'number') {
           newControls[n] = FormControl<num>(
               value: null, validators: _getValidators(f['required'], f));
 
           if (f['hasComments'] == true) {
-            newControls['${n}_comment'] =
-                FormControl<String>(value: '', validators: [Validators.required]);
+            newControls['${n}_comment'] = FormControl<String>(
+                value: '', validators: [Validators.required]);
           }
         } else if (f['type'] == 'radio') {
           if (f['options'] == null || (f['options'] as List).isEmpty) {
@@ -721,8 +723,8 @@ class DynamicFormController extends ChangeNotifier {
           );
 
           if (f['hasComments'] == true) {
-            newControls['${n}_comment'] =
-                FormControl<String>(value: '', validators: [Validators.required]);
+            newControls['${n}_comment'] = FormControl<String>(
+                value: '', validators: [Validators.required]);
           }
         } else {
           newControls[n] = FormControl<String>(
@@ -730,8 +732,8 @@ class DynamicFormController extends ChangeNotifier {
               validators: _getValidators(f['required'], f));
 
           if (f['hasComments'] == true) {
-            newControls['${n}_comment'] =
-                FormControl<String>(value: '', validators: [Validators.required]);
+            newControls['${n}_comment'] = FormControl<String>(
+                value: '', validators: [Validators.required]);
           }
         }
       }
@@ -742,11 +744,25 @@ class DynamicFormController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Removes form controls for deleted fields
+  ///
+  /// This method is called when question sets are removed from the form
+  /// via the delete button. It removes the main control, any associated
+  /// comment fields, and cleans up uploaded files.
   void removeFormControls(Iterable<String> names) {
     for (var n in names) {
+      // Remove the main control
       if (form.contains(n)) {
         form.removeControl(n);
       }
+
+      // Remove any associated comment control
+      final commentField = '${n}_comment';
+      if (form.contains(commentField)) {
+        form.removeControl(commentField);
+      }
+
+      // Remove any uploaded files
       uploadedFiles.remove(n);
     }
     notifyListeners();

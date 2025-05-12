@@ -10,7 +10,6 @@ import 'package:reactiveform/string_constants.dart';
 import 'package:flutter/services.dart';
 import 'dynamicformcontroller.dart';
 import 'package:reactiveform/models/form_field_model.dart';
-import 'dart:convert'; // For base64 encoding
 
 // Conditional import for web
 import 'web_utils.dart' if (dart.library.html) 'dart:html' as html;
@@ -50,25 +49,52 @@ class DynamicForm extends StatefulWidget {
   State<DynamicForm> createState() => _DynamicFormState();
 }
 
-class _DynamicFormState extends State<DynamicForm> {
+class _DynamicFormState extends State<DynamicForm>
+    with SingleTickerProviderStateMixin {
+  // Core controllers and data structures
   late DynamicFormController controller;
-  late BuildContext dialogContext;
-  static const _maxFileSize = 3 * 1024 * 1024; // 5MB
-  static const double _iconSize = 24.0;
-  List<int> questionSequence = [0];
-  Set<String> visitedQuestions = {};
-  int currentVisibleQuestionIndex = 0;
-  int totalVisibleQuestions = 1;
-  late PageController _pageController;
-  final _progressKey = GlobalKey();
-  bool _showAttachmentError = false;
   List<Map<String, dynamic>> _internalFields = [];
-  // grouping helpers
+
+  // Group structure tracking
   List<int> _groupAnchors =
       []; // indices in _internalFields representing first field of each group
   Map<int, List<int>> _anchorToFieldIndices = {};
   int _currentGroupPointer =
       0; // points into _groupAnchors when showOneByOne=true
+
+  // UI state
+  late PageController _pageController;
+  late TabController _tabController;
+  BuildContext? _alertDialogContext;
+  late BuildContext dialogContext;
+  bool _showAttachmentError = false;
+  double _pageProgress = 0.0;
+  final _progressKey = GlobalKey();
+
+  // Search functionality
+  String _searchQuery = '';
+  bool _isSearching = false;
+  TextEditingController _searchTextController = TextEditingController();
+
+  // Form tracking
+  Set<String> visitedQuestions = {};
+  int currentVisibleQuestionIndex = 0;
+  int totalVisibleQuestions = 1;
+
+  // File handling
+  static const _maxFileSize = 3 * 1024 * 1024; // 3MB
+  static const double _iconSize = 24.0;
+  List<PlatformFile> pickedFiles = [];
+  Map<String, List<Map<String, dynamic>>> _fileData = {};
+  int totalUploadSize = 0;
+  ReactiveFormArray? options;
+
+  // Flags for safe PageController access
+  bool _pageControllerReady = false;
+  bool _isUpdatingPageController = false;
+
+  // Mapping to track relationships between original and duplicated fields
+  Map<String, String> _originalToDuplicateNames = {};
 
   @override
   void initState() {
@@ -89,7 +115,8 @@ class _DynamicFormState extends State<DynamicForm> {
 
     // Calculate initial progress
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _calculateProgress();
+      _safeCalculateProgress();
+      _pageControllerReady = true;
     });
 
     _recomputeGroupStructure();
@@ -99,45 +126,74 @@ class _DynamicFormState extends State<DynamicForm> {
   void dispose() {
     // Remove the listener when the widget is disposed
     controller.removeListener(_onControllerChanged);
+    _pageController.dispose(); // Ensure the controller is disposed
     super.dispose();
   }
 
   // This will be called whenever the controller notifies its listeners
   void _onControllerChanged() {
-    // When controller changes, update the PageView if needed
-    if (_pageController.page?.round() != controller.currentQuestionIndex) {
-      _pageController.animateToPage(
-        controller.currentQuestionIndex,
-        duration: Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+    // Only attempt to update the page if the controller is attached to a page view
+    // and the controller is ready (has been laid out)
+    if (_pageControllerReady &&
+        !_isUpdatingPageController &&
+        _pageController.hasClients &&
+        _pageController.position.hasContentDimensions) {
+      try {
+        // Set flag to avoid recursive updates
+        _isUpdatingPageController = true;
+
+        // When controller changes, update the PageView if needed
+        final currentPage = _pageController.page?.round();
+        if (currentPage != null &&
+            currentPage != controller.currentQuestionIndex) {
+          _pageController.animateToPage(
+            controller.currentQuestionIndex,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        }
+      } catch (e) {
+        print('Error updating page controller: $e');
+      } finally {
+        _isUpdatingPageController = false;
+      }
     }
-    _calculateProgress();
+
+    // Always calculate progress, but handle exceptions safely
+    _safeCalculateProgress();
   }
 
-  // Calculate the progress based on visible questions
-  void _calculateProgress() {
-    List<int> visibleIndices = _getVisibleQuestionIndices();
+  // Calculate the progress based on visible questions - safely
+  void _safeCalculateProgress() {
+    // Skip progress calculation if not mounted
+    if (!mounted) return;
 
-    int position = visibleIndices.indexOf(controller.currentQuestionIndex);
-    if (position == -1 && visibleIndices.isNotEmpty) {
-      // Find the closest position
-      for (int i = 0; i < visibleIndices.length; i++) {
-        if (visibleIndices[i] >= controller.currentQuestionIndex) {
-          position = i;
-          break;
+    try {
+      List<int> visibleIndices = _getVisibleQuestionIndices();
+
+      int position = visibleIndices.indexOf(controller.currentQuestionIndex);
+      if (position == -1 && visibleIndices.isNotEmpty) {
+        // Find the closest position
+        for (int i = 0; i < visibleIndices.length; i++) {
+          if (visibleIndices[i] >= controller.currentQuestionIndex) {
+            position = i;
+            break;
+          }
         }
+        if (position == -1) position = visibleIndices.length - 1;
       }
-      if (position == -1) position = visibleIndices.length - 1;
-    }
 
-    setState(() {
-      currentVisibleQuestionIndex = position >= 0 ? position : 0;
-      totalVisibleQuestions =
-          visibleIndices.isNotEmpty ? visibleIndices.length : 1;
-      print(
-          "Progress updated: ${currentVisibleQuestionIndex + 1}/$totalVisibleQuestions");
-    });
+      if (mounted) {
+        setState(() {
+          currentVisibleQuestionIndex = position >= 0 ? position : 0;
+          totalVisibleQuestions =
+              visibleIndices.isNotEmpty ? visibleIndices.length : 1;
+        });
+      }
+    } catch (e) {
+      // Safely handle any errors during progress calculation
+      print('Error calculating progress: $e');
+    }
   }
 
   // Get the list of visible question indices
@@ -183,8 +239,8 @@ class _DynamicFormState extends State<DynamicForm> {
 
   @override
   Widget build(BuildContext context) {
-    // Rebuild progress in the main build method to ensure it updates
-    _calculateProgress();
+    // Rebuild progress safely
+    _safeCalculateProgress();
 
     final buttonColor = widget.primaryColor;
 
@@ -197,12 +253,15 @@ class _DynamicFormState extends State<DynamicForm> {
       child: ReactiveForm(
         formGroup: controller.form,
         child: Scaffold(
-          floatingActionButton: _buildAddButton(),
+          floatingActionButton: FloatingActionButton(
+            onPressed: () => _addNewSet(),
+            child: const Icon(Icons.add),
+          ),
           body: LayoutBuilder(
             builder: (context, constraints) {
               return SingleChildScrollView(
                 key: ValueKey(
-                    '${StringConstants.form}${controller.currentQuestionIndex}'),
+                    '${StringConstants.form}${controller.currentQuestionIndex}_${_internalFields.length}'), // Force rebuild when fields change
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,19 +296,80 @@ class _DynamicFormState extends State<DynamicForm> {
   List<Widget> _buildOneByOneFields() {
     if (_groupAnchors.isEmpty) return [];
 
-    final anchor = _groupAnchors[_currentGroupPointer];
-    final List<int> fieldIndices = _anchorToFieldIndices[anchor] ?? [anchor];
+    final List<Widget> widgets = [];
 
-    List<Widget> widgets = [];
+    // Start with the current anchor indicated by the pointer
+    final currentAnchor = _groupAnchors[_currentGroupPointer];
+    final String currentAnchorName =
+        _internalFields[currentAnchor]['name'] as String;
 
-    for (int idx in fieldIndices) {
-      final field = _internalFields[idx];
-      widgets.add(_buildField(field));
-      widgets.add(const Divider(height: 32, thickness: 1));
+    // Find all duplicates of the current question to show them together
+    List<int> anchorsToShow = [];
+
+    // First add the current anchor
+    anchorsToShow.add(currentAnchor);
+
+    // Get the base name (without timestamps)
+    String baseName = currentAnchorName;
+    if (baseName.contains('_')) {
+      final regex = RegExp(r'(.+)_\d+');
+      final match = regex.firstMatch(baseName);
+      if (match != null) {
+        baseName = match.group(1) ?? baseName;
+      }
     }
 
-    if (widgets.isNotEmpty) {
-      widgets.removeLast(); // remove trailing divider
+    // Find any duplicates of the current question (they'll have the same base name with timestamps)
+    final namePattern = RegExp('^${baseName}_\d+');
+
+    // Add any duplicates to be shown together on the same page
+    for (int i = 0; i < _groupAnchors.length; i++) {
+      // Skip the current anchor since we've already added it
+      if (i == _currentGroupPointer) continue;
+
+      final thisAnchorName =
+          _internalFields[_groupAnchors[i]]['name'] as String;
+
+      // Check if this is a duplicate of the current card (either through naming pattern or isDuplicate flag)
+      if (namePattern.hasMatch(thisAnchorName) ||
+          (_internalFields[_groupAnchors[i]]['isDuplicate'] == true &&
+              thisAnchorName.startsWith(baseName))) {
+        anchorsToShow.add(_groupAnchors[i]);
+      }
+    }
+
+    // Now build cards for all anchors (current anchor + duplicates)
+    for (int anchor in anchorsToShow) {
+      final List<int> fieldIndices = _anchorToFieldIndices[anchor] ?? [anchor];
+      final groupFields = fieldIndices.map((i) => _internalFields[i]).toList();
+
+      // Determine if this is original or duplicate for delete button
+      final anchorData = _internalFields[anchor];
+
+      // Check if this is a duplicate using the isDuplicate flag we set when creating duplicates
+      final bool isDuplicated = anchorData['isDuplicate'] == true;
+
+      widgets.add(Card(
+        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            children: [
+              ...groupFields.map(_buildField).toList(),
+              // Only show delete button on duplicated cards
+              if (isDuplicated)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: () => _removeSet(
+                        groupFields.map((e) => e['name'] as String).toList()),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ));
     }
 
     return widgets;
@@ -291,6 +411,7 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   Widget _buildFieldWidget(Map<String, dynamic> field) {
+    // Access the controller instance variable
     final control = controller.form.control(field['name']);
     return _buildActualField(field, control);
   }
@@ -310,15 +431,7 @@ class _DynamicFormState extends State<DynamicForm> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  if (field['label'] != null)
-                    Text(field['label'], style: widget.fontFamily),
-                  if (field['required'] == true)
-                    Text(' *',
-                        style: widget.fontFamily.copyWith(color: Colors.red)),
-                ],
-              ),
+              _buildLabelRow(field),
               const SizedBox(height: 4),
               ...options
                   .map<Widget>(
@@ -356,15 +469,7 @@ class _DynamicFormState extends State<DynamicForm> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                if (field['label'] != null)
-                  Text(field['label'], style: widget.fontFamily),
-                if (field['required'] == true)
-                  Text(' *',
-                      style: widget.fontFamily.copyWith(color: Colors.red)),
-              ],
-            ),
+            _buildLabelRow(field),
             ReactiveFormField<List<String>, List<String>>(
               formControlName: field['name'],
               validationMessages: {
@@ -608,6 +713,22 @@ class _DynamicFormState extends State<DynamicForm> {
     }
   }
 
+  Widget _buildLabelRow(Map<String, dynamic> field) {
+    if (field['label'] == null) return const SizedBox.shrink();
+    return Row(
+      children: [
+        Text(
+          field['label'],
+          style: widget.fontFamily.copyWith(fontWeight: FontWeight.w400),
+        ),
+        if (field['required'] == true)
+          Text(' *',
+              style: widget.fontFamily
+                  .copyWith(color: Colors.red, fontWeight: FontWeight.w400)),
+      ],
+    );
+  }
+
   Widget _buildQuestionHeader(Map<String, dynamic> field) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -715,14 +836,7 @@ class _DynamicFormState extends State<DynamicForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            if (field['label'] != null)
-              Text(field['label'], style: widget.fontFamily),
-            if (field['required'] == true)
-              Text(' *', style: widget.fontFamily.copyWith(color: Colors.red)),
-          ],
-        ),
+        _buildLabelRow(field),
         const SizedBox(height: 4),
         ...options
             .map<Widget>(
@@ -921,14 +1035,7 @@ class _DynamicFormState extends State<DynamicForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            if (field['label'] != null)
-              Text(field['label'], style: widget.fontFamily),
-            if (field['required'] == true)
-              Text(' *', style: widget.fontFamily.copyWith(color: Colors.red)),
-          ],
-        ),
+        _buildLabelRow(field),
         const SizedBox(height: 4),
         InkWell(
           onTap: () {
@@ -1209,20 +1316,7 @@ class _DynamicFormState extends State<DynamicForm> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    if (field['label'] != null)
-                      Text(
-                        field['label'],
-                        style: widget.fontFamily,
-                      ),
-                    if (field['required'] == true)
-                      Text(
-                        ' *',
-                        style: widget.fontFamily.copyWith(color: Colors.red),
-                      ),
-                  ],
-                ),
+                _buildLabelRow(field),
                 ReactiveTextField(
                   formControlName: field['name'],
                   validationMessages: {
@@ -1439,20 +1533,7 @@ class _DynamicFormState extends State<DynamicForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            if (field['label'] != null)
-              Text(
-                field['label'],
-                style: widget.fontFamily,
-              ),
-            if (field['required'] == true)
-              Text(
-                ' *',
-                style: widget.fontFamily.copyWith(color: Colors.red),
-              ),
-          ],
-        ),
+        _buildLabelRow(field),
         ReactiveTextField<num>(
           formControlName: field['name'],
           keyboardType: TextInputType.number,
@@ -1902,7 +1983,8 @@ class _DynamicFormState extends State<DynamicForm> {
   }
 
   String getCurrentQuestionNumber() {
-    return '${questionSequence.length}/${getTotalQuestions()}';
+    if (_groupAnchors.isEmpty) return "0/0";
+    return '${_currentGroupPointer + 1}/${_groupAnchors.length}';
   }
 
   int getTotalQuestions() {
@@ -2095,97 +2177,238 @@ class _DynamicFormState extends State<DynamicForm> {
         : const SizedBox.shrink();
   }
 
-  Widget _buildAddButton() {
-    return FloatingActionButton(
-      onPressed: _addNewSet,
-      child: const Icon(Icons.add),
-    );
-  }
-
+  /// Adds a new set of related fields to the form by duplicating current group
+  /// and placing it below the original card
   void _addNewSet() {
-    if (_groupAnchors.isEmpty) return;
+    try {
+      // Temporarily disable PageController updates
+      _pageControllerReady = false;
 
-    final anchor = _groupAnchors[_currentGroupPointer];
-    final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
-    if (indices.isEmpty) return;
+      // Make sure we have valid anchors before proceeding
+      if (_groupAnchors.isEmpty) return;
 
-    final millis = DateTime.now().millisecondsSinceEpoch;
-    final List<Map<String, dynamic>> newFields = [];
+      // Make sure _currentGroupPointer is valid before using it
+      int safeGroupPointer = 0;
+      if (_currentGroupPointer < 0 ||
+          _currentGroupPointer >= _groupAnchors.length) {
+        print(
+            'Warning: Invalid _currentGroupPointer value (${_currentGroupPointer}), resetting to 0');
+        _currentGroupPointer = 0;
+      }
 
-    // Duplicate the anchor field first BUT keep it linked to the **existing** anchor
-    // by setting its `groupWith` to the original anchor name. This way, the new
-    // duplicate stays within the same page/card.
-    final Map<String, dynamic> anchorFieldCopy =
-        Map<String, dynamic>.from(_internalFields[indices.first]);
-    final String baseAnchorName = anchorFieldCopy['name'];
-    anchorFieldCopy['name'] = '${baseAnchorName}_$millis';
-    anchorFieldCopy['groupWith'] = baseAnchorName;
-    newFields.add(anchorFieldCopy);
+      safeGroupPointer = _currentGroupPointer;
+      final originalPointer = safeGroupPointer;
+      final anchor = _groupAnchors[safeGroupPointer];
+      final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
 
-    // Duplicate the remaining group fields and keep their groupWith pointing to the same base anchor
-    for (int i = 1; i < indices.length; i++) {
-      final Map<String, dynamic> fieldCopy =
-          Map<String, dynamic>.from(_internalFields[indices[i]]);
-      fieldCopy['name'] = '${fieldCopy['name']}_$millis';
-      fieldCopy['groupWith'] = baseAnchorName;
-      newFields.add(fieldCopy);
+      if (indices.isEmpty) return;
+
+      // Debug info to help diagnose the issue
+      print('Current anchor index: $anchor');
+      print('Fields in this group indices: $indices');
+
+      // Identify the original field names that should be part of this card
+      final originalFieldNames = <String>[];
+      for (int idx in indices) {
+        if (idx >= 0 && idx < _internalFields.length) {
+          originalFieldNames.add(_internalFields[idx]['name'].toString());
+        }
+      }
+      print('Original field names for duplication: $originalFieldNames');
+
+      // Generate a unique timestamp for this duplication
+      final millis = DateTime.now().millisecondsSinceEpoch;
+      final List<Map<String, dynamic>> newFields = [];
+
+      // Alternative approach: Directly duplicate all fields in the current card
+      final cardFields = <Map<String, dynamic>>[];
+      for (int idx in indices) {
+        if (idx >= 0 && idx < _internalFields.length) {
+          cardFields.add(_internalFields[idx]);
+        }
+      }
+
+      print('Found ${cardFields.length} fields to duplicate in this card');
+
+      // Create duplicate versions of all fields in the card
+      final Map<String, String> originalToDuplicateNames = {};
+
+      // First pass: Create duplicates with new names
+      for (final originalField in cardFields) {
+        final String originalFieldName = originalField['name'].toString();
+        final Map<String, dynamic> fieldCopy =
+            Map<String, dynamic>.from(originalField);
+
+        // Create unique name by adding timestamp suffix
+        fieldCopy['name'] = '${originalFieldName}_$millis';
+        originalToDuplicateNames[originalFieldName] = fieldCopy['name'];
+
+        // Mark as duplicate for delete button visibility
+        fieldCopy['isDuplicate'] = true;
+
+        newFields.add(fieldCopy);
+      }
+
+      // Second pass: Update any internal references (like groupWith)
+      for (final fieldCopy in newFields) {
+        if (fieldCopy.containsKey('groupWith')) {
+          final String originalGroupTarget = fieldCopy['groupWith'].toString();
+          // If this field was grouped with a field we've already duplicated,
+          // update the groupWith to point to the new duplicate
+          if (originalToDuplicateNames.containsKey(originalGroupTarget)) {
+            fieldCopy['groupWith'] =
+                originalToDuplicateNames[originalGroupTarget]!;
+          }
+        }
+      }
+
+      // Determine the insertion position - after the last field in the current card
+      final insertPosition = indices.isEmpty
+          ? 0
+          : indices.map((i) => i).reduce((a, b) => a > b ? a : b) + 1;
+
+      print('Creating ${newFields.length} duplicated fields');
+      print('Inserting at position $insertPosition');
+
+      // Check if widget is still mounted before updating state
+      if (!mounted) return;
+
+      setState(() {
+        // Insert all the duplicated fields at the calculated position
+        // This ensures they appear as a complete group directly below the original card
+        _internalFields.insertAll(insertPosition, newFields);
+
+        // Add form controls for all the duplicated fields
+        controller.addFormControls(newFields);
+
+        // Regenerate the group mapping to properly group duplicated fields
+        // This is critical to ensure duplicated fields appear in the right cards
+        _recomputeGroupStructure();
+
+        // Stay on the current card after duplication by restoring the original pointer
+        _currentGroupPointer = originalPointer;
+      });
+
+      // Re-enable PageController updates after a short delay to allow layout to complete
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          setState(() {
+            _pageControllerReady = true;
+          });
+        }
+      });
+    } catch (e) {
+      print('Error in _addNewSet: $e');
+      // Always re-enable page controller in case of error
+      _pageControllerReady = true;
     }
-
-    // Insert the duplicated fields immediately after the current group in the
-    // internal list so that they appear right below the original card.
-    final insertPosition = indices.last + 1;
-
-    setState(() {
-      _internalFields.insertAll(insertPosition, newFields);
-      controller.addFormControls(newFields);
-      _recomputeGroupStructure(); // refresh mappings; anchor set remains the same
-      // Do NOT move _currentGroupPointer – remain on the same page
-    });
   }
 
   void _removeSet(List<String> names) {
-    setState(() {
-      _internalFields.removeWhere((f) => names.contains(f['name']));
-      controller.removeFormControls(names);
-      _recomputeGroupStructure();
-      if (_currentGroupPointer >= _groupAnchors.length) {
-        _currentGroupPointer =
-            _groupAnchors.isEmpty ? 0 : _groupAnchors.length - 1;
-      }
-    });
+    if (!mounted) return;
+
+    try {
+      setState(() {
+        // Remove fields with matching names
+        if (_internalFields.isNotEmpty) {
+          _internalFields.removeWhere((f) => names.contains(f['name']));
+        }
+
+        // Remove form controls
+        if (controller != null) {
+          controller.removeFormControls(names);
+        }
+
+        // Recalculate group structure
+        _recomputeGroupStructure();
+
+        // Ensure the group pointer is valid after removing items
+        if (_groupAnchors.isEmpty) {
+          _currentGroupPointer = 0;
+        } else if (_currentGroupPointer >= _groupAnchors.length) {
+          _currentGroupPointer = _groupAnchors.length - 1;
+        }
+      });
+    } catch (e) {
+      print('Error in _removeSet: $e');
+    }
   }
 
   List<Widget> _buildGroupedCards() {
     List<Widget> cards = [];
 
-    // Iterate over each anchor that defines a group
-    for (int anchor in _groupAnchors) {
-      final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+    try {
+      // Safety check for empty anchors
+      if (_groupAnchors.isEmpty) {
+        return cards;
+      }
 
-      // Collect field maps for this group (anchor comes first)
-      final groupFields = indices.map((i) => _internalFields[i]).toList();
+      // Iterate over each anchor that defines a group
+      for (int i = 0; i < _groupAnchors.length; i++) {
+        // Safety check for valid anchor index
+        if (i >= _groupAnchors.length) continue;
 
-      cards.add(
-        Card(
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              children: [
-                ...groupFields.map(_buildField).toList(),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: () => _removeSet(
-                        groupFields.map((e) => e['name'] as String).toList()),
-                  ),
-                ),
-              ],
+        final int anchor = _groupAnchors[i];
+
+        // Safety check for valid internal fields index
+        if (anchor < 0 || anchor >= _internalFields.length) continue;
+
+        // Get all fields in this group
+        final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+        if (indices.isEmpty) continue;
+
+        // Collect field maps for this group with safety checks
+        final groupFields = <Map<String, dynamic>>[];
+        for (int idx in indices) {
+          if (idx >= 0 && idx < _internalFields.length) {
+            groupFields.add(_internalFields[idx]);
+          }
+        }
+
+        if (groupFields.isEmpty) continue;
+
+        // Check if this is a duplicated card using the explicit isDuplicate property
+        bool isDuplicated = false;
+        if (_internalFields[anchor].containsKey('isDuplicate')) {
+          isDuplicated = _internalFields[anchor]['isDuplicate'] == true;
+        }
+
+        cards.add(
+          Card(
+            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Build all fields in the group
+                  ...groupFields
+                      .map((fieldData) => _buildField(fieldData))
+                      .toList(),
+
+                  // Add delete button if this is a duplicated card
+                  if (isDuplicated)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        icon: const Icon(Icons.delete),
+                        onPressed: () {
+                          final fieldNames = groupFields
+                              .map((field) => field['name'].toString())
+                              .toList();
+                          _removeSet(fieldNames);
+                        },
+                        color: Colors.red,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      print('Error building grouped cards: $e');
     }
 
     return cards;
@@ -2196,22 +2419,98 @@ class _DynamicFormState extends State<DynamicForm> {
     _groupAnchors.clear();
     _anchorToFieldIndices.clear();
 
+    // Track groups by their base key + duplicate IDs
     Map<String, int> firstAnchorOfGroup = {};
+    Map<String, String> fieldToGroupKey = {};
+
+    // Extract timestamp patterns from field names for grouping duplicates together
+    final regex = RegExp(r'(.+)_(\d+)$');
+
+    // Step 1: Map each field to its group key
+    for (int i = 0; i < _internalFields.length; i++) {
+      final field = _internalFields[i];
+      final fieldName = field['name'].toString();
+
+      // Extract base name and timestamp if this is a duplicated field
+      String baseName = fieldName;
+      String? duplicateId;
+
+      // First try to extract from explicit groupWith setting
+      String? groupWith = field['groupWith']?.toString();
+
+      // Check for timestamp suffix pattern
+      final match = regex.firstMatch(fieldName);
+      if (match != null && match.groupCount >= 2) {
+        // Extract base name and timestamp ID
+        baseName = match.group(1) ?? fieldName;
+        duplicateId = match.group(2);
+      }
+
+      // Generate a group key
+      String groupKey;
+
+      if (groupWith != null) {
+        // If field explicitly declares what it groups with, use that
+        final groupWithMatch = regex.firstMatch(groupWith);
+        if (groupWithMatch != null && duplicateId != null) {
+          // If both this field and its groupWith have timestamps, use consistent key
+          final groupWithBase = groupWithMatch.group(1) ?? groupWith;
+          groupKey = '${groupWithBase}:${duplicateId}';
+        } else {
+          // Otherwise use the groupWith directly as key
+          groupKey = groupWith;
+        }
+      } else if (duplicateId != null) {
+        // For duplicated fields with timestamp but no groupWith, use base:timestamp
+        groupKey = '${baseName}:${duplicateId}';
+      } else {
+        // For original non-duplicated fields, use field name as its own group
+        groupKey = fieldName;
+      }
+
+      fieldToGroupKey[fieldName] = groupKey;
+    }
+
+    // Debug the mapping
+    if (kDebugMode) {
+      print('Field to group key mapping:');
+      fieldToGroupKey.forEach((field, group) {
+        print('  $field → $group');
+      });
+    }
+
+    // Step 2: Organize fields into groups based on their keys
+    Map<String, List<int>> groupKeyToFieldIndices = {};
 
     for (int i = 0; i < _internalFields.length; i++) {
       final field = _internalFields[i];
-      final String groupKey = field['groupWith']?.toString() ?? field['name'];
+      final fieldName = field['name'].toString();
+      final groupKey = fieldToGroupKey[fieldName];
 
-      int anchor;
-      if (firstAnchorOfGroup.containsKey(groupKey)) {
-        anchor = firstAnchorOfGroup[groupKey]!;
-      } else {
-        anchor = i;
-        firstAnchorOfGroup[groupKey] = i;
-        _groupAnchors.add(i);
+      if (groupKey != null) {
+        groupKeyToFieldIndices.putIfAbsent(groupKey, () => []).add(i);
       }
+    }
 
-      _anchorToFieldIndices.putIfAbsent(anchor, () => []).add(i);
+    // Debug the grouping
+    if (kDebugMode) {
+      print('Group organization:');
+      groupKeyToFieldIndices.forEach((groupKey, indices) {
+        final fieldNames =
+            indices.map((i) => _internalFields[i]['name']).join(', ');
+        print('  Group $groupKey: $fieldNames');
+      });
+    }
+
+    // Step 3: Create anchors and field indices
+    for (final groupKey in groupKeyToFieldIndices.keys) {
+      final fieldIndices = groupKeyToFieldIndices[groupKey]!;
+      if (fieldIndices.isEmpty) continue;
+
+      // Use first field as anchor
+      final anchor = fieldIndices.first;
+      _groupAnchors.add(anchor);
+      _anchorToFieldIndices[anchor] = fieldIndices;
     }
 
     // Ensure current pointer is within range
@@ -2220,9 +2519,15 @@ class _DynamicFormState extends State<DynamicForm> {
           _groupAnchors.isEmpty ? 0 : _groupAnchors.length - 1;
     }
 
-    // update controller index to current anchor so external validation logic stays valid
+    // Update controller index after a brief delay to ensure state is consistent
     if (_groupAnchors.isNotEmpty) {
-      controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+      // Don't immediately update the controller index during duplication operations
+      // This avoids potential PageController issues
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+        }
+      });
     }
   }
 
@@ -2480,7 +2785,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     );
   }
 
-  /// The function `_hideLoadingDialog` is used to close a loading dialog if it is currently
+  /// The `_hideLoadingDialog` function is used to close a loading dialog if it is currently
   /// being displayed.
   void _hideLoadingDialog() {
     if (_loadingContext != null) {
