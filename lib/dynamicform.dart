@@ -8,6 +8,7 @@ import 'package:reactiveform/components/app_typographpy.dart';
 import 'package:reactiveform/constants.dart';
 import 'package:reactiveform/string_constants.dart';
 import 'package:flutter/services.dart';
+import 'dart:async'; // Added for Completer
 import 'dynamicformcontroller.dart';
 import 'package:reactiveform/models/form_field_model.dart';
 import 'dart:convert'; // For base64 encoding
@@ -3032,31 +3033,247 @@ IconData _getFileIcon(String fileType) {
 }
 
 /// A screen to preview different types of files
-class FilePreviewScreen extends StatelessWidget {
+class FilePreviewScreen extends StatefulWidget {
   final Map<String, dynamic> file;
 
   const FilePreviewScreen({Key? key, required this.file}) : super(key: key);
 
   @override
+  State<FilePreviewScreen> createState() => _FilePreviewScreenState();
+}
+
+class _FilePreviewScreenState extends State<FilePreviewScreen> {
+  bool isDownloading = false;
+  bool isOpeningInNewTab = false;
+  final TransformationController _transformationController =
+      TransformationController();
+
+  @override
+  void dispose() {
+    _transformationController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final String fileName = file['fileName'];
-    final String fileType = file['fileType'];
-    final Uint8List fileBytes = file['file'];
+    final String fileName = widget.file['fileName'];
+    final String fileType = widget.file['fileType'];
+    final Uint8List fileBytes = widget.file['file'];
+
+    // Immediately download Excel files instead of showing preview screen
+    if (fileType == 'spreadsheet' ||
+        fileName.toLowerCase().endsWith('.xlsx') ||
+        fileName.toLowerCase().endsWith('.xls')) {
+      // Only trigger on first build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!isDownloading) {
+          setState(() {
+            isDownloading = true;
+          });
+          _downloadFile(context, fileBytes, fileName).then((_) {
+            Navigator.of(context).pop();
+          });
+        }
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(fileName),
+        title: Text(
+          fileName,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
-          // Add download action
-          IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: () {
-              _downloadFile(context, fileBytes, fileName);
-            },
+          // Make download button more visible
+          if (!isDownloading && !isOpeningInNewTab)
+            TextButton.icon(
+              icon: const Icon(Icons.download, color: Colors.white),
+              label:
+                  const Text('Download', style: TextStyle(color: Colors.white)),
+              onPressed: () async {
+                setState(() {
+                  isDownloading = true;
+                });
+                await _downloadFile(context, fileBytes, fileName);
+                if (mounted) {
+                  setState(() {
+                    isDownloading = false;
+                  });
+                }
+              },
+            ),
+          if (kIsWeb &&
+              !isDownloading &&
+              !isOpeningInNewTab &&
+              (fileType == 'pdf' || fileName.toLowerCase().endsWith('.pdf')))
+            TextButton.icon(
+              icon: const Icon(Icons.open_in_new, color: Colors.white),
+              label:
+                  const Text('New Tab', style: TextStyle(color: Colors.white)),
+              onPressed: () async {
+                setState(() {
+                  isOpeningInNewTab = true;
+                });
+                await _openPdfInNewTab(context, fileBytes, fileName);
+                if (mounted) {
+                  setState(() {
+                    isOpeningInNewTab = false;
+                  });
+                }
+              },
+            ),
+          if (isDownloading || isOpeningInNewTab)
+            const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              ),
+            )
+        ],
+      ),
+      body: _buildBody(context, fileType, fileBytes, fileName),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, String fileType, Uint8List fileBytes,
+      String fileName) {
+    if (isDownloading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text("Downloading file...", style: TextStyle(fontSize: 16))
+          ],
+        ),
+      );
+    }
+
+    if (isOpeningInNewTab) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text("Opening file in new tab...", style: TextStyle(fontSize: 16))
+          ],
+        ),
+      );
+    }
+
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth:
+                800, // Limit width for better readability on large screens
+          ),
+          child: Column(
+            children: [
+              // Only use part of the screen for bottom action bar
+              Expanded(
+                child: ClipRect(
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: _buildPreviewWidget(
+                          context, fileType, fileBytes, fileName),
+                    ),
+                  ),
+                ),
+              ),
+              // Fixed bottom action bar
+              _buildBottomActionBar(context, fileBytes, fileName, fileType),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomActionBar(BuildContext context, Uint8List fileBytes,
+      String fileName, String fileType) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, -2),
           ),
         ],
       ),
-      body: _buildPreviewWidget(context, fileType, fileBytes, fileName),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              icon: isDownloading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.download),
+              label: Text(isDownloading ? 'Downloading...' : 'Download'),
+              onPressed: isDownloading || isOpeningInNewTab
+                  ? null
+                  : () async {
+                      setState(() {
+                        isDownloading = true;
+                      });
+                      await _downloadFile(context, fileBytes, fileName);
+                      if (mounted) {
+                        setState(() {
+                          isDownloading = false;
+                        });
+                      }
+                    },
+            ),
+          ),
+          if (kIsWeb &&
+              (fileType == 'pdf' ||
+                  fileName.toLowerCase().endsWith('.pdf'))) ...[
+            const SizedBox(width: 16),
+            Expanded(
+              child: ElevatedButton.icon(
+                icon: isOpeningInNewTab
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.open_in_new),
+                label:
+                    Text(isOpeningInNewTab ? 'Opening...' : 'Open in New Tab'),
+                onPressed: isDownloading || isOpeningInNewTab
+                    ? null
+                    : () async {
+                        setState(() {
+                          isOpeningInNewTab = true;
+                        });
+                        await _openPdfInNewTab(context, fileBytes, fileName);
+                        if (mounted) {
+                          setState(() {
+                            isOpeningInNewTab = false;
+                          });
+                        }
+                      },
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -3065,149 +3282,192 @@ class FilePreviewScreen extends StatelessWidget {
       Uint8List fileBytes, String fileName) {
     switch (fileType) {
       case 'image':
-        return Center(
-          child: InteractiveViewer(
-            minScale: 0.5,
-            maxScale: 4.0,
-            child: Image.memory(
-              fileBytes,
-              fit: BoxFit.contain,
-            ),
-          ),
-        );
+        return _buildImagePreview(context, fileBytes);
       case 'pdf':
-        // PDF viewer without external dependencies
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.picture_as_pdf, size: 80, color: Colors.red),
-              const SizedBox(height: 20),
-              Text(
-                'PDF Document: $fileName',
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 20),
-              // PDF preview container
-              Container(
-                width: double.infinity,
-                height: 400,
-                margin: const EdgeInsets.symmetric(horizontal: 20),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.picture_as_pdf,
-                          size: 100, color: Colors.grey),
-                      const SizedBox(height: 16),
-                      Text(
-                        '$fileName',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'PDF Preview',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.download),
-                    label: const Text('Download'),
-                    onPressed: () =>
-                        _downloadFile(context, fileBytes, fileName),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  if (kIsWeb)
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('Open in New Tab'),
-                      onPressed: () =>
-                          _openPdfInNewTab(context, fileBytes, fileName),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        );
+        return _buildPdfPreview(fileName);
       case 'document':
       case 'spreadsheet':
-        // For documents and spreadsheets show a placeholder
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                fileType == 'document' ? Icons.description : Icons.table_chart,
-                size: 100,
-              ),
-              const SizedBox(height: 20),
-              Text('$fileType: $fileName'),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () {
-                  _openInExternalApp(context);
-                },
-                child: const Text('Open File'),
-              ),
-            ],
-          ),
-        );
       default:
-        // Generic file preview
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.insert_drive_file, size: 100),
-              const SizedBox(height: 20),
-              Text('File: $fileName'),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () {
-                  _openInExternalApp(context);
-                },
-                child: const Text('Open File'),
-              ),
-            ],
-          ),
-        );
+        return _buildGenericFilePreview(fileType, fileName);
     }
   }
 
-  /// Opens file in external app
-  void _openInExternalApp(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Opening file in external application...'),
+  Widget _buildImagePreview(BuildContext context, Uint8List fileBytes) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Get the device screen size
+        final Size screenSize = MediaQuery.of(context).size;
+
+        // Calculate the image height based on the screen height
+        // Use a percentage of screen height to prevent images from being too large
+        final double maxHeight = screenSize.height * 0.7;
+
+        // Create the image provider once to avoid multiple decodes
+        final imageProvider = MemoryImage(fileBytes);
+
+        // Pre-calculate image dimensions
+        return FutureBuilder(
+          future: _calculateImageDimension(imageProvider),
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              final Size imageSize = snapshot.data as Size;
+              double aspectRatio = imageSize.width / imageSize.height;
+
+              // Calculate constrained size
+              double displayHeight = imageSize.height;
+              double displayWidth = imageSize.width;
+
+              if (displayHeight > maxHeight) {
+                displayHeight = maxHeight;
+                displayWidth = displayHeight * aspectRatio;
+              }
+
+              if (displayWidth > constraints.maxWidth) {
+                displayWidth = constraints.maxWidth;
+                displayHeight = displayWidth / aspectRatio;
+              }
+
+              return Column(
+                children: [
+                  const SizedBox(height: 20),
+                  ClipRect(
+                    child: SizedBox(
+                      width: displayWidth,
+                      height: displayHeight,
+                      child: InteractiveViewer(
+                        transformationController: _transformationController,
+                        boundaryMargin: const EdgeInsets.all(20.0),
+                        minScale: 0.5,
+                        maxScale: 4.0,
+                        child: Image(
+                          image: imageProvider,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Add reset zoom button
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.zoom_out_map),
+                    label: const Text('Reset Zoom'),
+                    onPressed: () {
+                      _transformationController.value = Matrix4.identity();
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              );
+            } else {
+              // While calculating, show a loading indicator
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40.0),
+                  child: CircularProgressIndicator(),
+                ),
+              );
+            }
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPdfPreview(String fileName) {
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.picture_as_pdf, size: 80, color: Colors.red),
+          const SizedBox(height: 20),
+          Text(
+            'PDF Document: $fileName',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 30),
+          const Text(
+            'PDF preview is not available. Please download the file or open in a new tab.',
+            style: TextStyle(fontSize: 16),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 40),
+        ],
       ),
     );
-    // In a real app, you'd use a platform-specific method to open the file
+  }
+
+  Widget _buildGenericFilePreview(String fileType, String fileName) {
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _getFileIconForPreview(fileType, fileName),
+            size: 100,
+            color: Colors.blue,
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'File: $fileName',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 30),
+          const Text(
+            'This file type cannot be previewed directly. Please download to view the content.',
+            style: TextStyle(fontSize: 16),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+
+  /// Helper function to pre-calculate image dimensions
+  Future<Size> _calculateImageDimension(ImageProvider provider) async {
+    final Completer<Size> completer = Completer<Size>();
+
+    final ImageStream stream = provider.resolve(const ImageConfiguration());
+    final listener = ImageStreamListener(
+      (ImageInfo info, bool synchronousCall) {
+        final Size size = Size(
+          info.image.width.toDouble(),
+          info.image.height.toDouble(),
+        );
+        completer.complete(size);
+      },
+      onError: (dynamic exception, StackTrace? stackTrace) {
+        completer.completeError(exception, stackTrace);
+      },
+    );
+
+    stream.addListener(listener);
+    return completer.future;
+  }
+
+  /// Returns the appropriate icon based on file type and name
+  IconData _getFileIconForPreview(String fileType, String fileName) {
+    if (fileType == 'document') {
+      return Icons.description;
+    } else if (fileType == 'spreadsheet' ||
+        fileName.toLowerCase().endsWith('.xlsx') ||
+        fileName.toLowerCase().endsWith('.xls')) {
+      return Icons.table_chart;
+    } else if (fileType == 'pdf' || fileName.toLowerCase().endsWith('.pdf')) {
+      return Icons.picture_as_pdf;
+    } else {
+      return Icons.insert_drive_file;
+    }
   }
 
   /// Opens a PDF in a new browser tab (web only)
-  void _openPdfInNewTab(
-      BuildContext context, Uint8List pdfBytes, String fileName) {
+  Future<void> _openPdfInNewTab(
+      BuildContext context, Uint8List pdfBytes, String fileName) async {
     if (kIsWeb) {
       try {
         // Create a Blob from the PDF bytes with proper MIME type
@@ -3220,91 +3480,124 @@ class FilePreviewScreen extends StatelessWidget {
         html.window.open(url, '_blank');
 
         // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('PDF opened in a new tab'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('PDF opened in a new tab'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+
+        // Small delay before returning
+        await Future.delayed(const Duration(milliseconds: 500));
       } catch (e) {
         // Show error message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error opening PDF: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error opening PDF: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
         print('Error opening PDF in new tab: $e');
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Opening in new tab is only available on web platforms'),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Opening in new tab is only available on web platforms'),
+          ),
+        );
+      }
     }
   }
 
   /// Downloads the file to the device
-  void _downloadFile(
-      BuildContext context, Uint8List fileBytes, String fileName) {
+  Future<void> _downloadFile(
+      BuildContext context, Uint8List fileBytes, String fileName) async {
     try {
       if (kIsWeb) {
         // Web platform - use html to trigger download
         // Get proper MIME type based on filename
         String mimeType = 'application/octet-stream';
-        if (fileName.toLowerCase().endsWith('.pdf')) {
+        final lowerFileName = fileName.toLowerCase();
+
+        if (lowerFileName.endsWith('.pdf')) {
           mimeType = 'application/pdf';
-        } else if (fileName.toLowerCase().endsWith('.jpg') ||
-            fileName.toLowerCase().endsWith('.jpeg')) {
+        } else if (lowerFileName.endsWith('.jpg') ||
+            lowerFileName.endsWith('.jpeg')) {
           mimeType = 'image/jpeg';
-        } else if (fileName.toLowerCase().endsWith('.png')) {
+        } else if (lowerFileName.endsWith('.png')) {
           mimeType = 'image/png';
+        } else if (lowerFileName.endsWith('.xlsx')) {
+          mimeType =
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        } else if (lowerFileName.endsWith('.xls')) {
+          mimeType = 'application/vnd.ms-excel';
         }
 
-        // Create blob with correct MIME type
+        // Create blob with correct MIME type - in web this needs to be more direct
         final blob = html.Blob([fileBytes], mimeType);
         final url = html.Url.createObjectUrlFromBlob(blob);
 
-        // Create a download anchor element
+        // Create a download anchor element - ensure it's not attached until ready
         final anchor = html.AnchorElement()
           ..href = url
           ..style.display = 'none'
-          ..download = fileName; // Use the download property directly
+          ..download = fileName;
 
-        // Add to document body and trigger click
+        // Add to document body, click, and clean up immediately
         html.document.body?.append(anchor);
+
+        // Click the anchor to start the download
         anchor.click();
 
-        // Clean up by revoking the object URL
-        // We don't need to remove the anchor as the browser will handle this
+        // Clean up resources
+        // Small delay to ensure download starts
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Remove the anchor and revoke URL
+        anchor.remove();
         html.Url.revokeObjectUrl(url);
 
         // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('File downloaded successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Download started'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
       } else {
         // Mobile platform - show a temporary message
         // In a real app, you'd implement platform-specific download
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('File saved to downloads folder'),
+            ),
+          );
+        }
+      }
+
+      // Brief delay to ensure message and download process start
+      await Future.delayed(const Duration(milliseconds: 500));
+    } catch (e) {
+      // Show error message
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('File saved to downloads folder'),
+          SnackBar(
+            content: Text('Error downloading file: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
-    } catch (e) {
-      // Show error message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error downloading file: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
       print('Error downloading file: $e');
     }
   }
