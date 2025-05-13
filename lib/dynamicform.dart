@@ -321,23 +321,26 @@ class _DynamicFormState extends State<DynamicForm>
     }
 
     // Find any duplicates of the current question (they'll have the same base name with timestamps)
-    final namePattern = RegExp('^${baseName}_\d+');
+    final namePattern = RegExp('^${baseName}_\\d+');
 
     // Add any duplicates to be shown together on the same page
-    for (int i = 0; i < _groupAnchors.length; i++) {
+    // We need to search through all anchors in _anchorToFieldIndices, not just navigation anchors
+    _anchorToFieldIndices.forEach((anchor, fieldIndices) {
       // Skip the current anchor since we've already added it
-      if (i == _currentGroupPointer) continue;
+      if (anchor == currentAnchor) return;
 
-      final thisAnchorName =
-          _internalFields[_groupAnchors[i]]['name'] as String;
+      // Make sure we have a valid access to _internalFields
+      if (anchor < 0 || anchor >= _internalFields.length) return;
+
+      final thisAnchorName = _internalFields[anchor]['name'] as String;
 
       // Check if this is a duplicate of the current card (either through naming pattern or isDuplicate flag)
       if (namePattern.hasMatch(thisAnchorName) ||
-          (_internalFields[_groupAnchors[i]]['isDuplicate'] == true &&
+          (_internalFields[anchor]['isDuplicate'] == true &&
               thisAnchorName.startsWith(baseName))) {
-        anchorsToShow.add(_groupAnchors[i]);
+        anchorsToShow.add(anchor);
       }
-    }
+    });
 
     // Now build cards for all anchors (current anchor + duplicates)
     for (int anchor in anchorsToShow) {
@@ -2024,6 +2027,16 @@ class _DynamicFormState extends State<DynamicForm>
       setState(() {
         _currentGroupPointer++;
         controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+
+        // Make sure we're not navigating to a duplicate card
+        // This is a safety check in case duplicates somehow get included in _groupAnchors
+        while (_currentGroupPointer < _groupAnchors.length - 1 &&
+            _internalFields[_groupAnchors[_currentGroupPointer]]
+                    ['isDuplicate'] ==
+                true) {
+          _currentGroupPointer++;
+          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+        }
       });
     }
   }
@@ -2037,6 +2050,16 @@ class _DynamicFormState extends State<DynamicForm>
       setState(() {
         _currentGroupPointer--;
         controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+
+        // Make sure we're not navigating to a duplicate card
+        // This is a safety check in case duplicates somehow get included in _groupAnchors
+        while (_currentGroupPointer > 0 &&
+            _internalFields[_groupAnchors[_currentGroupPointer]]
+                    ['isDuplicate'] ==
+                true) {
+          _currentGroupPointer--;
+          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+        }
       });
     }
   }
@@ -2424,6 +2447,9 @@ class _DynamicFormState extends State<DynamicForm>
     Map<String, int> firstAnchorOfGroup = {};
     Map<String, String> fieldToGroupKey = {};
 
+    // Keep track of base names for duplicate grouping
+    Map<String, String> duplicateToBaseName = {};
+
     // Extract timestamp patterns from field names for grouping duplicates together
     final regex = RegExp(r'(.+)_(\d+)$');
 
@@ -2445,6 +2471,11 @@ class _DynamicFormState extends State<DynamicForm>
         // Extract base name and timestamp ID
         baseName = match.group(1) ?? fieldName;
         duplicateId = match.group(2);
+
+        // Record the mapping from duplicate name to base name
+        if (field['isDuplicate'] == true) {
+          duplicateToBaseName[fieldName] = baseName;
+        }
       }
 
       // Generate a group key
@@ -2504,15 +2535,31 @@ class _DynamicFormState extends State<DynamicForm>
     }
 
     // Step 3: Create anchors and field indices
+    // First, collect all original (non-duplicate) anchors
+    List<int> originalAnchors = [];
+
     for (final groupKey in groupKeyToFieldIndices.keys) {
       final fieldIndices = groupKeyToFieldIndices[groupKey]!;
       if (fieldIndices.isEmpty) continue;
 
       // Use first field as anchor
       final anchor = fieldIndices.first;
-      _groupAnchors.add(anchor);
+
+      // Store field indices mapping for all anchors (including duplicates)
       _anchorToFieldIndices[anchor] = fieldIndices;
+
+      // Only add to navigation anchors if it's not a duplicate
+      bool isDuplicate = _internalFields[anchor]['isDuplicate'] == true;
+      if (!isDuplicate) {
+        originalAnchors.add(anchor);
+      }
     }
+
+    // Sort original anchors by their position in _internalFields to maintain proper order
+    originalAnchors.sort();
+
+    // Now assign the navigation anchors
+    _groupAnchors = originalAnchors;
 
     // Ensure current pointer is within range
     if (_currentGroupPointer >= _groupAnchors.length) {
