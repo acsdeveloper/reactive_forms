@@ -97,6 +97,9 @@ class _DynamicFormState extends State<DynamicForm>
   // Mapping to track relationships between original and duplicated fields
   Map<String, String> _originalToDuplicateNames = {};
 
+  // Maintain a map of which question number corresponds to each anchor
+  Map<int, int> _anchorToQuestionNumber = {};
+
   @override
   void initState() {
     super.initState();
@@ -258,10 +261,10 @@ class _DynamicFormState extends State<DynamicForm>
       // Get the current anchor
       final currentAnchor = _groupAnchors[_currentGroupPointer];
       if (currentAnchor >= 0 && currentAnchor < _internalFields.length) {
-        // Check if this field has a non-empty groupWith value
+        // Check if this field or any field in its group has a groupWith property
         final currentField = _internalFields[currentAnchor];
-        final groupWithValue = currentField['groupWith']?.toString() ?? '';
-        currentQuestionHasGroupWith = groupWithValue.isNotEmpty;
+        currentQuestionHasGroupWith = currentField['groupWith'] != null ||
+            currentField['allowDuplicate'] == true;
 
         // For debugging
         if (kDebugMode) {
@@ -269,6 +272,9 @@ class _DynamicFormState extends State<DynamicForm>
           print("Current field: ${currentField['name']}");
           if (currentField['groupWith'] != null) {
             print("GroupWith: ${currentField['groupWith']}");
+          }
+          if (currentField['allowDuplicate'] == true) {
+            print("AllowDuplicate: ${currentField['allowDuplicate']}");
           }
         }
       }
@@ -372,14 +378,12 @@ class _DynamicFormState extends State<DynamicForm>
       print("Current anchor: $currentAnchor ($currentAnchorName)");
     }
 
-    // Build the current question fields
-    // This is the original question that is always displayed
+    // Build the card for the current anchor with all its grouped fields
+    // This is the original card that is always displayed
     final List<int> currentIndices =
         _anchorToFieldIndices[currentAnchor] ?? [currentAnchor];
     final List<Map<String, dynamic>> currentGroupFields =
         currentIndices.map((i) => _internalFields[i]).toList();
-
-    // Check if the current question has a groupWith property to determine UI style
     bool hasGroupWith = false;
     for (final field in currentGroupFields) {
       final groupWithValue = field['groupWith']?.toString() ?? '';
@@ -388,16 +392,14 @@ class _DynamicFormState extends State<DynamicForm>
         break;
       }
     }
-
     if (kDebugMode) {
       print(
-          "Building original question for anchor $currentAnchor ($currentAnchorName)");
+          "Building original card for anchor $currentAnchor ($currentAnchorName)");
       print(
-          "Fields in original question: ${currentGroupFields.map((f) => f['name']).toList()}");
-      print("Has groupWith: $hasGroupWith");
+          "Fields in original card: ${currentGroupFields.map((f) => f['name']).toList()}");
     }
 
-    // If the question has groupWith, use a card UI, otherwise use plain UI
+    // Add the original card
     if (hasGroupWith) {
       // Add the original question as a card
       widgets.add(_buildCardForFields(currentGroupFields, false));
@@ -465,11 +467,11 @@ class _DynamicFormState extends State<DynamicForm>
       }
     }
 
-    if (kDebugMode && duplicateAnchors.isNotEmpty) {
+    if (kDebugMode) {
       print("Duplicate anchors to show: $duplicateAnchors");
     }
 
-    // Build cards for all duplicate anchors - duplicates are always shown in cards with delete buttons
+    // Build cards for all duplicate anchors
     for (final anchor in duplicateAnchors) {
       final indices = _anchorToFieldIndices[anchor] ?? [anchor];
       final fields = indices.map((i) => _internalFields[i]).toList();
@@ -481,7 +483,7 @@ class _DynamicFormState extends State<DynamicForm>
             "Fields in duplicate card: ${fields.map((f) => f['name']).toList()}");
       }
 
-      // Add the duplicate card with delete button - duplicates always use cards
+      // Add the duplicate card with delete button
       widgets.add(_buildCardForFields(fields, true));
     }
 
@@ -572,9 +574,9 @@ class _DynamicFormState extends State<DynamicForm>
           final List<String> options =
               rawOptions.isEmpty ? ['Yes', 'No'] : rawOptions.cast<String>();
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
               _buildLabelRow(field),
               const SizedBox(height: 4),
               ...options
@@ -614,53 +616,53 @@ class _DynamicFormState extends State<DynamicForm>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildLabelRow(field),
-            ReactiveFormField<List<String>, List<String>>(
-              formControlName: field['name'],
-              validationMessages: {
-                'required': (_) => 'Please select at least one option',
-              },
-              builder:
-                  (ReactiveFormFieldState<List<String>, List<String>> state) {
-                // Get current control value, ensuring it's a List<String>
-                List<String> currentValue = [];
-                final rawValue = controller.form.control(field['name']).value;
+                ReactiveFormField<List<String>, List<String>>(
+                  formControlName: field['name'],
+                  validationMessages: {
+                    'required': (_) => 'Please select at least one option',
+                  },
+                  builder:
+                      (ReactiveFormFieldState<List<String>, List<String>> state) {
+                    // Get current control value, ensuring it's a List<String>
+                    List<String> currentValue = [];
+                    final rawValue = controller.form.control(field['name']).value;
 
-                if (rawValue is List) {
-                  currentValue =
-                      List<String>.from(rawValue.map((e) => e.toString()));
-                } else if (rawValue != null && rawValue != "") {
-                  // Handle case when it's a single value
-                  currentValue = [rawValue.toString()];
-                }
-
-                return MultiSelectFormField(
-                  field: FormFieldModel.fromJson(field),
-                  onChanged: (List<String> value) {
-                    // Force direct update to the FormGroup's value
-                    controller.form.patchValue({field['name']: value});
-
-                    // Explicitly update control to ensure type consistency
-                    final control = controller.form.control(field['name']);
-                    if (control is FormControl<dynamic>) {
-                      control.updateValue(value);
+                    if (rawValue is List) {
+                      currentValue =
+                          List<String>.from(rawValue.map((e) => e.toString()));
+                    } else if (rawValue != null && rawValue != "") {
+                      // Handle case when it's a single value
+                      currentValue = [rawValue.toString()];
                     }
+
+                    return MultiSelectFormField(
+                      field: FormFieldModel.fromJson(field),
+                      onChanged: (List<String> value) {
+                        // Force direct update to the FormGroup's value
+                        controller.form.patchValue({field['name']: value});
+
+                        // Explicitly update control to ensure type consistency
+                        final control = controller.form.control(field['name']);
+                        if (control is FormControl<dynamic>) {
+                          control.updateValue(value);
+                        }
 
                     // Debug info
                     print(
                         'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
                     print('Current form value: ${controller.form.value}');
 
-                    state.didChange(value);
-                    state.control.markAsTouched();
+                        state.didChange(value);
+                        state.control.markAsTouched();
+                      },
+                      value: currentValue,
+                      hasError: state.control.touched && !state.control.valid,
+                      errorText: state.control.touched && !state.control.valid
+                          ? 'Please select at least one option'
+                          : null,
+                    );
                   },
-                  value: currentValue,
-                  hasError: state.control.touched && !state.control.valid,
-                  errorText: state.control.touched && !state.control.valid
-                      ? 'Please select at least one option'
-                      : null,
-                );
-              },
-            ),
+                ),
             // Add support for file uploads
             if (field['hasAttachments'] == true)
               ReactiveValueListenableBuilder(
@@ -760,11 +762,11 @@ class _DynamicFormState extends State<DynamicForm>
                     }
                   }
 
-                  return Column(
-                    children: [
+          return Column(
+            children: [
                       const SizedBox(height: 16),
                       Row(
-                        children: [
+                children: [
                           Text(
                             StringConstants.uploadFiles,
                             style: widget.fontFamily,
@@ -859,17 +861,61 @@ class _DynamicFormState extends State<DynamicForm>
 
   Widget _buildLabelRow(Map<String, dynamic> field) {
     if (field['label'] == null) return const SizedBox.shrink();
-    return Row(
-      children: [
-        Text(
-          field['label'],
-          style: widget.fontFamily.copyWith(fontWeight: FontWeight.w400),
-        ),
-        if (field['required'] == true)
-          Text(' *',
-              style: widget.fontFamily
-                  .copyWith(color: Colors.red, fontWeight: FontWeight.w400)),
-      ],
+    
+    // Find the anchor index for this field
+    int? anchorIndex;
+    for (var entry in _anchorToFieldIndices.entries) {
+      if (entry.value.any((idx) => idx < _internalFields.length && 
+          _internalFields[idx]['name'] == field['name'])) {
+        anchorIndex = entry.key;
+        break;
+      }
+    }
+    
+    // Get question number if available
+    int? questionNumber = anchorIndex != null ? _anchorToQuestionNumber[anchorIndex] : null;
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (questionNumber != null)
+            Text(
+              'Question $questionNumber',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18.0,
+                color: widget.primaryColor ?? Theme.of(context).primaryColor,
+                fontFamily: widget.fontFamily?.fontFamily,
+              ),
+            ),
+          if (questionNumber != null)
+            const SizedBox(height: 4.0),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  field['label'],
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16.0,
+                    fontFamily: widget.fontFamily?.fontFamily,
+                  ),
+                ),
+              ),
+              if (field['required'] == true)
+                Text(' *',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16.0,
+                      fontFamily: widget.fontFamily?.fontFamily,
+                    )),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -2601,12 +2647,12 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   List<Widget> _buildGroupedCards() {
-    List<Widget> widgets = [];
+    List<Widget> cards = [];
 
     try {
       // Safety check for empty anchors
       if (_groupAnchors.isEmpty) {
-        return widgets;
+        return cards;
       }
 
       // Iterate over each anchor that defines a group
@@ -2639,66 +2685,45 @@ class _DynamicFormState extends State<DynamicForm>
           isDuplicated = _internalFields[anchor]['isDuplicate'] == true;
         }
 
-        // Check if any field in this group has a non-empty groupWith property
-        bool hasGroupWith = false;
-        for (final field in groupFields) {
-          final groupWithValue = field['groupWith']?.toString() ?? '';
-          if (groupWithValue.isNotEmpty) {
-            hasGroupWith = true;
-            break;
-          }
-        }
+        cards.add(
+          Card(
+            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Build all fields in the group
+                  ...groupFields
+                      .map((fieldData) => _buildField(fieldData))
+                      .toList(),
 
-        // Always use card UI for duplicated questions
-        // For original questions, use card only if they have groupWith
-        if (isDuplicated || hasGroupWith) {
-          widgets.add(
-            Card(
-              margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Build all fields in the group
-                    ...groupFields
-                        .map((fieldData) => _buildField(fieldData))
-                        .toList(),
-
-                    // Add delete button if this is a duplicated card
-                    if (isDuplicated)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () {
-                            final fieldNames = groupFields
-                                .map((field) => field['name'].toString())
-                                .toList();
-                            _removeSet(fieldNames);
-                          },
-                          color: Colors.red,
-                        ),
+                  // Add delete button if this is a duplicated card
+                  if (isDuplicated)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        icon: const Icon(Icons.delete),
+                        onPressed: () {
+                          final fieldNames = groupFields
+                              .map((field) => field['name'].toString())
+                              .toList();
+                          _removeSet(fieldNames);
+                        },
+                        color: Colors.red,
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
-          );
-        } else {
-          // For questions without groupWith, add them directly without a card
-          widgets.addAll(
-              groupFields.map((fieldData) => _buildField(fieldData)).toList());
-
-          // Add spacing between ungrouped questions
-          widgets.add(const SizedBox(height: 16));
-        }
+          ),
+        );
       }
     } catch (e) {
       print('Error building grouped cards: $e');
     }
 
-    return widgets;
+    return cards;
   }
 
   // --- Group logic -------------------------------------------------
