@@ -23,43 +23,11 @@ Each question in the form is represented as a JSON object with various propertie
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `more` | String | References another question to display in the same card |
 | `showWhen` | Object | Defines conditions for when this question should be displayed |
-| `groupWith` | String | Groups this question with another question (legacy approach) |
+| `groupWith` | String | Groups this question with another question |
 | `hasAttachments` | Boolean | Whether file attachments are allowed |
 | `hasComments` | Boolean | Whether comments are allowed |
 | `min` / `max` | Number | For number inputs: minimum and maximum values |
-
-## The "more" Field
-
-The `more` field is a powerful feature that allows questions to be displayed together within the same card. It creates a visual and logical grouping in the form.
-
-### How it works:
-
-1. When question A references question B using the `more` field, both questions appear in the same card
-2. Question B will not be displayed separately in the form flow
-3. Question B can reference question C with its own `more` field, creating a chain of related questions
-4. All validation for these questions occurs together
-
-### Example:
-
-```json
-{
-  "name": "invoice_details",
-  "type": "text",
-  "label": "Invoice Number",
-  "required": true,
-  "more": "invoice_date"
-},
-{
-  "name": "invoice_date",
-  "type": "text",
-  "label": "Invoice Date",
-  "required": true
-}
-```
-
-In this example, both "Invoice Number" and "Invoice Date" will appear in the same card, and "Invoice Date" won't be shown separately.
 
 ## Conditional Logic with showWhen
 
@@ -74,11 +42,6 @@ The `showWhen` property controls when a question is visible based on answers to 
 ```
 
 This means "show this question when the question named 'questionName' has a value of either 'value1' or 'value2'".
-
-### Interaction with "more":
-
-- If question A has `showWhen` conditions and also references question B with `more`, question B will only appear when question A is shown
-- If question A references question B with `more`, and question B has its own `showWhen` conditions, question B will always appear with question A regardless of its `showWhen` conditions
 
 ## File Attachments
 
@@ -97,17 +60,15 @@ For text fields, setting `hasAttachments: true` will make file uploads mandatory
 ### How the Form Renders
 
 1. The `DynamicFormController` processes the JSON structure and creates form controls
-2. It identifies questions referenced by `more` fields and tracks them
-3. The `DynamicForm` widget renders the form, checking if each question:
-   - Is referenced by another question's `more` field (if so, it skips rendering it separately)
+2. The `DynamicForm` widget renders the form, checking if each question:
    - Has conditions in `showWhen` that determine its visibility
-   - References other questions via `more` that should be displayed with it
+   - Is grouped with other questions via `groupWith`
 
 ### Validation Flow
 
-1. When validating a question that uses the `more` field:
+1. When validating a question:
    - The main question is validated
-   - All referenced questions are also validated
+   - All related questions in the same group are also validated
    - File attachments and comments are checked for all questions in the group
 2. Error messages display with the question label to clarify which question has issues
 3. Navigation only proceeds if all questions in the current card are valid
@@ -115,10 +76,9 @@ For text fields, setting `hasAttachments: true` will make file uploads mandatory
 ## Best Practices
 
 1. **Question Naming**: Use clear, descriptive names for questions to make references easy to understand
-2. **Logical Grouping**: Use the `more` field to group closely related questions
-3. **Avoid Circular References**: Don't create circular references with the `more` field
-4. **Clear Labels**: Provide clear labels and descriptions for all questions
-5. **Mind the Card Size**: Don't put too many questions in one card using `more` references
+2. **Logical Grouping**: Use the `groupWith` field to group closely related questions
+3. **Clear Labels**: Provide clear labels and descriptions for all questions
+4. **Mind the Card Size**: Don't put too many questions in one card using grouping
 
 ## Example Use Cases
 

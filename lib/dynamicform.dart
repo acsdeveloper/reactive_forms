@@ -359,17 +359,17 @@ class _DynamicFormState extends State<DynamicForm>
           padding: const EdgeInsets.all(12.0),
           child: Column(
             children: [
-              ...groupFields.map(_buildField).toList(),
-              // Only show delete button on duplicated cards
               if (isDuplicated)
                 Align(
                   alignment: Alignment.centerRight,
                   child: IconButton(
+                    color: const Color.fromARGB(255, 222, 75, 64),
                     icon: const Icon(Icons.delete),
                     onPressed: () => _removeSet(
                         groupFields.map((e) => e['name'] as String).toList()),
                   ),
                 ),
+              ...groupFields.map(_buildField).toList(),
             ],
           ),
         ),
