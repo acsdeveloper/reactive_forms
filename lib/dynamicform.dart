@@ -375,112 +375,101 @@ class _DynamicFormState extends State<DynamicForm>
       print("Current anchor: $currentAnchor ($currentAnchorName)");
     }
 
-    // Map to track which duplicated fields have already been added to cards
-    final Set<int> processedFieldIndices = {};
-
-    // First build the original card (current anchor and its grouped fields)
-    final List<int> originalIndices =
+    // Build the card for the current anchor with all its grouped fields
+    // This is the original card that is always displayed
+    final List<int> currentIndices =
         _anchorToFieldIndices[currentAnchor] ?? [currentAnchor];
-    final List<Map<String, dynamic>> originalGroupFields =
-        originalIndices.map((i) => _internalFields[i]).toList();
-
-    // Mark all original fields as processed
-    processedFieldIndices.addAll(originalIndices);
-
-    // Build card for the original fields
-    widgets.add(_buildCardForFields(originalGroupFields, false));
+    final List<Map<String, dynamic>> currentGroupFields =
+        currentIndices.map((i) => _internalFields[i]).toList();
 
     if (kDebugMode) {
       print(
-          "Added original card with fields: ${originalGroupFields.map((f) => f['name']).toList()}");
+          "Building original card for anchor $currentAnchor ($currentAnchorName)");
+      print(
+          "Fields in original card: ${currentGroupFields.map((f) => f['name']).toList()}");
     }
 
-    // Now handle duplicated fields by grouping them by duplicationGroupId
-    Map<String, List<Map<String, dynamic>>> duplicationGroups = {};
+    // Add the original card
+    widgets.add(_buildCardForFields(currentGroupFields, false));
 
-    // First pass: Organize duplicated fields by their duplication group ID
+    // Now collect all duplicates of the current anchor to show below it
+    final List<int> duplicateAnchors = [];
+    final timeStampPattern = RegExp(r'_(\d+)$');
+
+    // Extract the base name of the current question (removing any question_X suffix)
+    String baseName = currentAnchorName;
+    final questionPattern = RegExp(r'^question_(\d+)$');
+    if (questionPattern.hasMatch(baseName)) {
+      baseName = baseName.split('_').first;
+    }
+
+    // Find all duplicate anchors that should be shown with this question
     for (int i = 0; i < _internalFields.length; i++) {
-      // Skip if already processed
-      if (processedFieldIndices.contains(i)) continue;
+      // Skip the current anchor and non-anchor indices
+      if (i == currentAnchor || !_anchorToFieldIndices.containsKey(i)) continue;
 
       final field = _internalFields[i];
-
-      // Only consider duplicated fields related to the current question
-      if (field['isDuplicate'] != true) continue;
-
-      // Get the base name without timestamp
       final fieldName = field['name'].toString();
-      final timestampPattern = RegExp(r'(.+)_\d+$');
-      final match = timestampPattern.firstMatch(fieldName);
 
-      if (match == null) continue;
+      // Check if this is a duplicate field
+      if (field['isDuplicate'] == true) {
+        final match = timeStampPattern.firstMatch(fieldName);
+        if (match != null) {
+          // Extract the base name of this duplicate
+          String duplicateBaseName = fieldName;
+          final lastUnderscore = duplicateBaseName.lastIndexOf('_');
+          if (lastUnderscore > 0) {
+            duplicateBaseName = duplicateBaseName.substring(0, lastUnderscore);
+          }
 
-      final baseName = match.group(1) ?? '';
+          // Check if this duplicate is related to the current question
+          // It can be either duplicated from this question or a question that groups with it
+          bool isRelated = false;
 
-      // Check if this is related to our current question group
-      bool isRelatedToCurrentGroup = false;
+          // Directly related if it's a duplicate of the current question
+          if (duplicateBaseName == currentAnchorName ||
+              fieldName.startsWith("${currentAnchorName}_")) {
+            isRelated = true;
+          }
 
-      // Method 1: Check if any original field's name is a prefix of this field
-      for (final origField in originalGroupFields) {
-        final origName = origField['name'].toString();
-        if (fieldName.startsWith('${origName}_')) {
-          isRelatedToCurrentGroup = true;
-          break;
-        }
-      }
+          // Check if any field in the current group is related to this duplicate
+          for (final originalField in currentGroupFields) {
+            final originalName = originalField['name'].toString();
+            if (fieldName.startsWith("${originalName}_")) {
+              isRelated = true;
+              break;
+            }
+          }
 
-      // Method 2: Check based on groupWith property
-      if (!isRelatedToCurrentGroup && field['groupWith'] != null) {
-        final groupWith = field['groupWith'].toString();
-        // Check if this field is grouped with any field in our original group
-        for (final origField in originalGroupFields) {
-          final origName = origField['name'].toString();
-          if (groupWith.startsWith(origName) ||
-              origName.startsWith(groupWith)) {
-            isRelatedToCurrentGroup = true;
-            break;
+          if (isRelated) {
+            duplicateAnchors.add(i);
+            if (kDebugMode) {
+              print("Found related duplicate anchor: $i ($fieldName)");
+            }
           }
         }
       }
-
-      if (!isRelatedToCurrentGroup) continue;
-
-      // Get duplication group ID, fall back to the timestamp if not available
-      final String duplicationId = field['duplicationGroupId'] as String? ??
-          fieldName.substring(fieldName.lastIndexOf('_') + 1);
-
-      // Get all fields that belong to this duplicated group
-      List<Map<String, dynamic>> groupFields = [field];
-      List<int> groupIndices = [i];
-
-      // If this is an anchor with grouped fields, include all of them
-      if (_anchorToFieldIndices.containsKey(i)) {
-        final indices = _anchorToFieldIndices[i] ?? [];
-        groupIndices = indices;
-        groupFields = indices.map((idx) => _internalFields[idx]).toList();
-      }
-
-      // Add all fields in this group to the appropriate duplication group
-      duplicationGroups
-          .putIfAbsent(duplicationId, () => [])
-          .addAll(groupFields);
-
-      // Mark all these fields as processed
-      processedFieldIndices.addAll(groupIndices);
     }
 
-    // Second pass: Build a card for each duplication group
-    duplicationGroups.forEach((duplicationId, fields) {
-      if (fields.isEmpty) return;
+    if (kDebugMode) {
+      print("Duplicate anchors to show: $duplicateAnchors");
+    }
+
+    // Build cards for all duplicate anchors
+    for (final anchor in duplicateAnchors) {
+      final indices = _anchorToFieldIndices[anchor] ?? [anchor];
+      final fields = indices.map((i) => _internalFields[i]).toList();
 
       if (kDebugMode) {
         print(
-            "Building duplicated card for group ID: $duplicationId with fields: ${fields.map((f) => f['name']).toList()}");
+            "Building duplicate card for anchor $anchor (${_internalFields[anchor]['name']})");
+        print(
+            "Fields in duplicate card: ${fields.map((f) => f['name']).toList()}");
       }
 
-      // Build a single card for all fields in this duplication group
+      // Add the duplicate card with delete button
       widgets.add(_buildCardForFields(fields, true));
-    });
+    }
 
     if (kDebugMode) {
       print("Returning ${widgets.length} widgets for display");
@@ -2464,8 +2453,6 @@ class _DynamicFormState extends State<DynamicForm>
 
       // Generate a unique timestamp for this duplication
       final millis = DateTime.now().millisecondsSinceEpoch;
-      final String duplicationGroupId =
-          'dup_group_$millis'; // Common ID for all duplicated fields in this group
       final List<Map<String, dynamic>> newFields = [];
 
       // Get all fields in the current card for duplication
@@ -2483,7 +2470,7 @@ class _DynamicFormState extends State<DynamicForm>
       // Map of original field names to their duplicated versions
       final Map<String, String> originalToDuplicateNames = {};
 
-      // First pass: Create duplicates with new names and assign common duplication group ID
+      // First pass: Create duplicates with new names
       for (final originalField in cardFields) {
         final String originalFieldName = originalField['name'].toString();
         final Map<String, dynamic> fieldCopy =
@@ -2495,9 +2482,6 @@ class _DynamicFormState extends State<DynamicForm>
 
         // Mark as duplicate for delete button visibility
         fieldCopy['isDuplicate'] = true;
-
-        // Add common duplication group ID to identify fields created in the same operation
-        fieldCopy['duplicationGroupId'] = duplicationGroupId;
 
         // Add field to list of new fields
         newFields.add(fieldCopy);
@@ -2526,7 +2510,6 @@ class _DynamicFormState extends State<DynamicForm>
         print('Creating ${newFields.length} duplicated fields');
         print('Inserting at position $insertPosition');
         print('New field names: ${newFields.map((f) => f['name']).toList()}');
-        print('Common duplication group ID: $duplicationGroupId');
       }
 
       // Check if widget is still mounted before updating state
@@ -2578,54 +2561,14 @@ class _DynamicFormState extends State<DynamicForm>
 
     try {
       setState(() {
-        // Check if any of the fields to be removed has a duplicationGroupId
-        String? duplicationGroupId;
-        for (final name in names) {
-          final fieldIndex =
-              _internalFields.indexWhere((f) => f['name'] == name);
-          if (fieldIndex >= 0 &&
-              _internalFields[fieldIndex]['duplicationGroupId'] != null) {
-            duplicationGroupId =
-                _internalFields[fieldIndex]['duplicationGroupId'].toString();
-            break;
-          }
+        // Remove fields with matching names
+        if (_internalFields.isNotEmpty) {
+          _internalFields.removeWhere((f) => names.contains(f['name']));
         }
 
-        // If a duplicationGroupId was found, remove all fields with that ID
-        if (duplicationGroupId != null) {
-          if (kDebugMode) {
-            print(
-                "Removing all fields with duplicationGroupId: $duplicationGroupId");
-          }
-
-          // Collect all field names with this duplicationGroupId
-          final fieldsToRemove = <String>[];
-          for (final field in _internalFields) {
-            if (field['duplicationGroupId'] == duplicationGroupId) {
-              fieldsToRemove.add(field['name'].toString());
-            }
-          }
-
-          // Remove all fields with this duplicationGroupId
-          if (fieldsToRemove.isNotEmpty) {
-            _internalFields.removeWhere(
-                (f) => f['duplicationGroupId'] == duplicationGroupId);
-
-            // Remove form controls for all removed fields
-            if (controller != null) {
-              controller.removeFormControls(fieldsToRemove);
-            }
-          }
-        } else {
-          // Original behavior - remove fields with matching names
-          if (_internalFields.isNotEmpty) {
-            _internalFields.removeWhere((f) => names.contains(f['name']));
-          }
-
-          // Remove form controls
-          if (controller != null) {
-            controller.removeFormControls(names);
-          }
+        // Remove form controls
+        if (controller != null) {
+          controller.removeFormControls(names);
         }
 
         // Recalculate group structure
@@ -2732,44 +2675,54 @@ class _DynamicFormState extends State<DynamicForm>
     Map<String, int> firstAnchorOfGroup = {};
     Map<String, String> fieldToGroupKey = {};
 
+    // Keep track of timestamp-based duplicates
+    Map<String, List<int>> timestampGroups = {};
+
     // Keep track of base names for duplicate grouping
     Map<String, String> duplicateToBaseName = {};
-
-    // Track duplication groups to ensure fields duplicated together stay together
-    Map<String, List<int>> duplicationGroupToIndices = {};
 
     // Special pattern for "question_X" format - need to differentiate from duplicates
     final questionPattern = RegExp(r'^question_(\d+)$');
 
     // Extract timestamp patterns from field names for grouping duplicates together
-    final duplicatePattern = RegExp(r'(.+)_(\d+)$');
+    final timestampPattern = RegExp(r'(.+)_(\d+)$');
 
     if (kDebugMode) {
       print("\n----- Starting Group Structure Computation -----");
       print("Total fields: ${_internalFields.length}");
       _internalFields.forEach((field) {
-        print(
-            "Field: ${field['name']}, groupWith: ${field['groupWith']}, isDuplicate: ${field['isDuplicate']}, duplicationGroupId: ${field['duplicationGroupId']}");
+        print("Field: ${field['name']}, groupWith: ${field['groupWith']}");
       });
     }
 
-    // First pass: Organize fields by duplication group
+    // First pass: Identify all timestamp-based duplicates
     for (int i = 0; i < _internalFields.length; i++) {
       final field = _internalFields[i];
+      final fieldName = field['name'].toString();
 
-      if (field['isDuplicate'] == true && field['duplicationGroupId'] != null) {
-        final duplicationGroupId = field['duplicationGroupId'].toString();
-        duplicationGroupToIndices
-            .putIfAbsent(duplicationGroupId, () => [])
-            .add(i);
+      // Check if this field has a timestamp
+      final match = timestampPattern.firstMatch(fieldName);
+      if (match != null && field['isDuplicate'] == true) {
+        final baseName = match.group(1) ?? fieldName;
+        final timestamp = match.group(2) ?? '';
+
+        if (timestamp.isNotEmpty) {
+          final groupKey = 'duplicate:${timestamp}';
+          timestampGroups.putIfAbsent(groupKey, () => []).add(i);
+
+          if (kDebugMode) {
+            print(
+                "Found timestamp-based duplicate: $fieldName with timestamp $timestamp");
+          }
+        }
       }
     }
 
-    if (kDebugMode && duplicationGroupToIndices.isNotEmpty) {
-      print("Found duplication groups:");
-      duplicationGroupToIndices.forEach((groupId, indices) {
+    if (kDebugMode) {
+      print("Timestamp-based groups:");
+      timestampGroups.forEach((key, indices) {
         print(
-            "Group $groupId: ${indices.map((i) => _internalFields[i]['name']).toList()}");
+            "  $key: ${indices.map((i) => _internalFields[i]['name']).join(', ')}");
       });
     }
 
@@ -2787,7 +2740,7 @@ class _DynamicFormState extends State<DynamicForm>
 
       // Check if this is a standard question pattern (question_X)
       final questionMatch = questionPattern.firstMatch(fieldName);
-      final duplicateMatch = duplicatePattern.firstMatch(fieldName);
+      final duplicateMatch = timestampPattern.firstMatch(fieldName);
 
       if (duplicateMatch != null) {
         // This is a duplicated field with timestamp
@@ -2808,13 +2761,9 @@ class _DynamicFormState extends State<DynamicForm>
         // For question_X format, the groupWith directly becomes the key
         // This ensures questions with pattern question_1, question_2, etc. group correctly
         groupKey = groupWith;
-      } else if (field['duplicationGroupId'] != null) {
-        // If this field has a duplication group ID, use that as the key
-        // This ensures all fields duplicated together stay together
-        groupKey = field['duplicationGroupId'].toString();
-      } else if (duplicateId != null) {
-        // For duplicated fields with timestamp but no groupWith, use base:timestamp
-        groupKey = '${baseName}:${duplicateId}';
+      } else if (duplicateId != null && field['isDuplicate'] == true) {
+        // For duplicated fields with timestamp but no groupWith, use a common group key
+        groupKey = 'duplicate:${duplicateId}';
       } else {
         // For original non-duplicated fields, use field name as its own group
         groupKey = fieldName;
@@ -2858,15 +2807,41 @@ class _DynamicFormState extends State<DynamicForm>
     // First, collect all original (non-duplicate) anchors
     List<int> originalAnchors = [];
 
+    // Special handling for timestamp-based duplicates
+    for (final groupKey in timestampGroups.keys) {
+      final fieldIndices = timestampGroups[groupKey]!;
+      if (fieldIndices.isEmpty) continue;
+
+      // Find the first field as the anchor for this duplicate set
+      final firstIndex = fieldIndices.reduce((a, b) => a < b ? a : b);
+
+      // Store all fields in this timestamp group under this anchor
+      _anchorToFieldIndices[firstIndex] = List.from(fieldIndices);
+
+      if (kDebugMode) {
+        print(
+            "Created duplicate anchor $firstIndex (${_internalFields[firstIndex]['name']}) with fields: ${fieldIndices.map((i) => _internalFields[i]['name']).join(', ')}");
+      }
+    }
+
+    // Regular groups based on groupWith and non-duplicates
     for (final groupKey in groupKeyToFieldIndices.keys) {
       final fieldIndices = groupKeyToFieldIndices[groupKey]!;
       if (fieldIndices.isEmpty) continue;
+
+      // Skip if this is a duplicate:timestamp group (already handled)
+      if (groupKey.startsWith('duplicate:')) {
+        continue;
+      }
 
       // Use first field as anchor
       final anchor = fieldIndices.first;
 
       // Store field indices mapping for all anchors (including duplicates)
-      _anchorToFieldIndices[anchor] = fieldIndices;
+      // Only if this anchor doesn't already have fields (from timestamp processing)
+      if (!_anchorToFieldIndices.containsKey(anchor)) {
+        _anchorToFieldIndices[anchor] = fieldIndices;
+      }
 
       // Only add to navigation anchors if it's not a duplicate
       bool isDuplicate = _internalFields[anchor]['isDuplicate'] == true;
