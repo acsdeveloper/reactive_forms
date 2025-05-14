@@ -258,10 +258,10 @@ class _DynamicFormState extends State<DynamicForm>
       // Get the current anchor
       final currentAnchor = _groupAnchors[_currentGroupPointer];
       if (currentAnchor >= 0 && currentAnchor < _internalFields.length) {
-        // Check if this field or any field in its group has a groupWith property
+        // Check if this field has a non-empty groupWith value
         final currentField = _internalFields[currentAnchor];
-        currentQuestionHasGroupWith = currentField['groupWith'] != null ||
-            currentField['allowDuplicate'] == true;
+        final groupWithValue = currentField['groupWith']?.toString() ?? '';
+        currentQuestionHasGroupWith = groupWithValue.isNotEmpty;
 
         // For debugging
         if (kDebugMode) {
@@ -269,9 +269,6 @@ class _DynamicFormState extends State<DynamicForm>
           print("Current field: ${currentField['name']}");
           if (currentField['groupWith'] != null) {
             print("GroupWith: ${currentField['groupWith']}");
-          }
-          if (currentField['allowDuplicate'] == true) {
-            print("AllowDuplicate: ${currentField['allowDuplicate']}");
           }
         }
       }
@@ -375,22 +372,39 @@ class _DynamicFormState extends State<DynamicForm>
       print("Current anchor: $currentAnchor ($currentAnchorName)");
     }
 
-    // Build the card for the current anchor with all its grouped fields
-    // This is the original card that is always displayed
+    // Build the current question fields
+    // This is the original question that is always displayed
     final List<int> currentIndices =
         _anchorToFieldIndices[currentAnchor] ?? [currentAnchor];
     final List<Map<String, dynamic>> currentGroupFields =
         currentIndices.map((i) => _internalFields[i]).toList();
 
-    if (kDebugMode) {
-      print(
-          "Building original card for anchor $currentAnchor ($currentAnchorName)");
-      print(
-          "Fields in original card: ${currentGroupFields.map((f) => f['name']).toList()}");
+    // Check if the current question has a groupWith property to determine UI style
+    bool hasGroupWith = false;
+    for (final field in currentGroupFields) {
+      final groupWithValue = field['groupWith']?.toString() ?? '';
+      if (groupWithValue.isNotEmpty) {
+        hasGroupWith = true;
+        break;
+      }
     }
 
-    // Add the original card
-    widgets.add(_buildCardForFields(currentGroupFields, false));
+    if (kDebugMode) {
+      print(
+          "Building original question for anchor $currentAnchor ($currentAnchorName)");
+      print(
+          "Fields in original question: ${currentGroupFields.map((f) => f['name']).toList()}");
+      print("Has groupWith: $hasGroupWith");
+    }
+
+    // If the question has groupWith, use a card UI, otherwise use plain UI
+    if (hasGroupWith) {
+      // Add the original question as a card
+      widgets.add(_buildCardForFields(currentGroupFields, false));
+    } else {
+      // Add the original question without a card
+      widgets.addAll(currentGroupFields.map(_buildField).toList());
+    }
 
     // Now collect all duplicates of the current anchor to show below it
     final List<int> duplicateAnchors = [];
@@ -451,11 +465,11 @@ class _DynamicFormState extends State<DynamicForm>
       }
     }
 
-    if (kDebugMode) {
+    if (kDebugMode && duplicateAnchors.isNotEmpty) {
       print("Duplicate anchors to show: $duplicateAnchors");
     }
 
-    // Build cards for all duplicate anchors
+    // Build cards for all duplicate anchors - duplicates are always shown in cards with delete buttons
     for (final anchor in duplicateAnchors) {
       final indices = _anchorToFieldIndices[anchor] ?? [anchor];
       final fields = indices.map((i) => _internalFields[i]).toList();
@@ -467,7 +481,7 @@ class _DynamicFormState extends State<DynamicForm>
             "Fields in duplicate card: ${fields.map((f) => f['name']).toList()}");
       }
 
-      // Add the duplicate card with delete button
+      // Add the duplicate card with delete button - duplicates always use cards
       widgets.add(_buildCardForFields(fields, true));
     }
 
@@ -2587,12 +2601,12 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   List<Widget> _buildGroupedCards() {
-    List<Widget> cards = [];
+    List<Widget> widgets = [];
 
     try {
       // Safety check for empty anchors
       if (_groupAnchors.isEmpty) {
-        return cards;
+        return widgets;
       }
 
       // Iterate over each anchor that defines a group
@@ -2625,45 +2639,66 @@ class _DynamicFormState extends State<DynamicForm>
           isDuplicated = _internalFields[anchor]['isDuplicate'] == true;
         }
 
-        cards.add(
-          Card(
-            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Build all fields in the group
-                  ...groupFields
-                      .map((fieldData) => _buildField(fieldData))
-                      .toList(),
+        // Check if any field in this group has a non-empty groupWith property
+        bool hasGroupWith = false;
+        for (final field in groupFields) {
+          final groupWithValue = field['groupWith']?.toString() ?? '';
+          if (groupWithValue.isNotEmpty) {
+            hasGroupWith = true;
+            break;
+          }
+        }
 
-                  // Add delete button if this is a duplicated card
-                  if (isDuplicated)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () {
-                          final fieldNames = groupFields
-                              .map((field) => field['name'].toString())
-                              .toList();
-                          _removeSet(fieldNames);
-                        },
-                        color: Colors.red,
+        // Always use card UI for duplicated questions
+        // For original questions, use card only if they have groupWith
+        if (isDuplicated || hasGroupWith) {
+          widgets.add(
+            Card(
+              margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Build all fields in the group
+                    ...groupFields
+                        .map((fieldData) => _buildField(fieldData))
+                        .toList(),
+
+                    // Add delete button if this is a duplicated card
+                    if (isDuplicated)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () {
+                            final fieldNames = groupFields
+                                .map((field) => field['name'].toString())
+                                .toList();
+                            _removeSet(fieldNames);
+                          },
+                          color: Colors.red,
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        );
+          );
+        } else {
+          // For questions without groupWith, add them directly without a card
+          widgets.addAll(
+              groupFields.map((fieldData) => _buildField(fieldData)).toList());
+
+          // Add spacing between ungrouped questions
+          widgets.add(const SizedBox(height: 16));
+        }
       }
     } catch (e) {
       print('Error building grouped cards: $e');
     }
 
-    return cards;
+    return widgets;
   }
 
   // --- Group logic -------------------------------------------------
