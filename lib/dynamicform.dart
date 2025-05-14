@@ -245,6 +245,31 @@ class _DynamicFormState extends State<DynamicForm>
 
     final buttonColor = widget.primaryColor;
 
+    // Determine if the current question has groupWith to control FAB visibility
+    bool currentQuestionHasGroupWith = false;
+    if (_groupAnchors.isNotEmpty &&
+        _currentGroupPointer < _groupAnchors.length) {
+      int currentAnchorIndex = _groupAnchors[_currentGroupPointer];
+      if (currentAnchorIndex >= 0 &&
+          currentAnchorIndex < _internalFields.length) {
+        var currentField = _internalFields[currentAnchorIndex];
+        currentQuestionHasGroupWith = currentField.containsKey('groupWith') &&
+            currentField['groupWith'] != null;
+      }
+    }
+
+    // Log current state to help debug
+    if (kDebugMode) {
+      print("Build method called");
+      print("showOneByOne: ${widget.showOneByOne}");
+      print("Current group pointer: $_currentGroupPointer");
+      if (_groupAnchors.isNotEmpty &&
+          _currentGroupPointer < _groupAnchors.length) {
+        print(
+            "Current question: ${_internalFields[_groupAnchors[_currentGroupPointer]]['name']}");
+      }
+    }
+
     return Theme(
       data: Theme.of(context).copyWith(
         textTheme: Theme.of(context).textTheme.apply(
@@ -254,20 +279,30 @@ class _DynamicFormState extends State<DynamicForm>
       child: ReactiveForm(
         formGroup: controller.form,
         child: Scaffold(
-          floatingActionButton: FloatingActionButton(
-            onPressed: () => _addNewSet(),
-            child: const Icon(Icons.add),
-          ),
+          // Only show the FloatingActionButton if the current question has a groupWith property
+          floatingActionButton:
+              widget.showOneByOne && currentQuestionHasGroupWith
+                  ? FloatingActionButton(
+                      onPressed: () => _addNewSet(),
+                      child: const Icon(Icons.add),
+                    )
+                  : null,
           body: LayoutBuilder(
             builder: (context, constraints) {
+              // Create a unique key that includes the current group pointer
+              // This ensures the widget tree is rebuilt when the current question changes
+              final uniqueKey = ValueKey(
+                  '${StringConstants.form}_pointer${_currentGroupPointer}_index${controller.currentQuestionIndex}_totalFields${_internalFields.length}');
+
               return SingleChildScrollView(
-                key: ValueKey(
-                    '${StringConstants.form}${controller.currentQuestionIndex}_${_internalFields.length}'), // Force rebuild when fields change
+                key: uniqueKey,
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // When showing one by one, we only show the current group of fields
                     if (widget.showOneByOne) ..._buildOneByOneFields(),
+                    // When showing all at once, we show all fields
                     if (!widget.showOneByOne) ..._buildAllFields(),
                     if (_showAttachmentError) _buildErrorMessage(),
                   ],
@@ -297,55 +332,98 @@ class _DynamicFormState extends State<DynamicForm>
   List<Widget> _buildOneByOneFields() {
     if (_groupAnchors.isEmpty) return [];
 
+    // Debug information to help diagnose groupWith issues
+    if (kDebugMode) {
+      print("\n\n========== Building one-by-one fields ==========");
+      print("Current group pointer: $_currentGroupPointer");
+      print("Available group anchors: $_groupAnchors");
+      print(
+          "Current question index from controller: ${controller.currentQuestionIndex}");
+      print("Total internal fields: ${_internalFields.length}");
+      print("Current field groupings:");
+      _anchorToFieldIndices.forEach((anchor, fieldIndices) {
+        final fieldNames = fieldIndices
+            .map((i) => "${_internalFields[i]['name']} (index $i)")
+            .join(", ");
+        print("  Anchor $anchor: $fieldNames");
+      });
+    }
+
     final List<Widget> widgets = [];
+
+    // Make sure _currentGroupPointer is valid
+    if (_currentGroupPointer >= _groupAnchors.length || _groupAnchors.isEmpty) {
+      if (kDebugMode) {
+        print(
+            "Warning: Current group pointer $_currentGroupPointer is out of range");
+      }
+      return widgets;
+    }
 
     // Start with the current anchor indicated by the pointer
     final currentAnchor = _groupAnchors[_currentGroupPointer];
     final String currentAnchorName =
         _internalFields[currentAnchor]['name'] as String;
 
+    if (kDebugMode) {
+      print("Current anchor: $currentAnchor ($currentAnchorName)");
+    }
+
     // Find all duplicates of the current question to show them together
     List<int> anchorsToShow = [];
 
-    // First add the current anchor
+    // First add the current anchor - this is the only anchor we want to show
     anchorsToShow.add(currentAnchor);
 
     // Get the base name (without timestamps)
     String baseName = currentAnchorName;
     if (baseName.contains('_')) {
-      final regex = RegExp(r'(.+)_\d+');
-      final match = regex.firstMatch(baseName);
-      if (match != null) {
-        baseName = match.group(1) ?? baseName;
+      // For timestamp-based duplicates (not question_X format)
+      final duplicatePattern = RegExp(r'(.+)_(\d+)_(\d+)$');
+      final duplicateMatch = duplicatePattern.firstMatch(baseName);
+      if (duplicateMatch != null) {
+        baseName = duplicateMatch.group(1) ?? baseName;
+
+        // For timestamp duplicates, search for others with the same base and timestamp
+        final timestamp = duplicateMatch.group(3);
+        final namePattern = RegExp('^${baseName}_(\\d+)_${timestamp}\$');
+
+        // Add any actual duplicates (with timestamps) to be shown together
+        _anchorToFieldIndices.forEach((anchor, fieldIndices) {
+          if (anchor == currentAnchor) return;
+          if (anchor < 0 || anchor >= _internalFields.length) return;
+
+          final thisAnchorName = _internalFields[anchor]['name'] as String;
+          if (namePattern.hasMatch(thisAnchorName) ||
+              (_internalFields[anchor]['isDuplicate'] == true &&
+                  thisAnchorName.startsWith(baseName))) {
+            anchorsToShow.add(anchor);
+            if (kDebugMode) {
+              print("Adding duplicate anchor: $anchor ($thisAnchorName)");
+            }
+          }
+        });
       }
     }
 
-    // Find any duplicates of the current question (they'll have the same base name with timestamps)
-    final namePattern = RegExp('^${baseName}_\\d+');
+    // If this question has fields grouped with it via groupWith property,
+    // find those fields in the _anchorToFieldIndices mapping
+    final fieldIndices =
+        _anchorToFieldIndices[currentAnchor] ?? [currentAnchor];
 
-    // Add any duplicates to be shown together on the same page
-    // We need to search through all anchors in _anchorToFieldIndices, not just navigation anchors
-    _anchorToFieldIndices.forEach((anchor, fieldIndices) {
-      // Skip the current anchor since we've already added it
-      if (anchor == currentAnchor) return;
+    if (kDebugMode) {
+      print("Anchors to show on this page: $anchorsToShow");
+      print("Fields in current group: $fieldIndices");
+    }
 
-      // Make sure we have a valid access to _internalFields
-      if (anchor < 0 || anchor >= _internalFields.length) return;
-
-      final thisAnchorName = _internalFields[anchor]['name'] as String;
-
-      // Check if this is a duplicate of the current card (either through naming pattern or isDuplicate flag)
-      if (namePattern.hasMatch(thisAnchorName) ||
-          (_internalFields[anchor]['isDuplicate'] == true &&
-              thisAnchorName.startsWith(baseName))) {
-        anchorsToShow.add(anchor);
-      }
-    });
-
-    // Now build cards for all anchors (current anchor + duplicates)
+    // Now build cards for all anchors (current anchor + any actual duplicates)
     for (int anchor in anchorsToShow) {
-      final List<int> fieldIndices = _anchorToFieldIndices[anchor] ?? [anchor];
-      final groupFields = fieldIndices.map((i) => _internalFields[i]).toList();
+      final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+      if (kDebugMode) {
+        print("Building fields for anchor $anchor: $indices");
+      }
+
+      final groupFields = indices.map((i) => _internalFields[i]).toList();
 
       // Determine if this is original or duplicate for delete button
       final anchorData = _internalFields[anchor];
@@ -374,6 +452,11 @@ class _DynamicFormState extends State<DynamicForm>
           ),
         ),
       ));
+    }
+
+    if (kDebugMode) {
+      print("Returning ${widgets.length} widgets for display");
+      print("=================================================\n");
     }
 
     return widgets;
@@ -2023,26 +2106,93 @@ class _DynamicFormState extends State<DynamicForm>
 
   // --- Duplicate navigation helpers removed (see consolidated implementations later in class) ---
   void _moveToNextStep(BuildContext context) {
-    if (_currentGroupPointer < _groupAnchors.length - 1) {
-      setState(() {
-        _currentGroupPointer++;
-        controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
-
-        // Make sure we're not navigating to a duplicate card
-        // This is a safety check in case duplicates somehow get included in _groupAnchors
-        while (_currentGroupPointer < _groupAnchors.length - 1 &&
-            _internalFields[_groupAnchors[_currentGroupPointer]]
-                    ['isDuplicate'] ==
-                true) {
-          _currentGroupPointer++;
-          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
-        }
-      });
+    // Debug the current state
+    if (kDebugMode) {
+      print('Moving to next step');
+      print('Current group pointer: $_currentGroupPointer');
+      print('Group anchors: $_groupAnchors');
     }
+
+    // Make sure we have valid anchors
+    if (_groupAnchors.isEmpty) {
+      if (kDebugMode) {
+        print('Warning: No group anchors available');
+      }
+      return;
+    }
+
+    // Validate the current question before moving to the next
+    if (!validateCurrentSection()) {
+      if (kDebugMode) {
+        print('Validation failed, not moving to next question');
+      }
+
+      // Show validation errors
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(StringConstants.fillRequiredFields),
+          backgroundColor: Colors.red,
+        ),
+      );
+      controller.form.markAllAsTouched();
+      return;
+    }
+
+    // Check if we're at the end of the form
+    if (_currentGroupPointer >= _groupAnchors.length - 1) {
+      // We've reached the end of the form, submit if valid
+      if (controller.form.valid) {
+        if (kDebugMode) {
+          print('Reached end of form, submitting');
+        }
+        controller.submitForm(context);
+      } else {
+        // Show validation errors
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(StringConstants.fillRequiredFields),
+            backgroundColor: Colors.red,
+          ),
+        );
+        controller.form.markAllAsTouched();
+      }
+      return;
+    }
+
+    // If we get here, we should increment the group pointer
+    setState(() {
+      // Increment group pointer to move to next question
+      _currentGroupPointer++;
+
+      // Update the controller's current question index to the new anchor
+      if (_currentGroupPointer < _groupAnchors.length) {
+        final nextAnchor = _groupAnchors[_currentGroupPointer];
+        controller.currentQuestionIndex = nextAnchor;
+
+        if (kDebugMode) {
+          print('Moved to group pointer: $_currentGroupPointer');
+          print('New anchor: $nextAnchor');
+          print('Question name: ${_internalFields[nextAnchor]['name']}');
+        }
+      }
+    });
   }
 
   void moveToNextQuestion(BuildContext context) {
+    if (kDebugMode) {
+      print("Moving to next question");
+      print("Before navigation - Current group pointer: $_currentGroupPointer");
+      print("Before navigation - Available anchors: $_groupAnchors");
+    }
+
     _moveToNextStep(context);
+
+    // Force a rebuild to ensure the UI updates with the new question
+    if (mounted) {
+      setState(() {
+        // This empty setState ensures the build method is called again
+      });
+    }
   }
 
   void moveToPreviousValidQuestion() {
@@ -2450,8 +2600,19 @@ class _DynamicFormState extends State<DynamicForm>
     // Keep track of base names for duplicate grouping
     Map<String, String> duplicateToBaseName = {};
 
+    // Special pattern for "question_X" format - need to differentiate from duplicates
+    final questionPattern = RegExp(r'^question_(\d+)$');
+
     // Extract timestamp patterns from field names for grouping duplicates together
-    final regex = RegExp(r'(.+)_(\d+)$');
+    final duplicatePattern = RegExp(r'(.+)_(\d+)_(\d+)$');
+
+    if (kDebugMode) {
+      print("\n----- Starting Group Structure Computation -----");
+      print("Total fields: ${_internalFields.length}");
+      _internalFields.forEach((field) {
+        print("Field: ${field['name']}, groupWith: ${field['groupWith']}");
+      });
+    }
 
     // Step 1: Map each field to its group key
     for (int i = 0; i < _internalFields.length; i++) {
@@ -2465,12 +2626,14 @@ class _DynamicFormState extends State<DynamicForm>
       // First try to extract from explicit groupWith setting
       String? groupWith = field['groupWith']?.toString();
 
-      // Check for timestamp suffix pattern
-      final match = regex.firstMatch(fieldName);
-      if (match != null && match.groupCount >= 2) {
-        // Extract base name and timestamp ID
-        baseName = match.group(1) ?? fieldName;
-        duplicateId = match.group(2);
+      // Check if this is a standard question pattern (question_X)
+      final questionMatch = questionPattern.firstMatch(fieldName);
+      final duplicateMatch = duplicatePattern.firstMatch(fieldName);
+
+      if (duplicateMatch != null && duplicateMatch.groupCount >= 3) {
+        // This is a duplicated field with timestamp
+        baseName = duplicateMatch.group(1) ?? fieldName;
+        duplicateId = duplicateMatch.group(3);
 
         // Record the mapping from duplicate name to base name
         if (field['isDuplicate'] == true) {
@@ -2483,15 +2646,9 @@ class _DynamicFormState extends State<DynamicForm>
 
       if (groupWith != null) {
         // If field explicitly declares what it groups with, use that
-        final groupWithMatch = regex.firstMatch(groupWith);
-        if (groupWithMatch != null && duplicateId != null) {
-          // If both this field and its groupWith have timestamps, use consistent key
-          final groupWithBase = groupWithMatch.group(1) ?? groupWith;
-          groupKey = '${groupWithBase}:${duplicateId}';
-        } else {
-          // Otherwise use the groupWith directly as key
-          groupKey = groupWith;
-        }
+        // For question_X format, the groupWith directly becomes the key
+        // This ensures questions with pattern question_1, question_2, etc. group correctly
+        groupKey = groupWith;
       } else if (duplicateId != null) {
         // For duplicated fields with timestamp but no groupWith, use base:timestamp
         groupKey = '${baseName}:${duplicateId}';
@@ -2550,7 +2707,31 @@ class _DynamicFormState extends State<DynamicForm>
 
       // Only add to navigation anchors if it's not a duplicate
       bool isDuplicate = _internalFields[anchor]['isDuplicate'] == true;
-      if (!isDuplicate) {
+
+      // Special check for question_X format - if we're looking at a question that's
+      // referenced via groupWith but is not itself a groupWith-referencing question,
+      // then it should be an anchor
+      final anchorName = _internalFields[anchor]['name'].toString();
+      bool isQuestionReferredByOthers = false;
+
+      // Check if this field is referred to by another field's groupWith
+      for (var field in _internalFields) {
+        if (field['groupWith']?.toString() == anchorName) {
+          isQuestionReferredByOthers = true;
+          break;
+        }
+      }
+
+      // A field should be an anchor if:
+      // 1. It's not a duplicate AND
+      // 2. Either:
+      //    a. It's not referred to by another field's groupWith, OR
+      //    b. It has its own groupWith reference
+      bool shouldBeAnchor = !isDuplicate &&
+          (!isQuestionReferredByOthers ||
+              _internalFields[anchor]['groupWith'] != null);
+
+      if (shouldBeAnchor) {
         originalAnchors.add(anchor);
       }
     }
@@ -2561,11 +2742,17 @@ class _DynamicFormState extends State<DynamicForm>
     // Now assign the navigation anchors
     _groupAnchors = originalAnchors;
 
-    // Ensure current pointer is within range
-    if (_currentGroupPointer >= _groupAnchors.length) {
-      _currentGroupPointer =
-          _groupAnchors.isEmpty ? 0 : _groupAnchors.length - 1;
+    if (kDebugMode) {
+      print('Final group anchors for navigation: $_groupAnchors');
+      print('Anchor to fields mapping:');
+      _anchorToFieldIndices.forEach((anchor, indices) {
+        print(
+            '  Anchor $anchor (${_internalFields[anchor]['name']}): ${indices.map((i) => _internalFields[i]['name']).toList()}');
+      });
     }
+
+    // Reset the current group pointer to 0 to ensure we start from the first question
+    _currentGroupPointer = 0;
 
     // Update controller index after a brief delay to ensure state is consistent
     if (_groupAnchors.isNotEmpty) {
@@ -2576,6 +2763,10 @@ class _DynamicFormState extends State<DynamicForm>
           controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
         }
       });
+    }
+
+    if (kDebugMode) {
+      print("----- Group Structure Computation Complete -----\n");
     }
   }
 
