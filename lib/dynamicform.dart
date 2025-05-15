@@ -100,6 +100,138 @@ class _DynamicFormState extends State<DynamicForm>
   // Maintain a map of which question number corresponds to each anchor
   Map<int, int> _anchorToQuestionNumber = {};
 
+  // Tracks fields being evaluated for showWhen circular dependency detection
+  Set<String> _fieldEvaluationStack = {};
+
+  // Subscription to form value changes - will be used to update visibility
+  late StreamSubscription<dynamic> _formValueChangeSubscription;
+
+  // Check if the current question should be visible, and if not, skip to the next visible one
+  void _updateCurrentQuestionBasedOnVisibility() {
+    if (!widget.showOneByOne) return; // Only applicable in step-by-step mode
+
+    // If the current question pointer is out of bounds, reset to the beginning
+    if (_currentGroupPointer < 0 ||
+        _currentGroupPointer >= _groupAnchors.length) {
+      _currentGroupPointer = 0;
+      return;
+    }
+
+    // Get the current question anchor and index
+    int currentAnchorIndex = _groupAnchors[_currentGroupPointer];
+    int currentQuestionIndex = -1;
+
+    // Find the form index of the current question
+    for (int i = 0; i < widget.formJson.length; i++) {
+      if (widget.formJson[i]['name'] ==
+          _internalFields[currentAnchorIndex]['name']) {
+        currentQuestionIndex = i;
+        break;
+      }
+    }
+
+    // If current question is not found in the form JSON (shouldn't happen), return
+    if (currentQuestionIndex == -1) return;
+
+    // Get the current list of visible question indices
+    List<int> visibleIndices = _getVisibleQuestionIndices();
+
+    // Critical: If no questions are visible, make the first question visible as fallback
+    if (visibleIndices.isEmpty && widget.formJson.isNotEmpty) {
+      if (kDebugMode) {
+        print(
+            "Warning: No visible questions found! Making first question visible as fallback.");
+      }
+      visibleIndices = [0]; // Make the first question visible as fallback
+    }
+
+    // Check if current question is visible
+    if (!visibleIndices.contains(currentQuestionIndex)) {
+      if (kDebugMode) {
+        print(
+            "Current question at index $currentQuestionIndex is not visible. Finding next visible question.");
+      }
+
+      // Current question is not visible - find the next visible question
+      int nextVisibleIndex = -1;
+
+      // First try to find next visible question
+      for (int visibleIndex in visibleIndices) {
+        if (visibleIndex > currentQuestionIndex) {
+          nextVisibleIndex = visibleIndex;
+          break;
+        }
+      }
+
+      // If no next visible question found, use the last visible question
+      if (nextVisibleIndex == -1 && visibleIndices.isNotEmpty) {
+        // Try to find the closest previous visible question
+        int prevVisibleIndex = -1;
+        for (int visibleIndex in visibleIndices) {
+          if (visibleIndex < currentQuestionIndex &&
+              (prevVisibleIndex == -1 || visibleIndex > prevVisibleIndex)) {
+            prevVisibleIndex = visibleIndex;
+          }
+        }
+
+        // If a previous visible question is found, navigate to it
+        if (prevVisibleIndex != -1) {
+          nextVisibleIndex = prevVisibleIndex;
+        } else {
+          // If no previous question found either, use the first visible question
+          nextVisibleIndex = visibleIndices.first;
+        }
+      }
+
+      // Skip to the next/previous visible question if found
+      if (nextVisibleIndex != -1) {
+        // Find the anchor corresponding to this question index
+        int anchorPointer = -1;
+        for (int i = 0; i < _groupAnchors.length; i++) {
+          int anchorIndex = _groupAnchors[i];
+          String anchorName = _internalFields[anchorIndex]['name'].toString();
+
+          // Check if this anchor corresponds to the next visible question
+          for (int j = 0; j < widget.formJson.length; j++) {
+            if (j == nextVisibleIndex &&
+                widget.formJson[j]['name'] == anchorName) {
+              anchorPointer = i;
+              break;
+            }
+          }
+
+          if (anchorPointer != -1) break;
+        }
+
+        // Update the current pointer and controller index if an anchor was found
+        if (anchorPointer != -1 && anchorPointer != _currentGroupPointer) {
+          if (kDebugMode) {
+            print(
+                "Smart Skip: Question at index $currentQuestionIndex is not visible. Skipping to question at index $nextVisibleIndex (anchor: $anchorPointer)");
+          }
+
+          setState(() {
+            _currentGroupPointer = anchorPointer;
+            controller.currentQuestionIndex =
+                _groupAnchors[_currentGroupPointer];
+          });
+        } else if (anchorPointer == -1) {
+          // If we couldn't find a proper anchor but we know a question should be visible,
+          // this is a serious issue - log it
+          if (kDebugMode) {
+            print(
+                "ERROR: Could not find anchor for visible question at index $nextVisibleIndex");
+          }
+        }
+      } else {
+        // This should never happen since we ensure visibleIndices is not empty
+        if (kDebugMode) {
+          print("ERROR: No visible question found to navigate to!");
+        }
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -124,6 +256,26 @@ class _DynamicFormState extends State<DynamicForm>
     });
 
     _recomputeGroupStructure();
+
+    // Listen to form value changes and update question visibility
+    _formValueChangeSubscription =
+        controller.form.valueChanges.listen((formValues) {
+      if (mounted) {
+        if (kDebugMode) {
+          print(
+              "Form values changed: ${formValues?.keys.join(', ') ?? 'null'}");
+        }
+
+        // First, recalculate progress and visibility
+        _safeCalculateProgress();
+
+        // Then check if current question should be skipped
+        _updateCurrentQuestionBasedOnVisibility();
+
+        // Update UI
+        setState(() {});
+      }
+    });
   }
 
   @override
@@ -131,6 +283,10 @@ class _DynamicFormState extends State<DynamicForm>
     // Remove the listener when the widget is disposed
     controller.removeListener(_onControllerChanged);
     _pageController.dispose(); // Ensure the controller is disposed
+
+    // NEW: Cancel the form value change subscription
+    _formValueChangeSubscription.cancel();
+
     super.dispose();
   }
 
@@ -203,39 +359,109 @@ class _DynamicFormState extends State<DynamicForm>
   // Get the list of visible question indices
   List<int> _getVisibleQuestionIndices() {
     List<int> visible = [];
+    Set<String> evaluationStack =
+        {}; // Track fields being evaluated to detect circular dependencies
 
+    // Helper function to evaluate showWhen conditions with circular dependency detection
+    bool evaluateShowWhen(Map<String, dynamic> question,
+        {String? fieldBeingEvaluated}) {
+      // If this question doesn't have showWhen conditions, it's always visible
+      if (question['showWhen'] == null) {
+        return true;
+      }
+
+      // Get the current field name for tracking
+      String currentField = question['name']?.toString() ?? '';
+
+      // If this field is already being evaluated, we have a circular dependency
+      if (fieldBeingEvaluated != null &&
+          evaluationStack.contains(fieldBeingEvaluated)) {
+        if (kDebugMode) {
+          print(
+              "WARNING: Circular dependency detected in showWhen conditions for field: $fieldBeingEvaluated");
+          print(
+              "Dependency chain: ${evaluationStack.join(' → ')} → $fieldBeingEvaluated");
+        }
+        // Break the circular dependency by treating this condition as true
+        return true;
+      }
+
+      // Add current field to evaluation stack
+      if (fieldBeingEvaluated != null) {
+        evaluationStack.add(fieldBeingEvaluated);
+      }
+
+      try {
+        bool shouldShow = true; // Initialize to true for AND logic
+        final conditions = question['showWhen'] as Map<String, dynamic>;
+
+        conditions.forEach((field, expectedValues) {
+          // Check if the form contains this field
+          if (!controller.form.contains(field)) {
+            shouldShow = false;
+            return;
+          }
+
+          // Get the field's value from the form
+          final value = controller.form.control(field).value;
+          bool matches = false;
+
+          // Check if the value matches the expected value(s)
+          if (expectedValues is List) {
+            matches = expectedValues.contains(value);
+          } else {
+            matches = (value == expectedValues);
+          }
+
+          // Check dependencies of the referenced field (to handle nested dependencies)
+          // Find the referenced field's question
+          int dependentFieldIndex =
+              widget.formJson.indexWhere((q) => q['name'] == field);
+          if (dependentFieldIndex >= 0) {
+            // Recursively check if the field this depends on should be shown
+            // Only if it's not already being evaluated (to prevent infinite recursion)
+            if (!evaluationStack.contains(field)) {
+              bool dependentFieldVisible = evaluateShowWhen(
+                  widget.formJson[dependentFieldIndex],
+                  fieldBeingEvaluated: field);
+
+              // If the dependent field isn't visible, this condition doesn't match
+              if (!dependentFieldVisible) {
+                matches = false;
+              }
+            }
+          }
+
+          shouldShow = shouldShow && matches;
+        });
+
+        return shouldShow;
+      } finally {
+        // Always remove the field from evaluation stack when done
+        if (fieldBeingEvaluated != null) {
+          evaluationStack.remove(fieldBeingEvaluated);
+        }
+      }
+    }
+
+    // Evaluate visibility for each question in the form
     for (int i = 0; i < widget.formJson.length; i++) {
       final question = widget.formJson[i];
 
-      if (question['showWhen'] == null) {
-        visible.add(i);
-        continue;
-      }
-
-      bool shouldShow = true; // Initialize to false for OR logic
-      final conditions = question['showWhen'] as Map<String, dynamic>;
-
-      conditions.forEach((field, expectedValues) {
-        if (!controller.form.contains(field)) {
-          shouldShow = false;
-          return;
-        }
-
-        final value = controller.form.control(field).value;
-        bool matches = false;
-
-        if (expectedValues is List) {
-          matches = expectedValues.contains(value);
-        } else {
-          matches = (value == expectedValues);
-        }
-
-        shouldShow = shouldShow && matches;
-      });
-
-      if (shouldShow) {
+      // Evaluate visibility using the helper function
+      if (evaluateShowWhen(question,
+          fieldBeingEvaluated: question['name']?.toString())) {
         visible.add(i);
       }
+    }
+
+    // Safety check: If no questions are visible, make the first one visible
+    if (visible.isEmpty && widget.formJson.isNotEmpty) {
+      if (kDebugMode) {
+        print(
+            "WARNING: No questions visible! Making first question visible by default.");
+      }
+      visible.add(0); // Make the first question visible as fallback
     }
 
     return visible;
@@ -510,30 +736,75 @@ class _DynamicFormState extends State<DynamicForm>
     if (field['showWhen'] != null) {
       return ReactiveFormConsumer(
         builder: (context, form, child) {
-          bool shouldShow = false; // Initialize to false for OR logic
-          final conditions = field['showWhen'] as Map<String, dynamic>;
+          final String fieldName = field['name'].toString();
 
-          conditions.forEach((dependentField, expectedValue) {
-            if (!controller.form.contains(dependentField)) {
-              shouldShow = false;
-              return;
+          // Check for circular dependency
+          if (_fieldEvaluationStack.contains(fieldName)) {
+            if (kDebugMode) {
+              print(
+                  "WARNING: Circular dependency detected in field-level showWhen for: $fieldName");
+              print(
+                  "Dependency chain: ${_fieldEvaluationStack.join(' → ')} → $fieldName");
             }
-
-            final dependentControl = form.control(dependentField);
-            final currentValue = dependentControl.value;
-
-            if (expectedValue is List) {
-              shouldShow = shouldShow || expectedValue.contains(currentValue);
-            } else {
-              shouldShow = shouldShow || currentValue == expectedValue;
-            }
-          });
-
-          if (!shouldShow) {
-            return const SizedBox.shrink();
+            // Break the circular dependency by showing the field
+            return _buildFieldWidget(field);
           }
 
-          return _buildFieldWidget(field);
+          _fieldEvaluationStack.add(fieldName);
+
+          try {
+            bool shouldShow = false; // Initialize to false for OR logic
+            final conditions = field['showWhen'] as Map<String, dynamic>;
+
+            conditions.forEach((dependentField, expectedValue) {
+              if (!controller.form.contains(dependentField)) {
+                shouldShow = false;
+                return;
+              }
+
+              final dependentControl = form.control(dependentField);
+              final currentValue = dependentControl.value;
+
+              // Check if the dependent field itself has a showWhen condition
+              // Only check if we're not already evaluating it (to prevent circular deps)
+              if (!_fieldEvaluationStack.contains(dependentField)) {
+                // Find the dependent field in the internal fields
+                int dependentFieldIdx = _internalFields
+                    .indexWhere((f) => f['name'] == dependentField);
+
+                if (dependentFieldIdx >= 0 &&
+                    _internalFields[dependentFieldIdx]['showWhen'] != null) {
+                  // Create a temporary instance of the field widget to check visibility
+                  // This is a simplified recursive check
+                  Widget tempWidget =
+                      _buildField(_internalFields[dependentFieldIdx]);
+
+                  // If the dependent field would be hidden, don't match this condition
+                  if (tempWidget is SizedBox &&
+                      tempWidget.width == 0 &&
+                      tempWidget.height == 0) {
+                    // The dependent field would be hidden (SizedBox.shrink)
+                    shouldShow = shouldShow || false;
+                    return;
+                  }
+                }
+              }
+
+              if (expectedValue is List) {
+                shouldShow = shouldShow || expectedValue.contains(currentValue);
+              } else {
+                shouldShow = shouldShow || currentValue == expectedValue;
+              }
+            });
+
+            if (!shouldShow) {
+              return const SizedBox.shrink();
+            }
+
+            return _buildFieldWidget(field);
+          } finally {
+            _fieldEvaluationStack.remove(fieldName);
+          }
         },
       );
     }
@@ -2588,13 +2859,20 @@ class _DynamicFormState extends State<DynamicForm>
       print("Validation passed - moving to next step");
     }
 
+    // Check if current question is visible, skip to next visible if not
+    _updateCurrentQuestionBasedOnVisibility();
+
     // Proceed with moving to the next step
     if (_currentGroupPointer < _groupAnchors.length - 1) {
       setState(() {
         _currentGroupPointer++;
+
         // Update the controller index to match the new group
         if (_groupAnchors.isNotEmpty) {
           controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+
+          // Check if we need to skip this next question too
+          _updateCurrentQuestionBasedOnVisibility();
         }
       });
     } else {
@@ -3365,12 +3643,19 @@ class _DynamicFormState extends State<DynamicForm>
 
   // Move to the next question in the form
   void moveToNextQuestion(BuildContext context) {
+    // Check if current question is visible, skip to next visible if not
+    _updateCurrentQuestionBasedOnVisibility();
+
+    // Now proceed with normal navigation
     if (_currentGroupPointer < _groupAnchors.length - 1) {
       setState(() {
         _currentGroupPointer++;
         // Update the controller index to match the new group
         if (_groupAnchors.isNotEmpty) {
           controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+
+          // Check if we need to skip this question too
+          _updateCurrentQuestionBasedOnVisibility();
         }
       });
     } else {
