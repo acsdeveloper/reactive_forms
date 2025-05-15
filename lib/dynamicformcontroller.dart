@@ -56,7 +56,10 @@ class DynamicFormController extends ChangeNotifier {
           }
         } else if (field['type'] == 'file') {
           uploadedFiles[fieldName] = [];
-          controls[fieldName] = FormControl<String>(value: '');
+          controls[fieldName] = FormControl<String>(
+            value: '',
+            validators: field['required'] == true ? [Validators.required] : [],
+          );
 
           if (field['hasComments'] == true) {
             controls['${fieldName}_comment'] = FormControl<String>(
@@ -699,7 +702,10 @@ class DynamicFormController extends ChangeNotifier {
           }
         } else if (f['type'] == 'file') {
           uploadedFiles[n] = [];
-          newControls[n] = FormControl<String>(value: '');
+          newControls[n] = FormControl<String>(
+            value: '',
+            validators: f['required'] == true ? [Validators.required] : [],
+          );
 
           if (f['hasComments'] == true) {
             newControls['${n}_comment'] = FormControl<String>(

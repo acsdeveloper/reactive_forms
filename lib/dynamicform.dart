@@ -341,31 +341,10 @@ class _DynamicFormState extends State<DynamicForm>
   List<Widget> _buildOneByOneFields() {
     if (_groupAnchors.isEmpty) return [];
 
-    // Debug information to help diagnose groupWith issues
-    if (kDebugMode) {
-      print("\n\n========== Building one-by-one fields ==========");
-      print("Current group pointer: $_currentGroupPointer");
-      print("Available group anchors: $_groupAnchors");
-      print(
-          "Current question index from controller: ${controller.currentQuestionIndex}");
-      print("Total internal fields: ${_internalFields.length}");
-      print("Current field groupings:");
-      _anchorToFieldIndices.forEach((anchor, fieldIndices) {
-        final fieldNames = fieldIndices
-            .map((i) => "${_internalFields[i]['name']} (index $i)")
-            .join(", ");
-        print("  Anchor $anchor: $fieldNames");
-      });
-    }
-
     final List<Widget> widgets = [];
 
     // Make sure _currentGroupPointer is valid
     if (_currentGroupPointer >= _groupAnchors.length || _groupAnchors.isEmpty) {
-      if (kDebugMode) {
-        print(
-            "Warning: Current group pointer $_currentGroupPointer is out of range");
-      }
       return widgets;
     }
 
@@ -374,16 +353,13 @@ class _DynamicFormState extends State<DynamicForm>
     final String currentAnchorName =
         _internalFields[currentAnchor]['name'] as String;
 
-    if (kDebugMode) {
-      print("Current anchor: $currentAnchor ($currentAnchorName)");
-    }
-
     // Build the card for the current anchor with all its grouped fields
     // This is the original card that is always displayed
     final List<int> currentIndices =
         _anchorToFieldIndices[currentAnchor] ?? [currentAnchor];
     final List<Map<String, dynamic>> currentGroupFields =
         currentIndices.map((i) => _internalFields[i]).toList();
+
     bool hasGroupWith = false;
     for (final field in currentGroupFields) {
       final groupWithValue = field['groupWith']?.toString() ?? '';
@@ -391,12 +367,6 @@ class _DynamicFormState extends State<DynamicForm>
         hasGroupWith = true;
         break;
       }
-    }
-    if (kDebugMode) {
-      print(
-          "Building original card for anchor $currentAnchor ($currentAnchorName)");
-      print(
-          "Fields in original card: ${currentGroupFields.map((f) => f['name']).toList()}");
     }
 
     // Add the original card
@@ -459,16 +429,9 @@ class _DynamicFormState extends State<DynamicForm>
 
           if (isRelated) {
             duplicateAnchors.add(i);
-            if (kDebugMode) {
-              print("Found related duplicate anchor: $i ($fieldName)");
-            }
           }
         }
       }
-    }
-
-    if (kDebugMode) {
-      print("Duplicate anchors to show: $duplicateAnchors");
     }
 
     // Build cards for all duplicate anchors
@@ -476,20 +439,8 @@ class _DynamicFormState extends State<DynamicForm>
       final indices = _anchorToFieldIndices[anchor] ?? [anchor];
       final fields = indices.map((i) => _internalFields[i]).toList();
 
-      if (kDebugMode) {
-        print(
-            "Building duplicate card for anchor $anchor (${_internalFields[anchor]['name']})");
-        print(
-            "Fields in duplicate card: ${fields.map((f) => f['name']).toList()}");
-      }
-
       // Add the duplicate card with delete button
       widgets.add(_buildCardForFields(fields, true));
-    }
-
-    if (kDebugMode) {
-      print("Returning ${widgets.length} widgets for display");
-      print("=================================================\n");
     }
 
     return widgets;
@@ -574,9 +525,9 @@ class _DynamicFormState extends State<DynamicForm>
           final List<String> options =
               rawOptions.isEmpty ? ['Yes', 'No'] : rawOptions.cast<String>();
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               _buildLabelRow(field),
               const SizedBox(height: 4),
               ...options
@@ -616,53 +567,53 @@ class _DynamicFormState extends State<DynamicForm>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildLabelRow(field),
-                ReactiveFormField<List<String>, List<String>>(
-                  formControlName: field['name'],
-                  validationMessages: {
-                    'required': (_) => 'Please select at least one option',
-                  },
-                  builder:
-                      (ReactiveFormFieldState<List<String>, List<String>> state) {
-                    // Get current control value, ensuring it's a List<String>
-                    List<String> currentValue = [];
-                    final rawValue = controller.form.control(field['name']).value;
+            ReactiveFormField<List<String>, List<String>>(
+              formControlName: field['name'],
+              validationMessages: {
+                'required': (_) => 'Please select at least one option',
+              },
+              builder:
+                  (ReactiveFormFieldState<List<String>, List<String>> state) {
+                // Get current control value, ensuring it's a List<String>
+                List<String> currentValue = [];
+                final rawValue = controller.form.control(field['name']).value;
 
-                    if (rawValue is List) {
-                      currentValue =
-                          List<String>.from(rawValue.map((e) => e.toString()));
-                    } else if (rawValue != null && rawValue != "") {
-                      // Handle case when it's a single value
-                      currentValue = [rawValue.toString()];
+                if (rawValue is List) {
+                  currentValue =
+                      List<String>.from(rawValue.map((e) => e.toString()));
+                } else if (rawValue != null && rawValue != "") {
+                  // Handle case when it's a single value
+                  currentValue = [rawValue.toString()];
+                }
+
+                return MultiSelectFormField(
+                  field: FormFieldModel.fromJson(field),
+                  onChanged: (List<String> value) {
+                    // Force direct update to the FormGroup's value
+                    controller.form.patchValue({field['name']: value});
+
+                    // Explicitly update control to ensure type consistency
+                    final control = controller.form.control(field['name']);
+                    if (control is FormControl<dynamic>) {
+                      control.updateValue(value);
                     }
-
-                    return MultiSelectFormField(
-                      field: FormFieldModel.fromJson(field),
-                      onChanged: (List<String> value) {
-                        // Force direct update to the FormGroup's value
-                        controller.form.patchValue({field['name']: value});
-
-                        // Explicitly update control to ensure type consistency
-                        final control = controller.form.control(field['name']);
-                        if (control is FormControl<dynamic>) {
-                          control.updateValue(value);
-                        }
 
                     // Debug info
                     print(
                         'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
                     print('Current form value: ${controller.form.value}');
 
-                        state.didChange(value);
-                        state.control.markAsTouched();
-                      },
-                      value: currentValue,
-                      hasError: state.control.touched && !state.control.valid,
-                      errorText: state.control.touched && !state.control.valid
-                          ? 'Please select at least one option'
-                          : null,
-                    );
+                    state.didChange(value);
+                    state.control.markAsTouched();
                   },
-                ),
+                  value: currentValue,
+                  hasError: state.control.touched && !state.control.valid,
+                  errorText: state.control.touched && !state.control.valid
+                      ? 'Please select at least one option'
+                      : null,
+                );
+              },
+            ),
             // Add support for file uploads
             if (field['hasAttachments'] == true)
               ReactiveValueListenableBuilder(
@@ -762,11 +713,11 @@ class _DynamicFormState extends State<DynamicForm>
                     }
                   }
 
-          return Column(
-            children: [
+                  return Column(
+                    children: [
                       const SizedBox(height: 16),
                       Row(
-                children: [
+                        children: [
                           Text(
                             StringConstants.uploadFiles,
                             style: widget.fontFamily,
@@ -804,6 +755,8 @@ class _DynamicFormState extends State<DynamicForm>
                           });
                         },
                         isRequired: isRequired,
+                        questionNumber: _getQuestionNumberForField(field),
+                        hasAttachments: field['hasAttachments'] == true,
                       ),
                     ],
                   );
@@ -861,20 +814,22 @@ class _DynamicFormState extends State<DynamicForm>
 
   Widget _buildLabelRow(Map<String, dynamic> field) {
     if (field['label'] == null) return const SizedBox.shrink();
-    
+
     // Find the anchor index for this field
     int? anchorIndex;
     for (var entry in _anchorToFieldIndices.entries) {
-      if (entry.value.any((idx) => idx < _internalFields.length && 
+      if (entry.value.any((idx) =>
+          idx < _internalFields.length &&
           _internalFields[idx]['name'] == field['name'])) {
         anchorIndex = entry.key;
         break;
       }
     }
-    
+
     // Get question number if available
-    int? questionNumber = anchorIndex != null ? _anchorToQuestionNumber[anchorIndex] : null;
-    
+    int? questionNumber =
+        anchorIndex != null ? _anchorToQuestionNumber[anchorIndex] : null;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Column(
@@ -890,8 +845,7 @@ class _DynamicFormState extends State<DynamicForm>
                 fontFamily: widget.fontFamily?.fontFamily,
               ),
             ),
-          if (questionNumber != null)
-            const SizedBox(height: 4.0),
+          if (questionNumber != null) const SizedBox(height: 4.0),
           Row(
             children: [
               Expanded(
@@ -1168,6 +1122,8 @@ class _DynamicFormState extends State<DynamicForm>
                       });
                     },
                     isRequired: isRequired,
+                    questionNumber: _getQuestionNumberForField(field),
+                    hasAttachments: field['hasAttachments'] == true,
                   ),
                 ],
               );
@@ -1424,6 +1380,8 @@ class _DynamicFormState extends State<DynamicForm>
                       });
                     },
                     isRequired: isRequired,
+                    questionNumber: _getQuestionNumberForField(field),
+                    hasAttachments: field['hasAttachments'] == true,
                   ),
                 ],
               );
@@ -1492,58 +1450,96 @@ class _DynamicFormState extends State<DynamicForm>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ReactiveValueListenableBuilder<String>(
-          formControlName: field['name'],
-          builder: (context, control, child) {
-            if (control.value != null &&
-                control.value.toString().toLowerCase() ==
-                    field['inputType']?.toString().toLowerCase()) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                controller.form.control(field['name']).value = '';
-              });
+        // Add a safety wrapper that handles potential type mismatches
+        Builder(
+          builder: (context) {
+            // Check if control exists and has correct type before building the ReactiveValueListenableBuilder
+            if (!controller.form.contains(field['name'])) {
+              return Text("Error: Form control not found for ${field['name']}",
+                  style: TextStyle(color: Colors.red));
             }
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildLabelRow(field),
-                ReactiveTextField(
-                  formControlName: field['name'],
-                  validationMessages: {
-                    'required': (error) => StringConstants.requiredField,
-                  },
-                  keyboardType: field['type'] == 'number'
-                      ? TextInputType.number
-                      : TextInputType.text,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) {
-                    if (widget.showOneByOne) {
-                      // Only proceed with auto-navigation if we're not on the submit page and form is valid
-                      if (!isCurrentQuestionEffectivelyLast()) {
-                        // First validate the current form section
-                        if (validateCurrentSection()) {
-                          moveToNextQuestion(context);
-                        }
-                      }
-                    }
-                  },
-                  cursorColor: Colors.black,
-                  decoration: InputDecoration(
-                    enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(
-                          color: Colors.black), // Set underline color to black
+            // If the form control exists but might not have the right type,
+            // wrap it in a try-catch to prevent runtime errors
+            try {
+              return ReactiveValueListenableBuilder<String>(
+                formControlName: field['name'],
+                builder: (context, control, child) {
+                  if (control.value != null &&
+                      control.value.toString().toLowerCase() ==
+                          field['inputType']?.toString().toLowerCase()) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      controller.form.control(field['name']).value = '';
+                    });
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildLabelRow(field),
+                      ReactiveTextField(
+                        formControlName: field['name'],
+                        validationMessages: {
+                          'required': (error) => StringConstants.requiredField,
+                        },
+                        keyboardType: field['type'] == 'number'
+                            ? TextInputType.number
+                            : TextInputType.text,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) {
+                          if (widget.showOneByOne) {
+                            // Only proceed with auto-navigation if we're not on the submit page and form is valid
+                            if (!isCurrentQuestionEffectivelyLast()) {
+                              // First validate the current form section
+                              if (validateCurrentSection()) {
+                                moveToNextQuestion(context);
+                              }
+                            }
+                          }
+                        },
+                        cursorColor: Colors.black,
+                        decoration: InputDecoration(
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(
+                                color: Colors
+                                    .black), // Set underline color to black
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(
+                                color: Colors
+                                    .black), // Set focused underline color to black
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            } catch (e) {
+              if (kDebugMode) {
+                print("Error rendering field ${field['name']}: $e");
+              }
+              // Return a fallback widget if there's a type mismatch
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildLabelRow(field),
+                  TextFormField(
+                    decoration: InputDecoration(
+                      hintText: "Error loading field - please reload the form",
+                      errorText: "Type mismatch error",
+                      enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: Colors.red),
+                      ),
                     ),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(
-                          color: Colors
-                              .black), // Set focused underline color to black
-                    ),
+                    enabled: false,
                   ),
-                ),
-              ],
-            );
+                ],
+              );
+            }
           },
         ),
+        // Rest of the code remains the same
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
           Row(
@@ -1711,6 +1707,8 @@ class _DynamicFormState extends State<DynamicForm>
                   });
                 },
                 isRequired: isRequired,
+                questionNumber: _getQuestionNumberForField(field),
+                hasAttachments: field['hasAttachments'] == true,
               );
             },
           ),
@@ -1724,49 +1722,84 @@ class _DynamicFormState extends State<DynamicForm>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildLabelRow(field),
-        ReactiveTextField<num>(
-          formControlName: field['name'],
-          keyboardType: TextInputType.number,
-          valueAccessor: NumValueAccessor(),
-          validationMessages: {
-            'required': (error) => StringConstants.requiredField,
-            'min': (error) =>
-                '${StringConstants.valueMustBeAtLeast} ${field['min']}',
-            'max': (error) =>
-                '${StringConstants.valueMustBeLessThanOrEqualTo} ${field['max']} ${StringConstants.characters}',
-          },
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) {
-            if (widget.showOneByOne) {
-              // Only proceed with auto-navigation if we're not on the submit page
-              if (!isCurrentQuestionEffectivelyLast()) {
-                // First validate the current form section
-                if (validateCurrentSection()) {
-                  moveToNextQuestion(context);
-                }
+        // Add a safety wrapper that handles potential type mismatches
+        Builder(
+          builder: (context) {
+            // Check if control exists
+            if (!controller.form.contains(field['name'])) {
+              return Text("Error: Form control not found for ${field['name']}",
+                  style: TextStyle(color: Colors.red));
+            }
+
+            // If the form control exists but might not have the right type,
+            // wrap it in a try-catch to prevent runtime errors
+            try {
+              return ReactiveTextField<num>(
+                formControlName: field['name'],
+                keyboardType: TextInputType.number,
+                valueAccessor: NumValueAccessor(),
+                validationMessages: {
+                  'required': (error) => StringConstants.requiredField,
+                  'min': (error) =>
+                      '${StringConstants.valueMustBeAtLeast} ${field['min']}',
+                  'max': (error) =>
+                      '${StringConstants.valueMustBeLessThanOrEqualTo} ${field['max']} ${StringConstants.characters}',
+                },
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) {
+                  if (widget.showOneByOne) {
+                    // Only proceed with auto-navigation if we're not on the submit page
+                    if (!isCurrentQuestionEffectivelyLast()) {
+                      // First validate the current form section
+                      if (validateCurrentSection()) {
+                        moveToNextQuestion(context);
+                      }
+                    }
+                  }
+                },
+                inputFormatters: [
+                  if (field['allowNegatives'] == false)
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+                  if (field['allowNegatives'] != false)
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.-]')),
+                  if (field['allowedDecimals'] == 0)
+                    FilteringTextInputFormatter.digitsOnly,
+                ],
+                decoration: InputDecoration(
+                  hintText: StringConstants.enterANumber +
+                      (field['min'] != null || field['max'] != null
+                          ? ' ('
+                          : '') +
+                      (field['min'] != null ? 'min: ${field['min']}' : '') +
+                      (field['min'] != null && field['max'] != null
+                          ? ', '
+                          : '') +
+                      (field['max'] != null ? 'max: ${field['max']}' : '') +
+                      (field['min'] != null || field['max'] != null ? ')' : ''),
+                  labelStyle: widget.fontFamily,
+                  hintStyle: widget.fontFamily,
+                  errorStyle: widget.fontFamily
+                      .copyWith(fontSize: 12, color: Colors.red),
+                ),
+              );
+            } catch (e) {
+              if (kDebugMode) {
+                print("Error rendering number field ${field['name']}: $e");
               }
+              // Return a fallback widget if there's a type mismatch
+              return TextFormField(
+                decoration: InputDecoration(
+                  hintText:
+                      "Error loading number field - please reload the form",
+                  errorText: "Type mismatch error",
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.red),
+                  ),
+                ),
+                enabled: false,
+              );
             }
           },
-          inputFormatters: [
-            if (field['allowNegatives'] == false)
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
-            if (field['allowNegatives'] != false)
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9.-]')),
-            if (field['allowedDecimals'] == 0)
-              FilteringTextInputFormatter.digitsOnly,
-          ],
-          decoration: InputDecoration(
-            hintText: StringConstants.enterANumber +
-                (field['min'] != null || field['max'] != null ? ' (' : '') +
-                (field['min'] != null ? 'min: ${field['min']}' : '') +
-                (field['min'] != null && field['max'] != null ? ', ' : '') +
-                (field['max'] != null ? 'max: ${field['max']}' : '') +
-                (field['min'] != null || field['max'] != null ? ')' : ''),
-            labelStyle: widget.fontFamily,
-            hintStyle: widget.fontFamily,
-            errorStyle:
-                widget.fontFamily.copyWith(fontSize: 12, color: Colors.red),
-          ),
         ),
         if (field['hasAttachments'] == true ||
             field['attachmentsRequired'] == true) ...[
@@ -1840,6 +1873,8 @@ class _DynamicFormState extends State<DynamicForm>
                     });
                   },
                   isRequired: isRequired,
+                  questionNumber: _getQuestionNumberForField(field),
+                  hasAttachments: field['hasAttachments'] == true,
                 );
               }),
         ],
@@ -1892,59 +1927,106 @@ class _DynamicFormState extends State<DynamicForm>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ReactiveValueListenableBuilder<String>(
-          formControlName: field['name'],
-          builder: (context, control, child) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FileUploadWidget(
-                  fieldName: field['name'],
-                  fieldLabel: field['label'],
-                  primaryColor: widget.primaryColor,
-                  fontFamily: widget.fontFamily,
-                  buttonTextColor: widget.buttonTextColor,
-                  onFilesUploaded: (files) {
-                    setState(() {
-                      controller.uploadedFiles[field['name']] = files;
-                      // Update the form control value when files are uploaded
-                      if (files.isNotEmpty) {
-                        control.value =
-                            files.map((f) => f['fileName']).join(',');
-                      } else {
-                        control.value = null;
-                      }
-                    });
-                  },
-                  uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
-                  onRemoveUploadedFile: (file) {
-                    setState(() {
-                      // For single file upload, set to empty list when file is removed
-                      controller.uploadedFiles[field['name']] = [];
-                      // Update the form control value when files are removed
-                      final remainingFiles =
-                          controller.uploadedFiles[field['name']] ?? [];
-                      if (remainingFiles.isEmpty) {
-                        control.value = null;
-                      } else {
-                        control.value =
-                            remainingFiles.map((f) => f['fileName']).join(',');
-                      }
-                    });
-                  },
-                  isRequired: field['required'] == true,
-                ),
-                // Show error message if validation error occurs and control is touched
-                if (control.touched && control.hasErrors)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      StringConstants.fileIsRequired,
-                      style: TextStyle(color: Colors.red[700], fontSize: 12),
+        // Add a safety wrapper that handles potential type mismatches
+        Builder(
+          builder: (context) {
+            // Check if control exists
+            if (!controller.form.contains(field['name'])) {
+              return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildLabelRow(field),
+                    Text("Error: Form control not found for ${field['name']}",
+                        style: TextStyle(color: Colors.red)),
+                  ]);
+            }
+
+            // If the form control exists but might not have the right type,
+            // wrap it in a try-catch to prevent runtime errors
+            try {
+              return ReactiveValueListenableBuilder<String>(
+                formControlName: field['name'],
+                builder: (context, control, child) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FileUploadWidget(
+                        fieldName: field['name'],
+                        fieldLabel: field['label'],
+                        primaryColor: widget.primaryColor,
+                        fontFamily: widget.fontFamily,
+                        buttonTextColor: widget.buttonTextColor,
+                        onFilesUploaded: (files) {
+                          setState(() {
+                            controller.uploadedFiles[field['name']] = files;
+                            // Update the form control value when files are uploaded
+                            if (files.isNotEmpty) {
+                              control.value =
+                                  files.map((f) => f['fileName']).join(',');
+                            } else {
+                              control.value = null;
+                            }
+                          });
+                        },
+                        uploadedFiles:
+                            controller.uploadedFiles[field['name']] ?? [],
+                        onRemoveUploadedFile: (file) {
+                          setState(() {
+                            // For single file upload, set to empty list when file is removed
+                            controller.uploadedFiles[field['name']] = [];
+                            // Update the form control value when files are removed
+                            final remainingFiles =
+                                controller.uploadedFiles[field['name']] ?? [];
+                            if (remainingFiles.isEmpty) {
+                              control.value = null;
+                            } else {
+                              control.value = remainingFiles
+                                  .map((f) => f['fileName'])
+                                  .join(',');
+                            }
+                          });
+                        },
+                        isRequired: field['required'] == true,
+                        questionNumber: _getQuestionNumberForField(field),
+                        hasAttachments: field['hasAttachments'] == true,
+                      ),
+                      // Show error message if validation error occurs and control is touched
+                      if (control.touched && control.hasErrors)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            StringConstants.fileIsRequired,
+                            style:
+                                TextStyle(color: Colors.red[700], fontSize: 12),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              );
+            } catch (e) {
+              if (kDebugMode) {
+                print("Error rendering file field ${field['name']}: $e");
+              }
+              // Return a fallback widget if there's a type mismatch
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildLabelRow(field),
+                  TextFormField(
+                    decoration: InputDecoration(
+                      hintText:
+                          "Error loading file field - please reload the form",
+                      errorText: "Type mismatch error",
+                      enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: Colors.red),
+                      ),
                     ),
+                    enabled: false,
                   ),
-              ],
-            );
+                ],
+              );
+            }
           },
         ),
         // Comments section if `hasComments` is true
@@ -2209,13 +2291,6 @@ class _DynamicFormState extends State<DynamicForm>
 
   // --- Duplicate navigation helpers removed (see consolidated implementations later in class) ---
   void _moveToNextStep(BuildContext context) {
-    // Debug the current state
-    if (kDebugMode) {
-      print('Moving to next step');
-      print('Current group pointer: $_currentGroupPointer');
-      print('Group anchors: $_groupAnchors');
-    }
-
     // Make sure we have valid anchors
     if (_groupAnchors.isEmpty) {
       if (kDebugMode) {
@@ -2271,23 +2346,11 @@ class _DynamicFormState extends State<DynamicForm>
       if (_currentGroupPointer < _groupAnchors.length) {
         final nextAnchor = _groupAnchors[_currentGroupPointer];
         controller.currentQuestionIndex = nextAnchor;
-
-        if (kDebugMode) {
-          print('Moved to group pointer: $_currentGroupPointer');
-          print('New anchor: $nextAnchor');
-          print('Question name: ${_internalFields[nextAnchor]['name']}');
-        }
       }
     });
   }
 
   void moveToNextQuestion(BuildContext context) {
-    if (kDebugMode) {
-      print("Moving to next question");
-      print("Before navigation - Current group pointer: $_currentGroupPointer");
-      print("Before navigation - Available anchors: $_groupAnchors");
-    }
-
     _moveToNextStep(context);
 
     // Force a rebuild to ensure the UI updates with the new question
@@ -2330,110 +2393,211 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   bool _validateCurrentStep() {
-    // Make sure we have a valid question index
-    if (controller.currentQuestionIndex >= widget.formJson.length) {
-      return true;
+    // Make sure we have valid group anchors
+    if (_groupAnchors.isEmpty || _currentGroupPointer >= _groupAnchors.length) {
+      return true; // Nothing to validate
     }
 
-    // Get the name of the current question
-    String questionName = _getCurrentQuestionName();
-    if (questionName.isEmpty) {
-      return true;
+    // Get the current anchor and its field indices
+    final int currentAnchor = _groupAnchors[_currentGroupPointer];
+    final List<int> indices =
+        _anchorToFieldIndices[currentAnchor] ?? [currentAnchor];
+
+    if (indices.isEmpty) {
+      return true; // Nothing to validate
     }
 
-    // Check if control exists and is valid
-    if (!controller.form.contains(questionName)) {
-      return true;
+    // First check: Are we validating a duplicated group?
+    bool isCurrentGroupDuplicated = false;
+    if (currentAnchor < _internalFields.length) {
+      isCurrentGroupDuplicated =
+          _internalFields[currentAnchor]['isDuplicate'] == true;
     }
 
-    bool isValid = controller.form.control(questionName).valid;
+    // CHANGED: We still need to validate duplicated groups
+    // Original code would return true here and skip validation for duplicated groups
+    // if (isCurrentGroupDuplicated) {
+    //   return true;
+    // }
 
-    // Get the current field definition
-    Map<String, dynamic>? currentField =
-        widget.formJson[controller.currentQuestionIndex];
+    // Check each field in this group
+    bool isValid = true;
 
-    if (currentField != null) {
-      // Get the current value
-      var selectedValue = controller.form.control(currentField['name']).value;
+    for (int idx in indices) {
+      if (idx < 0 || idx >= _internalFields.length) continue;
 
-      // Check if file is required based on the selected values
-      bool fileRequired = false;
+      final field = _internalFields[idx];
 
-      // Check requireAttachmentsOn
-      if (currentField['requireAttachmentsOn'] != null) {
-        if (currentField['requireAttachmentsOn'] == true) {
-          fileRequired = true;
-        } else if (currentField['requireAttachmentsOn'] is List) {
-          List<dynamic> requiredOptions = currentField['requireAttachmentsOn'];
+      // CHANGED: Validate all fields including duplicates
+      // Original code would skip validation for duplicate fields
+      // if (field['isDuplicate'] == true) {
+      //   continue;
+      // }
 
-          if (requiredOptions.contains(selectedValue)) {
-            fileRequired = true;
+      final fieldName = field['name'].toString();
+
+      // Skip if field doesn't exist in form (might be a bug elsewhere)
+      if (!controller.form.contains(fieldName)) {
+        continue;
+      }
+
+      final control = controller.form.control(fieldName);
+
+      // Check if field is required and validate accordingly
+      if (field['required'] == true) {
+        if (control.value == null || control.value.toString().isEmpty) {
+          control.markAsTouched();
+          isValid = false;
+          if (kDebugMode) {
+            print(
+                "Validation failed for field: $fieldName (required but empty)");
           }
         }
       }
 
-      // Check enableAttachmentsOn (now works like requireAttachmentsOn)
-      if (!fileRequired && currentField['enableAttachmentsOn'] != null) {
-        if (currentField['enableAttachmentsOn'] is List) {
-          List<dynamic> enabledOptions = currentField['enableAttachmentsOn'];
+      // Check if field has required attachments
+      if (field['hasAttachments'] == true ||
+          field['requireAttachmentsOn'] == true ||
+          field['requiredAttachmentsOn'] == true) {
+        bool attachmentsRequired = false;
 
-          if (enabledOptions.contains(selectedValue)) {
-            fileRequired = true;
+        // Direct attachment requirement
+        if (field['requireAttachmentsOn'] == true ||
+            field['requiredAttachmentsOn'] == true) {
+          attachmentsRequired = true;
+        }
+
+        // Conditional attachment requirement based on selected value
+        if (field['requireAttachmentsOn'] is List) {
+          final requiredOptions = field['requireAttachmentsOn'];
+          final value = control.value;
+
+          if (value is List) {
+            // For multiselect fields
+            if ((value as List).any((v) => requiredOptions.contains(v))) {
+              attachmentsRequired = true;
+            }
+          } else {
+            // For single-value fields
+            if (requiredOptions.contains(value)) {
+              attachmentsRequired = true;
+            }
+          }
+        }
+
+        // Check if enableAttachmentsOn makes attachments required
+        if (!attachmentsRequired && field['enableAttachmentsOn'] != null) {
+          final enabledOptions = field['enableAttachmentsOn'] is List
+              ? field['enableAttachmentsOn']
+              : [field['enableAttachmentsOn']];
+
+          final value = control.value;
+
+          if (value is List) {
+            // For multiselect fields
+            if ((value as List).any((v) => enabledOptions.contains(v))) {
+              attachmentsRequired = true;
+            }
+          } else {
+            // For single-value fields
+            if (enabledOptions.contains(value)) {
+              attachmentsRequired = true;
+            }
+          }
+        }
+
+        // Special case for text fields with hasAttachments=true
+        if (!attachmentsRequired &&
+            field['type'] == 'text' &&
+            field['hasAttachments'] == true) {
+          attachmentsRequired = true;
+        }
+
+        // Now check if required attachments are present
+        if (attachmentsRequired &&
+            (controller.uploadedFiles[fieldName] == null ||
+                controller.uploadedFiles[fieldName]!.isEmpty)) {
+          setState(() {
+            _showAttachmentError = true;
+          });
+
+          isValid = false;
+          if (kDebugMode) {
+            print(
+                "Validation failed for field: $fieldName (missing required attachments)");
           }
         }
       }
 
-      // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and enableAttachmentsOn are empty or null, make file upload mandatory
-      if (!fileRequired && currentField['hasAttachments'] == true) {
-        // Check if this is a text field
-        if (currentField['type'] == 'text') {
-          // For text fields with hasAttachments=true, always make file upload mandatory
-          fileRequired = true;
-        } else {
-          // For other field types, keep the existing logic
-          // Check if requireAttachmentsOn is empty or null
-          bool isRequireAttachmentsOnEmpty =
-              currentField['requireAttachmentsOn'] == null ||
-                  (currentField['requireAttachmentsOn'] is List &&
-                      (currentField['requireAttachmentsOn'] as List).isEmpty);
-
-          // Check if enableAttachmentsOn is empty or null
-          bool isEnableAttachmentsOnEmpty =
-              currentField['enableAttachmentsOn'] == null ||
-                  (currentField['enableAttachmentsOn'] is List &&
-                      (currentField['enableAttachmentsOn'] as List).isEmpty);
-
-          // If both are empty or null, file upload is required
-          if (isRequireAttachmentsOnEmpty && isEnableAttachmentsOnEmpty) {
-            fileRequired = true;
+      // Check for required comments
+      if (field['hasComments'] == true) {
+        final commentFieldName = '${fieldName}_comment';
+        if (controller.form.contains(commentFieldName)) {
+          final commentControl = controller.form.control(commentFieldName);
+          if (commentControl.value == null ||
+              commentControl.value.toString().isEmpty) {
+            commentControl.markAsTouched();
+            isValid = false;
+            if (kDebugMode) {
+              print(
+                  "Validation failed for field: $fieldName (missing required comment)");
+            }
           }
         }
       }
+    }
 
-      // Check requiredAttachmentsOn (legacy support)
-      if (currentField['requiredAttachmentsOn'] == true) {
-        fileRequired = true;
-      }
-
-      // If file is required, check if it's uploaded
-      if (fileRequired &&
-          (controller.uploadedFiles[currentField['name']] == null ||
-              controller.uploadedFiles[currentField['name']]!.isEmpty)) {
+    if (!isValid) {
+      // Hide attachment error if there are no attachment validation failures
+      if (_showAttachmentError &&
+          !indices.any((idx) =>
+              _internalFields[idx]['hasAttachments'] == true ||
+              _internalFields[idx]['requireAttachmentsOn'] != null)) {
         setState(() {
-          _showAttachmentError = true;
+          _showAttachmentError = false;
         });
-        return false;
       }
+    } else {
+      setState(() {
+        _showAttachmentError = false;
+      });
     }
-
-    setState(() {
-      _showAttachmentError = false;
-    });
 
     return isValid;
   }
 
   bool validateCurrentSection() {
+    // Check if we're on a duplicated card
+    if (_groupAnchors.isNotEmpty &&
+        _currentGroupPointer < _groupAnchors.length) {
+      final currentAnchor = _groupAnchors[_currentGroupPointer];
+      if (currentAnchor < _internalFields.length) {
+        final isDuplicate =
+            _internalFields[currentAnchor]['isDuplicate'] == true;
+
+        // CHANGED: No longer bypass validation for duplicated cards
+        // Original code would return true here and skip validation
+        // if (isDuplicate) {
+        //   return true;
+        // }
+
+        if (isDuplicate && kDebugMode) {
+          print("Validating duplicated card with anchor: $currentAnchor");
+        }
+
+        // CHANGED: No longer bypass validation for fields with timestamp in name
+        // Original code would return true here and skip validation
+        // final currentFieldName =
+        //     _internalFields[currentAnchor]['name'].toString();
+        // final isTimestampedDuplicate =
+        //     RegExp(r'_\d+$').hasMatch(currentFieldName);
+        // if (isTimestampedDuplicate) {
+        //   return true;
+        // }
+      }
+    }
+
+    // Proceed with normal validation
     return _validateCurrentStep();
   }
 
@@ -2454,32 +2618,450 @@ class _DynamicFormState extends State<DynamicForm>
         : const SizedBox.shrink();
   }
 
+  // Ensure form controls are properly initialized when a field is duplicated
+  void _ensureFormControlsHaveCorrectValidation() {
+    if (kDebugMode) {
+      print("\n=== Checking form control validation ===");
+    }
+
+    try {
+      // Check each field to ensure its form control has the right validation
+      for (final field in _internalFields) {
+        final fieldName = field['name'].toString();
+
+        // Skip if form doesn't have this control
+        if (!controller.form.contains(fieldName)) continue;
+
+        final control = controller.form.control(fieldName);
+        final bool isRequired = field['required'] == true;
+
+        // Check if validator is missing or unexpectedly present
+        final bool hasRequiredValidator = control.validators
+            .any((validator) => validator.toString().contains('required'));
+
+        // CHANGED: Actually fix validation mismatches rather than just logging them
+        if (isRequired != hasRequiredValidator) {
+          if (kDebugMode) {
+            print(
+                "Validation mismatch for $fieldName: Field required=$isRequired, but control hasRequiredValidator=$hasRequiredValidator");
+          }
+
+          // Fix the validation mismatch by updating the control
+          if (isRequired && !hasRequiredValidator) {
+            // Field is required but validator is missing - add it
+            if (control is FormControl) {
+              List<Validator> updatedValidators = List.from(control.validators);
+              updatedValidators.add(Validators.required);
+
+              // Create a new control with the updated validators and preserve the value AND type
+              // Determine the correct type based on the field type
+              dynamic controlValue = control.value;
+              String fieldType = field['type']?.toString() ?? 'text';
+
+              if (fieldType == 'multiselect') {
+                // Handle multiselect which needs List<String> type
+                final newControl = FormControl<List<String>>(
+                  value: controlValue is List
+                      ? List<String>.from(controlValue.map((e) => e.toString()))
+                      : <String>[],
+                  validators: updatedValidators,
+                );
+                controller.form.removeControl(fieldName);
+                controller.form.addAll({fieldName: newControl});
+              } else if (fieldType == 'number') {
+                // Handle number fields
+                final newControl = FormControl<num>(
+                  value: controlValue is num ? controlValue : null,
+                  validators: updatedValidators,
+                );
+                controller.form.removeControl(fieldName);
+                controller.form.addAll({fieldName: newControl});
+              } else {
+                // Default to String for most field types
+                final newControl = FormControl<String>(
+                  value: controlValue?.toString() ?? '',
+                  validators: updatedValidators,
+                );
+                controller.form.removeControl(fieldName);
+                controller.form.addAll({fieldName: newControl});
+              }
+
+              if (kDebugMode) {
+                print("Added required validator to $fieldName");
+              }
+            }
+          } else if (!isRequired && hasRequiredValidator) {
+            // Field is not required but has required validator - remove it
+            if (control is FormControl) {
+              List<Validator> updatedValidators = control.validators
+                  .where((v) => !v.toString().contains('required'))
+                  .toList();
+
+              // Create a new control without the required validator AND preserve type
+              // Determine the correct type based on the field type
+              dynamic controlValue = control.value;
+              String fieldType = field['type']?.toString() ?? 'text';
+
+              if (fieldType == 'multiselect') {
+                // Handle multiselect which needs List<String> type
+                final newControl = FormControl<List<String>>(
+                  value: controlValue is List
+                      ? List<String>.from(controlValue.map((e) => e.toString()))
+                      : <String>[],
+                  validators: updatedValidators,
+                );
+                controller.form.removeControl(fieldName);
+                controller.form.addAll({fieldName: newControl});
+              } else if (fieldType == 'number') {
+                // Handle number fields
+                final newControl = FormControl<num>(
+                  value: controlValue is num ? controlValue : null,
+                  validators: updatedValidators,
+                );
+                controller.form.removeControl(fieldName);
+                controller.form.addAll({fieldName: newControl});
+              } else {
+                // Default to String for most field types
+                final newControl = FormControl<String>(
+                  value: controlValue?.toString() ?? '',
+                  validators: updatedValidators,
+                );
+                controller.form.removeControl(fieldName);
+                controller.form.addAll({fieldName: newControl});
+              }
+
+              if (kDebugMode) {
+                print("Removed required validator from $fieldName");
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print("Error checking form controls validation: $e");
+      }
+    }
+
+    if (kDebugMode) {
+      print("=== Form control validation check complete ===");
+    }
+  }
+
+  void _recomputeGroupStructure() {
+    _groupAnchors.clear();
+    _anchorToFieldIndices.clear();
+    _anchorToQuestionNumber.clear(); // Clear the question numbering
+
+    // Track groups by their base key + duplicate IDs
+    Map<String, int> firstAnchorOfGroup = {};
+    Map<String, String> fieldToGroupKey = {};
+
+    // Keep track of timestamp-based duplicates
+    Map<String, List<int>> timestampGroups = {};
+
+    // Keep track of base names for duplicate grouping
+    Map<String, String> duplicateToBaseName = {};
+
+    // Special pattern for "question_X" format - need to differentiate from duplicates
+    final questionPattern = RegExp(r'^question_(\d+)$');
+
+    // Extract timestamp patterns from field names for grouping duplicates together
+    final timestampPattern = RegExp(r'(.+)_(\d+)$');
+
+    // First pass: Identify all timestamp-based duplicates
+    for (int i = 0; i < _internalFields.length; i++) {
+      final field = _internalFields[i];
+      final fieldName = field['name'].toString();
+
+      // Check if this field has a timestamp
+      final match = timestampPattern.firstMatch(fieldName);
+      if (match != null && field['isDuplicate'] == true) {
+        final baseName = match.group(1) ?? fieldName;
+        final timestamp = match.group(2) ?? '';
+
+        if (timestamp.isNotEmpty) {
+          final groupKey = 'duplicate:${timestamp}';
+          timestampGroups.putIfAbsent(groupKey, () => []).add(i);
+        }
+      }
+    }
+
+    // Step 1: Map each field to its group key
+    for (int i = 0; i < _internalFields.length; i++) {
+      final field = _internalFields[i];
+      final fieldName = field['name'].toString();
+
+      // Extract base name and timestamp if this is a duplicated field
+      String baseName = fieldName;
+      String? duplicateId;
+
+      // First try to extract from explicit groupWith setting
+      String? groupWith = field['groupWith']?.toString();
+
+      // Check if this is a standard question pattern (question_X)
+      final questionMatch = questionPattern.firstMatch(fieldName);
+      final duplicateMatch = timestampPattern.firstMatch(fieldName);
+
+      if (duplicateMatch != null) {
+        // This is a duplicated field with timestamp
+        baseName = duplicateMatch.group(1) ?? fieldName;
+        duplicateId = duplicateMatch.group(2);
+
+        // Record the mapping from duplicate name to base name
+        if (field['isDuplicate'] == true) {
+          duplicateToBaseName[fieldName] = baseName;
+        }
+      }
+
+      // Generate a group key
+      String groupKey;
+
+      if (groupWith != null) {
+        // If field explicitly declares what it groups with, use that
+        // For question_X format, the groupWith directly becomes the key
+        // This ensures questions with pattern question_1, question_2, etc. group correctly
+        groupKey = groupWith;
+      } else if (duplicateId != null && field['isDuplicate'] == true) {
+        // For duplicated fields with timestamp but no groupWith, use a common group key
+        groupKey = 'duplicate:${duplicateId}';
+      } else {
+        // For original non-duplicated fields, use field name as its own group
+        groupKey = fieldName;
+      }
+
+      fieldToGroupKey[fieldName] = groupKey;
+    }
+
+    // Step 2: Organize fields into groups based on their keys
+    Map<String, List<int>> groupKeyToFieldIndices = {};
+
+    for (int i = 0; i < _internalFields.length; i++) {
+      final field = _internalFields[i];
+      final fieldName = field['name'].toString();
+      final groupKey = fieldToGroupKey[fieldName];
+
+      if (groupKey != null) {
+        groupKeyToFieldIndices.putIfAbsent(groupKey, () => []).add(i);
+      }
+    }
+
+    // Step 3: Create anchors and field indices
+    // First, collect all original (non-duplicate) anchors
+    List<int> originalAnchors = [];
+
+    // Special handling for timestamp-based duplicates
+    for (final groupKey in timestampGroups.keys) {
+      final fieldIndices = timestampGroups[groupKey]!;
+      if (fieldIndices.isEmpty) continue;
+
+      // Find the first field as the anchor for this duplicate set
+      final firstIndex = fieldIndices.reduce((a, b) => a < b ? a : b);
+
+      // Store all fields in this timestamp group under this anchor
+      _anchorToFieldIndices[firstIndex] = List.from(fieldIndices);
+    }
+
+    // Regular groups based on groupWith and non-duplicates
+    for (final groupKey in groupKeyToFieldIndices.keys) {
+      final fieldIndices = groupKeyToFieldIndices[groupKey]!;
+      if (fieldIndices.isEmpty) continue;
+
+      // Skip if this is a duplicate:timestamp group (already handled)
+      if (groupKey.startsWith('duplicate:')) {
+        continue;
+      }
+
+      // Use first field as anchor
+      final anchor = fieldIndices.first;
+
+      // Store field indices mapping for all anchors (including duplicates)
+      // Only if this anchor doesn't already have fields (from timestamp processing)
+      if (!_anchorToFieldIndices.containsKey(anchor)) {
+        _anchorToFieldIndices[anchor] = fieldIndices;
+      }
+
+      // Only add to navigation anchors if it's not a duplicate
+      bool isDuplicate = _internalFields[anchor]['isDuplicate'] == true;
+
+      // Special check for question_X format - if we're looking at a question that's
+      // referenced via groupWith but is not itself a groupWith-referencing question,
+      // then it should be an anchor
+      final anchorName = _internalFields[anchor]['name'].toString();
+      bool isQuestionReferredByOthers = false;
+
+      // Check if this field is referred to by another field's groupWith
+      for (var field in _internalFields) {
+        if (field['groupWith']?.toString() == anchorName) {
+          isQuestionReferredByOthers = true;
+          break;
+        }
+      }
+
+      // A field should be an anchor if:
+      // 1. It's not a duplicate AND
+      // 2. Either:
+      //    a. It's not referred to by another field's groupWith, OR
+      //    b. It has its own groupWith reference
+      bool shouldBeAnchor = !isDuplicate &&
+          (!isQuestionReferredByOthers ||
+              _internalFields[anchor]['groupWith'] != null);
+
+      if (shouldBeAnchor) {
+        originalAnchors.add(anchor);
+      }
+    }
+
+    // Sort original anchors by their position in _internalFields to maintain proper order
+    originalAnchors.sort();
+
+    // Now assign the navigation anchors
+    _groupAnchors = originalAnchors;
+
+    // Assign question numbers to each anchor
+    int questionNumber = 1;
+    for (int i = 0; i < _groupAnchors.length; i++) {
+      _anchorToQuestionNumber[_groupAnchors[i]] = questionNumber++;
+    }
+
+    // Reset the current group pointer to 0 to ensure we start from the first question
+    _currentGroupPointer = 0;
+
+    // Update controller index after a brief delay to ensure state is consistent
+    if (_groupAnchors.isNotEmpty) {
+      // Don't immediately update the controller index during duplication operations
+      // This avoids potential PageController issues
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+        }
+      });
+    }
+  }
+
+  List<Widget> _buildFields() {
+    if (_groupAnchors.isEmpty) return [];
+
+    final List<Widget> widgets = [];
+
+    // Make sure _currentGroupPointer is valid
+    if (_currentGroupPointer >= _groupAnchors.length || _groupAnchors.isEmpty) {
+      return widgets;
+    }
+
+    // Get the current anchor indicated by the pointer
+    final currentAnchor = _groupAnchors[_currentGroupPointer];
+    final String currentAnchorName =
+        _internalFields[currentAnchor]['name'] as String;
+
+    // Build the card for the current anchor with all its grouped fields
+    // This is the original card that is always displayed
+    final List<int> currentIndices =
+        _anchorToFieldIndices[currentAnchor] ?? [currentAnchor];
+    final List<Map<String, dynamic>> currentGroupFields =
+        currentIndices.map((i) => _internalFields[i]).toList();
+
+    bool hasGroupWith = false;
+    for (final field in currentGroupFields) {
+      final groupWithValue = field['groupWith']?.toString() ?? '';
+      if (groupWithValue.isNotEmpty) {
+        hasGroupWith = true;
+        break;
+      }
+    }
+
+    // Add the original card
+    if (hasGroupWith) {
+      // Add the original question as a card
+      widgets.add(_buildCardForFields(currentGroupFields, false));
+    } else {
+      // Add the original question without a card
+      widgets.addAll(currentGroupFields.map(_buildField).toList());
+    }
+
+    // Now collect all duplicates of the current anchor to show below it
+    final List<int> duplicateAnchors = [];
+    final timeStampPattern = RegExp(r'_(\d+)$');
+
+    // Extract the base name of the current question (removing any question_X suffix)
+    String baseName = currentAnchorName;
+    final questionPattern = RegExp(r'^question_(\d+)$');
+    if (questionPattern.hasMatch(baseName)) {
+      baseName = baseName.split('_').first;
+    }
+
+    // Find all duplicate anchors that should be shown with this question
+    for (int i = 0; i < _internalFields.length; i++) {
+      // Skip the current anchor and non-anchor indices
+      if (i == currentAnchor || !_anchorToFieldIndices.containsKey(i)) continue;
+
+      final field = _internalFields[i];
+      final fieldName = field['name'].toString();
+
+      // Check if this is a duplicate field
+      if (field['isDuplicate'] == true) {
+        final match = timeStampPattern.firstMatch(fieldName);
+        if (match != null) {
+          // Extract the base name of this duplicate
+          String duplicateBaseName = fieldName;
+          final lastUnderscore = duplicateBaseName.lastIndexOf('_');
+          if (lastUnderscore > 0) {
+            duplicateBaseName = duplicateBaseName.substring(0, lastUnderscore);
+          }
+
+          // Check if this duplicate is related to the current question
+          // It can be either duplicated from this question or a question that groups with it
+          bool isRelated = false;
+
+          // Directly related if it's a duplicate of the current question
+          if (duplicateBaseName == currentAnchorName ||
+              fieldName.startsWith("${currentAnchorName}_")) {
+            isRelated = true;
+          }
+
+          // Check if any field in the current group is related to this duplicate
+          for (final originalField in currentGroupFields) {
+            final originalName = originalField['name'].toString();
+            if (fieldName.startsWith("${originalName}_")) {
+              isRelated = true;
+              break;
+            }
+          }
+
+          if (isRelated) {
+            duplicateAnchors.add(i);
+          }
+        }
+      }
+    }
+
+    // Build cards for all duplicate anchors
+    for (final anchor in duplicateAnchors) {
+      final indices = _anchorToFieldIndices[anchor] ?? [anchor];
+      final fields = indices.map((i) => _internalFields[i]).toList();
+
+      // Add the duplicate card with delete button
+      widgets.add(_buildCardForFields(fields, true));
+    }
+
+    return widgets;
+  }
+
   /// Adds a new set of related fields to the form by duplicating current group
   /// and placing it below the original card
   void _addNewSet() {
     try {
-      if (kDebugMode) {
-        print('\n\n=== Starting duplication process ===');
-      }
-
       // Temporarily disable PageController updates
       _pageControllerReady = false;
 
       // Make sure we have valid anchors before proceeding
       if (_groupAnchors.isEmpty) {
-        if (kDebugMode) {
-          print('No anchors available for duplication');
-        }
         return;
       }
 
       // Make sure _currentGroupPointer is valid
       if (_currentGroupPointer < 0 ||
           _currentGroupPointer >= _groupAnchors.length) {
-        if (kDebugMode) {
-          print(
-              'Warning: Invalid _currentGroupPointer value (${_currentGroupPointer}), resetting to 0');
-        }
         _currentGroupPointer = 0;
       }
 
@@ -2491,24 +3073,7 @@ class _DynamicFormState extends State<DynamicForm>
       final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
 
       if (indices.isEmpty) {
-        if (kDebugMode) {
-          print('No fields to duplicate in current anchor');
-        }
         return;
-      }
-
-      // Debug info to help diagnose the issue
-      if (kDebugMode) {
-        print('Current anchor index: $anchor');
-        print('Fields in this group indices: $indices');
-      }
-
-      // Identify the original field names that should be part of this card
-      final originalFieldNames = <String>[];
-      for (int idx in indices) {
-        if (idx >= 0 && idx < _internalFields.length) {
-          originalFieldNames.add(_internalFields[idx]['name'].toString());
-        }
       }
 
       // Generate a unique timestamp for this duplication
@@ -2521,10 +3086,6 @@ class _DynamicFormState extends State<DynamicForm>
         if (idx >= 0 && idx < _internalFields.length) {
           cardFields.add(_internalFields[idx]);
         }
-      }
-
-      if (kDebugMode) {
-        print('Found ${cardFields.length} fields to duplicate in this card');
       }
 
       // Map of original field names to their duplicated versions
@@ -2566,10 +3127,10 @@ class _DynamicFormState extends State<DynamicForm>
           ? 0
           : indices.map((i) => i).reduce((a, b) => a > b ? a : b) + 1;
 
+      // Only keep this specific debug output as requested by the user
       if (kDebugMode) {
-        print('Creating ${newFields.length} duplicated fields');
-        print('Inserting at position $insertPosition');
-        print('New field names: ${newFields.map((f) => f['name']).toList()}');
+        print(
+            'Required flags: ${newFields.map((f) => "${f['name']}: ${f['required']}").toList()}');
       }
 
       // Check if widget is still mounted before updating state
@@ -2584,6 +3145,9 @@ class _DynamicFormState extends State<DynamicForm>
         // Add form controls for all the duplicated fields
         controller.addFormControls(newFields);
 
+        // Check that form controls have correct validation
+        _ensureFormControlsHaveCorrectValidation();
+
         // Regenerate the group mapping to properly group duplicated fields
         // This is critical to ensure duplicated fields appear in the right cards
         _recomputeGroupStructure();
@@ -2597,18 +3161,9 @@ class _DynamicFormState extends State<DynamicForm>
         if (mounted) {
           setState(() {
             _pageControllerReady = true;
-
-            // Force UI refresh to reflect changes
-            if (kDebugMode) {
-              print('Duplication complete, forcing UI refresh');
-            }
           });
         }
       });
-
-      if (kDebugMode) {
-        print('=== Duplication process completed ===\n\n');
-      }
     } catch (e) {
       print('Error in _addNewSet: $e');
       // Always re-enable page controller in case of error
@@ -2726,253 +3281,27 @@ class _DynamicFormState extends State<DynamicForm>
     return cards;
   }
 
-  // --- Group logic -------------------------------------------------
-  void _recomputeGroupStructure() {
-    _groupAnchors.clear();
-    _anchorToFieldIndices.clear();
-
-    // Track groups by their base key + duplicate IDs
-    Map<String, int> firstAnchorOfGroup = {};
-    Map<String, String> fieldToGroupKey = {};
-
-    // Keep track of timestamp-based duplicates
-    Map<String, List<int>> timestampGroups = {};
-
-    // Keep track of base names for duplicate grouping
-    Map<String, String> duplicateToBaseName = {};
-
-    // Special pattern for "question_X" format - need to differentiate from duplicates
-    final questionPattern = RegExp(r'^question_(\d+)$');
-
-    // Extract timestamp patterns from field names for grouping duplicates together
-    final timestampPattern = RegExp(r'(.+)_(\d+)$');
-
-    if (kDebugMode) {
-      print("\n----- Starting Group Structure Computation -----");
-      print("Total fields: ${_internalFields.length}");
-      _internalFields.forEach((field) {
-        print("Field: ${field['name']}, groupWith: ${field['groupWith']}");
-      });
-    }
-
-    // First pass: Identify all timestamp-based duplicates
-    for (int i = 0; i < _internalFields.length; i++) {
-      final field = _internalFields[i];
-      final fieldName = field['name'].toString();
-
-      // Check if this field has a timestamp
-      final match = timestampPattern.firstMatch(fieldName);
-      if (match != null && field['isDuplicate'] == true) {
-        final baseName = match.group(1) ?? fieldName;
-        final timestamp = match.group(2) ?? '';
-
-        if (timestamp.isNotEmpty) {
-          final groupKey = 'duplicate:${timestamp}';
-          timestampGroups.putIfAbsent(groupKey, () => []).add(i);
-
-          if (kDebugMode) {
-            print(
-                "Found timestamp-based duplicate: $fieldName with timestamp $timestamp");
-          }
-        }
-      }
-    }
-
-    if (kDebugMode) {
-      print("Timestamp-based groups:");
-      timestampGroups.forEach((key, indices) {
-        print(
-            "  $key: ${indices.map((i) => _internalFields[i]['name']).join(', ')}");
-      });
-    }
-
-    // Step 1: Map each field to its group key
-    for (int i = 0; i < _internalFields.length; i++) {
-      final field = _internalFields[i];
-      final fieldName = field['name'].toString();
-
-      // Extract base name and timestamp if this is a duplicated field
-      String baseName = fieldName;
-      String? duplicateId;
-
-      // First try to extract from explicit groupWith setting
-      String? groupWith = field['groupWith']?.toString();
-
-      // Check if this is a standard question pattern (question_X)
-      final questionMatch = questionPattern.firstMatch(fieldName);
-      final duplicateMatch = timestampPattern.firstMatch(fieldName);
-
-      if (duplicateMatch != null) {
-        // This is a duplicated field with timestamp
-        baseName = duplicateMatch.group(1) ?? fieldName;
-        duplicateId = duplicateMatch.group(2);
-
-        // Record the mapping from duplicate name to base name
-        if (field['isDuplicate'] == true) {
-          duplicateToBaseName[fieldName] = baseName;
-        }
-      }
-
-      // Generate a group key
-      String groupKey;
-
-      if (groupWith != null) {
-        // If field explicitly declares what it groups with, use that
-        // For question_X format, the groupWith directly becomes the key
-        // This ensures questions with pattern question_1, question_2, etc. group correctly
-        groupKey = groupWith;
-      } else if (duplicateId != null && field['isDuplicate'] == true) {
-        // For duplicated fields with timestamp but no groupWith, use a common group key
-        groupKey = 'duplicate:${duplicateId}';
-      } else {
-        // For original non-duplicated fields, use field name as its own group
-        groupKey = fieldName;
-      }
-
-      fieldToGroupKey[fieldName] = groupKey;
-    }
-
-    // Debug the mapping
-    if (kDebugMode) {
-      print('Field to group key mapping:');
-      fieldToGroupKey.forEach((field, group) {
-        print('  $field → $group');
-      });
-    }
-
-    // Step 2: Organize fields into groups based on their keys
-    Map<String, List<int>> groupKeyToFieldIndices = {};
-
-    for (int i = 0; i < _internalFields.length; i++) {
-      final field = _internalFields[i];
-      final fieldName = field['name'].toString();
-      final groupKey = fieldToGroupKey[fieldName];
-
-      if (groupKey != null) {
-        groupKeyToFieldIndices.putIfAbsent(groupKey, () => []).add(i);
-      }
-    }
-
-    // Debug the grouping
-    if (kDebugMode) {
-      print('Group organization:');
-      groupKeyToFieldIndices.forEach((groupKey, indices) {
-        final fieldNames =
-            indices.map((i) => _internalFields[i]['name']).join(', ');
-        print('  Group $groupKey: $fieldNames');
-      });
-    }
-
-    // Step 3: Create anchors and field indices
-    // First, collect all original (non-duplicate) anchors
-    List<int> originalAnchors = [];
-
-    // Special handling for timestamp-based duplicates
-    for (final groupKey in timestampGroups.keys) {
-      final fieldIndices = timestampGroups[groupKey]!;
-      if (fieldIndices.isEmpty) continue;
-
-      // Find the first field as the anchor for this duplicate set
-      final firstIndex = fieldIndices.reduce((a, b) => a < b ? a : b);
-
-      // Store all fields in this timestamp group under this anchor
-      _anchorToFieldIndices[firstIndex] = List.from(fieldIndices);
-
-      if (kDebugMode) {
-        print(
-            "Created duplicate anchor $firstIndex (${_internalFields[firstIndex]['name']}) with fields: ${fieldIndices.map((i) => _internalFields[i]['name']).join(', ')}");
-      }
-    }
-
-    // Regular groups based on groupWith and non-duplicates
-    for (final groupKey in groupKeyToFieldIndices.keys) {
-      final fieldIndices = groupKeyToFieldIndices[groupKey]!;
-      if (fieldIndices.isEmpty) continue;
-
-      // Skip if this is a duplicate:timestamp group (already handled)
-      if (groupKey.startsWith('duplicate:')) {
-        continue;
-      }
-
-      // Use first field as anchor
-      final anchor = fieldIndices.first;
-
-      // Store field indices mapping for all anchors (including duplicates)
-      // Only if this anchor doesn't already have fields (from timestamp processing)
-      if (!_anchorToFieldIndices.containsKey(anchor)) {
-        _anchorToFieldIndices[anchor] = fieldIndices;
-      }
-
-      // Only add to navigation anchors if it's not a duplicate
-      bool isDuplicate = _internalFields[anchor]['isDuplicate'] == true;
-
-      // Special check for question_X format - if we're looking at a question that's
-      // referenced via groupWith but is not itself a groupWith-referencing question,
-      // then it should be an anchor
-      final anchorName = _internalFields[anchor]['name'].toString();
-      bool isQuestionReferredByOthers = false;
-
-      // Check if this field is referred to by another field's groupWith
-      for (var field in _internalFields) {
-        if (field['groupWith']?.toString() == anchorName) {
-          isQuestionReferredByOthers = true;
-          break;
-        }
-      }
-
-      // A field should be an anchor if:
-      // 1. It's not a duplicate AND
-      // 2. Either:
-      //    a. It's not referred to by another field's groupWith, OR
-      //    b. It has its own groupWith reference
-      bool shouldBeAnchor = !isDuplicate &&
-          (!isQuestionReferredByOthers ||
-              _internalFields[anchor]['groupWith'] != null);
-
-      if (shouldBeAnchor) {
-        originalAnchors.add(anchor);
-      }
-    }
-
-    // Sort original anchors by their position in _internalFields to maintain proper order
-    originalAnchors.sort();
-
-    // Now assign the navigation anchors
-    _groupAnchors = originalAnchors;
-
-    if (kDebugMode) {
-      print('Final group anchors for navigation: $_groupAnchors');
-      print('Anchor to fields mapping:');
-      _anchorToFieldIndices.forEach((anchor, indices) {
-        print(
-            '  Anchor $anchor (${_internalFields[anchor]['name']}): ${indices.map((i) => _internalFields[i]['name']).toList()}');
-      });
-    }
-
-    // Reset the current group pointer to 0 to ensure we start from the first question
-    _currentGroupPointer = 0;
-
-    // Update controller index after a brief delay to ensure state is consistent
-    if (_groupAnchors.isNotEmpty) {
-      // Don't immediately update the controller index during duplication operations
-      // This avoids potential PageController issues
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
-        }
-      });
-    }
-
-    if (kDebugMode) {
-      print("----- Group Structure Computation Complete -----\n");
-    }
-  }
-
   String _getCurrentQuestionName() {
     if (controller.currentQuestionIndex < widget.formJson.length) {
       return widget.formJson[controller.currentQuestionIndex]['name'];
     }
     return '';
+  }
+
+  int? _getQuestionNumberForField(Map<String, dynamic> field) {
+    // Find the anchor index for this field
+    int? anchorIndex;
+    for (var entry in _anchorToFieldIndices.entries) {
+      if (entry.value.any((idx) =>
+          idx < _internalFields.length &&
+          _internalFields[idx]['name'] == field['name'])) {
+        anchorIndex = entry.key;
+        break;
+      }
+    }
+
+    // Get question number if available
+    return anchorIndex != null ? _anchorToQuestionNumber[anchorIndex] : null;
   }
 }
 
@@ -3153,6 +3482,8 @@ class FileUploadWidget extends StatefulWidget {
   final List<Map<String, dynamic>> uploadedFiles;
   final Function(Map<String, dynamic>) onRemoveUploadedFile;
   final bool isRequired;
+  final int? questionNumber;
+  final bool hasAttachments; // Add new property
 
   const FileUploadWidget({
     Key? key,
@@ -3165,6 +3496,8 @@ class FileUploadWidget extends StatefulWidget {
     required this.uploadedFiles,
     required this.onRemoveUploadedFile,
     this.isRequired = false,
+    this.questionNumber,
+    this.hasAttachments = false, // Default to false
   }) : super(key: key);
 
   @override
@@ -3527,6 +3860,61 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
         // Parent components already show the label
         const SizedBox(height: 8),
         // Only show the upload button if no file is uploaded yet
+        if (widget.questionNumber != null &&(!widget.hasAttachments))
+          Text(
+            'Question ${widget.questionNumber}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18.0,
+              color: widget.primaryColor ?? Theme.of(context).primaryColor,
+              fontFamily: widget.fontFamily?.fontFamily,
+            ),
+          ),
+        if (widget.questionNumber != null) const SizedBox(height: 4.0),
+        if (!widget.hasAttachments)
+        Row(
+          children: [
+            Text(
+              widget.fieldLabel,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16.0,
+                fontFamily: widget.fontFamily?.fontFamily,
+              ),
+            ),
+            if (widget.isRequired) ...[
+              const SizedBox(width: 4),
+              Text(
+                '*',
+                style: widget.fontFamily.copyWith(
+                  color: const Color.fromARGB(255, 222, 75, 64),
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ],
+        ),
+        // const SizedBox(height: 8),
+        // Only show this row if hasAttachments is false
+        if (!widget.hasAttachments)
+          Row(
+            children: [
+              Text(
+                StringConstants.uploadFiles,
+                style: widget.fontFamily,
+              ),
+              if (widget.isRequired) ...[
+                const SizedBox(width: 4),
+                Text(
+                  '*',
+                  style: widget.fontFamily.copyWith(
+                    color: const Color.fromARGB(255, 222, 75, 64),
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ],
+          ),
         if (!hasUploadedFile)
           SizedBox(
             width: double.infinity,
