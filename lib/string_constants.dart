@@ -71,7 +71,6 @@ class StringConstants {
   static const String file = 'File';
   static const String errorViewingFilePleaseTryAgain = 'Error viewing file. Please try again.';
   static const String pleaseCheckAllRequiredFields = 'Please check all required fields';
-  static const String pleaseFillInAllRequiredFields = 'Please fill in all required fields';
   static const String processingFilePleaseWait = 'Processing file...';
   static const String fileSizeMustBeLessThan5MB = 'File size must be less than 5MB';
   static const String errorSelectingFilePleaseTryAgain = 'Error selecting file. Please try again.';

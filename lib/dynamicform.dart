@@ -2180,7 +2180,7 @@ class _DynamicFormState extends State<DynamicForm>
               control.value == 'null')) {
         control.markAsTouched();
         AppSnackBar(
-            StringConstants.pleaseFillInAllRequiredFields as BuildContext);
+            StringConstants.fillRequiredFields as BuildContext);
         return;
       }
 
