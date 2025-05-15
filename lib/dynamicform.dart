@@ -2420,6 +2420,7 @@ class _DynamicFormState extends State<DynamicForm>
     final List<String> duplicateFields = [];
     final timeStampPattern = RegExp(r'_\d+$');
 
+    // First, collect all duplicate fields that need validation
     for (final field in _internalFields) {
       final fieldName = field['name'].toString();
       final match = timeStampPattern.firstMatch(fieldName);
@@ -2438,59 +2439,72 @@ class _DynamicFormState extends State<DynamicForm>
               baseFieldName.startsWith("${currentField}_") ||
               currentField.startsWith("${baseFieldName}_")) {
             duplicateFields.add(fieldName);
-
-            if (controller.form.contains(fieldName)) {
-              final control = controller.form.control(fieldName);
-              final bool isRequired = field['required'] == true;
-
-              if (kDebugMode) {
-                print(
-                    "Validating duplicate field: $fieldName, required: $isRequired");
-              }
-
-              // Mark the control as touched to show validation errors
-              control.markAsTouched();
-
-              if (!control.valid) {
-                if (kDebugMode) {
-                  print(
-                      "Duplicate field $fieldName validation failed: ${control.errors}");
-                }
-                isValid = false;
-              }
-
-              // Check for required file uploads for duplicates
-              if (field['type'] == 'file' && isRequired) {
-                final hasFiles =
-                    controller.uploadedFiles[fieldName]?.isNotEmpty ?? false;
-                if (!hasFiles) {
-                  if (kDebugMode) {
-                    print(
-                        "Required file upload missing for duplicate field $fieldName");
-                  }
-                  isValid = false;
-                }
-              }
-
-              // Check for required comments for duplicates
-              if (field['hasComments'] == true) {
-                final commentControlName = '${fieldName}_comment';
-                if (controller.form.contains(commentControlName)) {
-                  final commentControl =
-                      controller.form.control(commentControlName);
-                  commentControl.markAsTouched();
-
-                  if (!commentControl.valid) {
-                    if (kDebugMode) {
-                      print(
-                          "Comment for duplicate field $fieldName validation failed");
-                    }
-                    isValid = false;
-                  }
-                }
-              }
-            }
             break;
+          }
+        }
+      }
+    }
+
+    // Now validate all collected duplicate fields
+    for (final fieldName in duplicateFields) {
+      // Find the field definition
+      final fieldIndex =
+          _internalFields.indexWhere((f) => f['name'] == fieldName);
+      if (fieldIndex == -1) continue;
+
+      final field = _internalFields[fieldIndex];
+      final bool isRequired = field['required'] == true;
+
+      if (kDebugMode) {
+        print("Validating duplicate field: $fieldName, required: $isRequired");
+      }
+
+      // Skip validation for fields that aren't in the form
+      if (!controller.form.contains(fieldName)) {
+        if (kDebugMode) {
+          print("Duplicate field $fieldName not in form, skipping validation");
+        }
+        continue;
+      }
+
+      final control = controller.form.control(fieldName);
+
+      // Always mark the control as touched to show validation errors
+      control.markAsTouched();
+
+      if (!control.valid) {
+        if (kDebugMode) {
+          print(
+              "Duplicate field $fieldName validation failed: ${control.errors}");
+        }
+        isValid = false;
+      }
+
+      // Check for required file uploads for duplicates
+      if (field['type'] == 'file' && isRequired) {
+        final hasFiles =
+            controller.uploadedFiles[fieldName]?.isNotEmpty ?? false;
+        if (!hasFiles) {
+          if (kDebugMode) {
+            print(
+                "Required file upload missing for duplicate field $fieldName");
+          }
+          isValid = false;
+        }
+      }
+
+      // Check for required comments for duplicates
+      if (field['hasComments'] == true) {
+        final commentControlName = '${fieldName}_comment';
+        if (controller.form.contains(commentControlName)) {
+          final commentControl = controller.form.control(commentControlName);
+          commentControl.markAsTouched();
+
+          if (!commentControl.valid) {
+            if (kDebugMode) {
+              print("Comment for duplicate field $fieldName validation failed");
+            }
+            isValid = false;
           }
         }
       }
@@ -2557,36 +2571,138 @@ class _DynamicFormState extends State<DynamicForm>
     }
   }
 
+  /// Resolves the ultimate parent field for a field with potentially chained groupWith references
+  /// This function traverses the chain of groupWith relationships to find the ultimate parent question.
+  /// It also detects and handles circular dependencies within the chain.
+  String _resolveUltimateParent(String fieldName) {
+    String currentParent = fieldName;
+    Set<String> visitedFields = {}; // To detect circular dependencies
+
+    while (true) {
+      // Find the field with this name
+      int fieldIndex =
+          _internalFields.indexWhere((f) => f['name'] == currentParent);
+      if (fieldIndex == -1) break; // Field not found
+
+      // Check if this field has a groupWith property
+      String? nextParent = _internalFields[fieldIndex]['groupWith']?.toString();
+      if (nextParent == null || nextParent.isEmpty)
+        break; // No parent reference
+
+      // Check for circular dependency
+      if (visitedFields.contains(nextParent)) {
+        print(
+            "Warning: Circular dependency detected in groupWith chain for $fieldName!");
+        break; // Break the chain
+      }
+
+      visitedFields.add(currentParent);
+      currentParent = nextParent;
+    }
+
+    return currentParent;
+  }
+
+  /// Checks if adding a groupWith relation would create a circular reference
+  /// Returns true if a circular reference would be created, false otherwise
+  bool _wouldCreateCircularReference(String sourceField, String targetField) {
+    // If they're the same, it's immediately circular
+    if (sourceField == targetField) return true;
+
+    // Check if the target field already references the source through a chain
+    Set<String> visited = {};
+    String current = targetField;
+
+    while (true) {
+      if (visited.contains(current)) break; // We've seen this field before
+      visited.add(current);
+
+      // Find the field with this name
+      int fieldIndex = _internalFields.indexWhere((f) => f['name'] == current);
+      if (fieldIndex == -1) break; // Field not found
+
+      // Check if this field has a groupWith property
+      String? groupWith = _internalFields[fieldIndex]['groupWith']?.toString();
+      if (groupWith == null || groupWith.isEmpty) break; // End of chain
+
+      if (groupWith == sourceField) return true; // Found circular reference
+      current = groupWith;
+    }
+
+    return false; // No circular reference found
+  }
+
   void _recomputeGroupStructure() {
+    // Clear existing data structures
     _groupAnchors.clear();
     _anchorToFieldIndices.clear();
-    _anchorToQuestionNumber.clear(); // Clear the question numbering
+    _anchorToQuestionNumber.clear();
 
-    // Track groups by their base key + duplicate IDs
-    Map<String, int> firstAnchorOfGroup = {};
-    Map<String, String> fieldToGroupKey = {};
+    // Handle empty _internalFields gracefully
+    if (_internalFields.isEmpty) {
+      if (kDebugMode) {
+        print("Warning: _internalFields is empty in _recomputeGroupStructure");
+      }
+      return;
+    }
 
-    // Keep track of timestamp-based duplicates
+    // Map to track which fields each anchor (parent) is referenced by
+    Map<String, List<int>> anchorToChildIndices = {};
+
+    // Map field names to their indices for easier lookup
+    Map<String, int> fieldNameToIndex = {};
+    for (int i = 0; i < _internalFields.length; i++) {
+      fieldNameToIndex[_internalFields[i]['name'].toString()] = i;
+    }
+
+    // Track all fields that are children (have groupWith property)
+    Set<int> childFieldIndices = {};
+
+    // First pass: identify direct parent-child relationships
+    // and track which fields are children
+    for (int i = 0; i < _internalFields.length; i++) {
+      final field = _internalFields[i];
+      final String fieldName = field['name'].toString();
+      final String? groupWith = field['groupWith']?.toString();
+
+      if (groupWith != null && groupWith.isNotEmpty) {
+        // This field refers to a parent
+        childFieldIndices.add(i); // Mark as a child field
+
+        // Resolve ultimate parent to handle chained relationships
+        String ultimateParent = _resolveUltimateParent(groupWith);
+
+        // Check if parent field exists
+        if (fieldNameToIndex.containsKey(ultimateParent)) {
+          int parentIndex = fieldNameToIndex[ultimateParent]!;
+
+          // Add this field as a child of the ultimate parent
+          anchorToChildIndices.putIfAbsent(ultimateParent, () => []).add(i);
+
+          // Debug
+          if (kDebugMode && ultimateParent != groupWith) {
+            print(
+                "Chain detected: $fieldName -> $groupWith -> $ultimateParent");
+          }
+        } else if (kDebugMode) {
+          print(
+              "Warning: Field '$fieldName' references non-existent parent '$ultimateParent'");
+        }
+      }
+    }
+
+    // Special handling for timestamp-based duplicates
     Map<String, List<int>> timestampGroups = {};
-
-    // Keep track of base names for duplicate grouping
-    Map<String, String> duplicateToBaseName = {};
-
-    // Special pattern for "question_X" format - need to differentiate from duplicates
-    final questionPattern = RegExp(r'^question_(\d+)$');
-
-    // Extract timestamp patterns from field names for grouping duplicates together
     final timestampPattern = RegExp(r'(.+)_(\d+)$');
 
-    // First pass: Identify all timestamp-based duplicates
+    // Identify all timestamp-based duplicates
     for (int i = 0; i < _internalFields.length; i++) {
       final field = _internalFields[i];
       final fieldName = field['name'].toString();
 
-      // Check if this field has a timestamp
+      // Check if this field has a timestamp and is marked as duplicate
       final match = timestampPattern.firstMatch(fieldName);
       if (match != null && field['isDuplicate'] == true) {
-        final baseName = match.group(1) ?? fieldName;
         final timestamp = match.group(2) ?? '';
 
         if (timestamp.isNotEmpty) {
@@ -2596,70 +2712,32 @@ class _DynamicFormState extends State<DynamicForm>
       }
     }
 
-    // Step 1: Map each field to its group key
+    // Second pass: identify all anchor fields and build their groups
     for (int i = 0; i < _internalFields.length; i++) {
       final field = _internalFields[i];
       final fieldName = field['name'].toString();
+      final bool isDuplicate = field['isDuplicate'] == true;
 
-      // Extract base name and timestamp if this is a duplicated field
-      String baseName = fieldName;
-      String? duplicateId;
+      // Skip duplicates and child fields from being anchors
+      if (isDuplicate || childFieldIndices.contains(i)) continue;
 
-      // First try to extract from explicit groupWith setting
-      String? groupWith = field['groupWith']?.toString();
+      // This field is an anchor - either it's referenced by other fields or it's standalone
+      _groupAnchors.add(i);
 
-      // Check if this is a standard question pattern (question_X)
-      final questionMatch = questionPattern.firstMatch(fieldName);
-      final duplicateMatch = timestampPattern.firstMatch(fieldName);
+      // Start with the anchor field itself
+      List<int> groupIndices = [i];
 
-      if (duplicateMatch != null) {
-        // This is a duplicated field with timestamp
-        baseName = duplicateMatch.group(1) ?? fieldName;
-        duplicateId = duplicateMatch.group(2);
-
-        // Record the mapping from duplicate name to base name
-        if (field['isDuplicate'] == true) {
-          duplicateToBaseName[fieldName] = baseName;
-        }
+      // Add any children that reference this field
+      List<int>? childIndices = anchorToChildIndices[fieldName];
+      if (childIndices != null && childIndices.isNotEmpty) {
+        groupIndices.addAll(childIndices);
       }
 
-      // Generate a group key
-      String groupKey;
-
-      if (groupWith != null) {
-        // If field explicitly declares what it groups with, use that
-        // For question_X format, the groupWith directly becomes the key
-        // This ensures questions with pattern question_1, question_2, etc. group correctly
-        groupKey = groupWith;
-      } else if (duplicateId != null && field['isDuplicate'] == true) {
-        // For duplicated fields with timestamp but no groupWith, use a common group key
-        groupKey = 'duplicate:${duplicateId}';
-      } else {
-        // For original non-duplicated fields, use field name as its own group
-        groupKey = fieldName;
-      }
-
-      fieldToGroupKey[fieldName] = groupKey;
+      // Store the group
+      _anchorToFieldIndices[i] = groupIndices;
     }
 
-    // Step 2: Organize fields into groups based on their keys
-    Map<String, List<int>> groupKeyToFieldIndices = {};
-
-    for (int i = 0; i < _internalFields.length; i++) {
-      final field = _internalFields[i];
-      final fieldName = field['name'].toString();
-      final groupKey = fieldToGroupKey[fieldName];
-
-      if (groupKey != null) {
-        groupKeyToFieldIndices.putIfAbsent(groupKey, () => []).add(i);
-      }
-    }
-
-    // Step 3: Create anchors and field indices
-    // First, collect all original (non-duplicate) anchors
-    List<int> originalAnchors = [];
-
-    // Special handling for timestamp-based duplicates
+    // Handle timestamp-based duplicates
     for (final groupKey in timestampGroups.keys) {
       final fieldIndices = timestampGroups[groupKey]!;
       if (fieldIndices.isEmpty) continue;
@@ -2667,65 +2745,17 @@ class _DynamicFormState extends State<DynamicForm>
       // Find the first field as the anchor for this duplicate set
       final firstIndex = fieldIndices.reduce((a, b) => a < b ? a : b);
 
-      // Store all fields in this timestamp group under this anchor
+      // Only add as an anchor if it's not already a child of another field
+      if (!childFieldIndices.contains(firstIndex)) {
+        _groupAnchors.add(firstIndex);
+      }
+
+      // Always store all fields in this timestamp group under this anchor
       _anchorToFieldIndices[firstIndex] = List.from(fieldIndices);
     }
 
-    // Regular groups based on groupWith and non-duplicates
-    for (final groupKey in groupKeyToFieldIndices.keys) {
-      final fieldIndices = groupKeyToFieldIndices[groupKey]!;
-      if (fieldIndices.isEmpty) continue;
-
-      // Skip if this is a duplicate:timestamp group (already handled)
-      if (groupKey.startsWith('duplicate:')) {
-        continue;
-      }
-
-      // Use first field as anchor
-      final anchor = fieldIndices.first;
-
-      // Store field indices mapping for all anchors (including duplicates)
-      // Only if this anchor doesn't already have fields (from timestamp processing)
-      if (!_anchorToFieldIndices.containsKey(anchor)) {
-        _anchorToFieldIndices[anchor] = fieldIndices;
-      }
-
-      // Only add to navigation anchors if it's not a duplicate
-      bool isDuplicate = _internalFields[anchor]['isDuplicate'] == true;
-
-      // Special check for question_X format - if we're looking at a question that's
-      // referenced via groupWith but is not itself a groupWith-referencing question,
-      // then it should be an anchor
-      final anchorName = _internalFields[anchor]['name'].toString();
-      bool isQuestionReferredByOthers = false;
-
-      // Check if this field is referred to by another field's groupWith
-      for (var field in _internalFields) {
-        if (field['groupWith']?.toString() == anchorName) {
-          isQuestionReferredByOthers = true;
-          break;
-        }
-      }
-
-      // A field should be an anchor if:
-      // 1. It's not a duplicate AND
-      // 2. Either:
-      //    a. It's not referred to by another field's groupWith, OR
-      //    b. It has its own groupWith reference
-      bool shouldBeAnchor = !isDuplicate &&
-          (!isQuestionReferredByOthers ||
-              _internalFields[anchor]['groupWith'] != null);
-
-      if (shouldBeAnchor) {
-        originalAnchors.add(anchor);
-      }
-    }
-
-    // Sort original anchors by their position in _internalFields to maintain proper order
-    originalAnchors.sort();
-
-    // Now assign the navigation anchors
-    _groupAnchors = originalAnchors;
+    // Sort anchors by their position in _internalFields to maintain proper order
+    _groupAnchors.sort();
 
     // Assign question numbers to each anchor
     int questionNumber = 1;
@@ -2733,13 +2763,28 @@ class _DynamicFormState extends State<DynamicForm>
       _anchorToQuestionNumber[_groupAnchors[i]] = questionNumber++;
     }
 
-    // Reset the current group pointer to 0 to ensure we start from the first question
+    // Reset the group pointer
     _currentGroupPointer = 0;
+
+    // Debug the group structure if in debug mode
+    if (kDebugMode) {
+      print("\n=== Group Structure After Recomputation ===");
+      print("Total anchors: ${_groupAnchors.length}");
+
+      for (int i = 0; i < _groupAnchors.length; i++) {
+        int anchorIndex = _groupAnchors[i];
+        String anchorName = _internalFields[anchorIndex]['name'].toString();
+        List<int> groupIndices =
+            _anchorToFieldIndices[anchorIndex] ?? [anchorIndex];
+
+        print("Anchor #${i + 1}: '${anchorName}' (index: $anchorIndex)");
+        print(
+            "  Group fields: ${groupIndices.map((idx) => _internalFields[idx]['name']).toList()}");
+      }
+    }
 
     // Update controller index after a brief delay to ensure state is consistent
     if (_groupAnchors.isNotEmpty) {
-      // Don't immediately update the controller index during duplication operations
-      // This avoids potential PageController issues
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
