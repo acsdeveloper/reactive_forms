@@ -2605,67 +2605,6 @@ class _DynamicFormState extends State<DynamicForm>
     }
   }
 
-  /// Resolves the ultimate parent field for a field with potentially chained groupWith references
-  /// This function traverses the chain of groupWith relationships to find the ultimate parent question.
-  /// It also detects and handles circular dependencies within the chain.
-  String _resolveUltimateParent(String fieldName) {
-    String currentParent = fieldName;
-    Set<String> visitedFields = {}; // To detect circular dependencies
-
-    while (true) {
-      // Find the field with this name
-      int fieldIndex =
-          _internalFields.indexWhere((f) => f['name'] == currentParent);
-      if (fieldIndex == -1) break; // Field not found
-
-      // Check if this field has a groupWith property
-      String? nextParent = _internalFields[fieldIndex]['groupWith']?.toString();
-      if (nextParent == null || nextParent.isEmpty)
-        break; // No parent reference
-
-      // Check for circular dependency
-      if (visitedFields.contains(nextParent)) {
-        print(
-            "Warning: Circular dependency detected in groupWith chain for $fieldName!");
-        break; // Break the chain
-      }
-
-      visitedFields.add(currentParent);
-      currentParent = nextParent;
-    }
-
-    return currentParent;
-  }
-
-  /// Checks if adding a groupWith relation would create a circular reference
-  /// Returns true if a circular reference would be created, false otherwise
-  bool _wouldCreateCircularReference(String sourceField, String targetField) {
-    // If they're the same, it's immediately circular
-    if (sourceField == targetField) return true;
-
-    // Check if the target field already references the source through a chain
-    Set<String> visited = {};
-    String current = targetField;
-
-    while (true) {
-      if (visited.contains(current)) break; // We've seen this field before
-      visited.add(current);
-
-      // Find the field with this name
-      int fieldIndex = _internalFields.indexWhere((f) => f['name'] == current);
-      if (fieldIndex == -1) break; // Field not found
-
-      // Check if this field has a groupWith property
-      String? groupWith = _internalFields[fieldIndex]['groupWith']?.toString();
-      if (groupWith == null || groupWith.isEmpty) break; // End of chain
-
-      if (groupWith == sourceField) return true; // Found circular reference
-      current = groupWith;
-    }
-
-    return false; // No circular reference found
-  }
-
   void _recomputeGroupStructure() {
     // Clear existing data structures
     _groupAnchors.clear();
@@ -2791,10 +2730,59 @@ class _DynamicFormState extends State<DynamicForm>
     // Sort anchors by their position in _internalFields to maintain proper order
     _groupAnchors.sort();
 
-    // Assign question numbers to each anchor
+    // Map to track base field names to their question numbers
+    Map<String, int> baseNameToQuestionNumber = {};
+
+    // First pass: assign question numbers to non-duplicate anchors
     int questionNumber = 1;
     for (int i = 0; i < _groupAnchors.length; i++) {
-      _anchorToQuestionNumber[_groupAnchors[i]] = questionNumber++;
+      int anchorIndex = _groupAnchors[i];
+      String fieldName = _internalFields[anchorIndex]['name'].toString();
+      bool isDuplicate = _internalFields[anchorIndex]['isDuplicate'] == true;
+
+      if (!isDuplicate) {
+        _anchorToQuestionNumber[anchorIndex] = questionNumber;
+        baseNameToQuestionNumber[fieldName] = questionNumber;
+        questionNumber++;
+      }
+    }
+
+    // Second pass: assign question numbers to duplicate anchors
+    for (int i = 0; i < _groupAnchors.length; i++) {
+      int anchorIndex = _groupAnchors[i];
+      String fieldName = _internalFields[anchorIndex]['name'].toString();
+      bool isDuplicate = _internalFields[anchorIndex]['isDuplicate'] == true;
+
+      if (isDuplicate) {
+        // For duplicates, try to find the original field they were duplicated from
+        final match = timestampPattern.firstMatch(fieldName);
+        if (match != null) {
+          // Extract the base name (removing timestamp suffix)
+          String baseName = match.group(1) ?? '';
+
+          if (baseNameToQuestionNumber.containsKey(baseName)) {
+            // Use the same question number as the original field
+            _anchorToQuestionNumber[anchorIndex] =
+                baseNameToQuestionNumber[baseName]!;
+
+            if (kDebugMode) {
+              print(
+                  "Assigned question number ${baseNameToQuestionNumber[baseName]} to duplicate field '$fieldName' from original '$baseName'");
+            }
+          } else {
+            // If original field not found, assign a new number
+            _anchorToQuestionNumber[anchorIndex] = questionNumber++;
+
+            if (kDebugMode) {
+              print(
+                  "Assigned new question number to duplicate field '$fieldName' - original field not found");
+            }
+          }
+        } else {
+          // Not a standard timestamp-based duplicate, assign a new number
+          _anchorToQuestionNumber[anchorIndex] = questionNumber++;
+        }
+      }
     }
 
     // Reset the group pointer
@@ -2810,8 +2798,10 @@ class _DynamicFormState extends State<DynamicForm>
         String anchorName = _internalFields[anchorIndex]['name'].toString();
         List<int> groupIndices =
             _anchorToFieldIndices[anchorIndex] ?? [anchorIndex];
+        int qNumber = _anchorToQuestionNumber[anchorIndex] ?? -1;
 
-        print("Anchor #${i + 1}: '${anchorName}' (index: $anchorIndex)");
+        print(
+            "Anchor #${i + 1}: '${anchorName}' (index: $anchorIndex, question: $qNumber)");
         print(
             "  Group fields: ${groupIndices.map((idx) => _internalFields[idx]['name']).toList()}");
       }
@@ -3415,6 +3405,38 @@ class _DynamicFormState extends State<DynamicForm>
         ),
       ),
     );
+  }
+
+  /// Resolves the ultimate parent field for a field with potentially chained groupWith references
+  /// This function traverses the chain of groupWith relationships to find the ultimate parent question.
+  /// It also detects and handles circular dependencies within the chain.
+  String _resolveUltimateParent(String fieldName) {
+    String currentParent = fieldName;
+    Set<String> visitedFields = {}; // To detect circular dependencies
+
+    while (true) {
+      // Find the field with this name
+      int fieldIndex =
+          _internalFields.indexWhere((f) => f['name'] == currentParent);
+      if (fieldIndex == -1) break; // Field not found
+
+      // Check if this field has a groupWith property
+      String? nextParent = _internalFields[fieldIndex]['groupWith']?.toString();
+      if (nextParent == null || nextParent.isEmpty)
+        break; // No parent reference
+
+      // Check for circular dependency
+      if (visitedFields.contains(nextParent)) {
+        print(
+            "Warning: Circular dependency detected in groupWith chain for $fieldName!");
+        break; // Break the chain
+      }
+
+      visitedFields.add(currentParent);
+      currentParent = nextParent;
+    }
+
+    return currentParent;
   }
 }
 
