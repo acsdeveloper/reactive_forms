@@ -13,11 +13,17 @@ class StringConstants {
   static const String filePreview = 'File Preview';
   static const String cannotPreviewFile = 'This file type cannot be previewed';
   static const String errorLoadingImage = 'Error loading image';
-  static const String errorViewingFile = 'Error viewing file. Please try again.';
-  static const String errorSelectingFile = 'Error selecting file. Please try again.';
-  static const String errorSelectingImage = 'Error selecting image. Please try again.';
-  static const String errorTakingPhoto = 'Error taking photo. Please try again.';
+  static const String errorViewingFile =
+      'Error viewing file. Please try again.';
+  static const String errorSelectingFile =
+      'Error selecting file. Please try again.';
+  static const String errorSelectingImage =
+      'Error selecting image. Please try again.';
+  static const String errorTakingPhoto =
+      'Error taking photo. Please try again.';
   static const String fileSizeError = 'File size must be less than 5MB';
+  static const String pleaseFillOutAllRequiredAttachments =
+      'Please upload all required attachments.';
 
   // Form Fields
   static const String search = 'Search...';
@@ -38,7 +44,7 @@ class StringConstants {
   static const String errorProcessingFile = 'Error processing file';
   static const String fileNotSupported = 'File type not supported';
   static const String invalidFileFormat = 'Invalid file format';
-  
+
   // Progress Messages
   static const String loading = 'Loading...';
   static const String uploading = 'Uploading...';
@@ -48,49 +54,65 @@ class StringConstants {
   static const String back = 'Previous';
   static const String next = 'Next';
   static const String cancel = 'Cancel';
-  
+
   // Validation Messages
   static const String invalidInput = 'Invalid input';
-  static const String requiredField = 'This field is required. Please enter a value.';
+  static const String requiredField =
+      'This field is required. Please enter a value.';
   static const String invalidFormat = 'Invalid format';
   static const String fillAllFields = 'Please fill in all fields';
   static const String uploadRequiredFiles = 'Please upload required files';
-  static const String pleaseAnswerAllRequiredSubQuestions = 'Please answer all required sub-questions';
-  static const String pleaseSelectAnOption = 'Please select an option before proceeding.';
+  static const String pleaseAnswerAllRequiredSubQuestions =
+      'Please answer all required sub-questions';
+  static const String pleaseSelectAnOption =
+      'Please select an option before proceeding.';
   static const String pleaseAnswerThisQuestion = 'Please answer this question';
   static const String questionNumber = 'Question';
   static const String valueMustBeAtLeast = 'Value must be at least';
   static const String valueMustBeLessThan = 'Value must be less than';
-  static const String valueMustBeLessThanOrEqualTo = 'Entered value is too long. Please limit to';
+  static const String valueMustBeLessThanOrEqualTo =
+      'Entered value is too long. Please limit to';
   static const String valueMustBeGreaterThan = 'Value must be greater than';
-  static const String valueMustBeGreaterThanOrEqualTo = 'Value must be greater than or equal to';
+  static const String valueMustBeGreaterThanOrEqualTo =
+      'Value must be greater than or equal to';
   static const String valueMustBeBetween = 'Value must be between';
   static const String valueMustBeEqual = 'Value must be equal to';
   static const String enterCommentsHere = 'Enter your comments here';
-  static const String thisFileTypeCannotBePreviewed = 'This file type cannot be previewed';
+  static const String thisFileTypeCannotBePreviewed =
+      'This file type cannot be previewed';
   static const String file = 'File';
-  static const String errorViewingFilePleaseTryAgain = 'Error viewing file. Please try again.';
-  static const String pleaseCheckAllRequiredFields = 'Please check all required fields';
+  static const String errorViewingFilePleaseTryAgain =
+      'Error viewing file. Please try again.';
+  static const String pleaseCheckAllRequiredFields =
+      'Please check all required fields';
   static const String processingFilePleaseWait = 'Processing file...';
-  static const String fileSizeMustBeLessThan5MB = 'File size must be less than 5MB';
-  static const String errorSelectingFilePleaseTryAgain = 'Error selecting file. Please try again.';
-  static const String errorSelectingImagePleaseTryAgain = 'Error selecting image. Please try again.';
-  static const String errorTakingPhotoPleaseTryAgain = 'Error taking photo. Please try again.';
+  static const String fileSizeMustBeLessThan5MB =
+      'File size must be less than 5MB';
+  static const String errorSelectingFilePleaseTryAgain =
+      'Error selecting file. Please try again.';
+  static const String errorSelectingImagePleaseTryAgain =
+      'Error selecting image. Please try again.';
+  static const String errorTakingPhotoPleaseTryAgain =
+      'Error taking photo. Please try again.';
   static const String enterANumber = 'Enter a number';
-  static const String form ="form_"; 
+  static const String form = "form_";
   static const String pdf = 'pdf';
   static const String doc = 'doc';
-  static const String pleaseUploadRequiredFiles = 'Please upload required files';
+  static const String pleaseUploadRequiredFiles =
+      'Please upload required files';
   static const String isRequired = 'is required';
   static const String fileIsRequired = 'File upload is required.';
   static const String pleaseProvideComment = 'Please provide a comment';
-  static const String pleaseSelectAtLeastOneOption = 'Please select at least one option';
+  static const String pleaseSelectAtLeastOneOption =
+      'Please select at least one option';
   static const String selectOptions = 'Select Options';
-  static const String pleaseEnterNumberBetween = 'Please enter a number between';
+  static const String pleaseEnterNumberBetween =
+      'Please enter a number between';
   static const String and = 'and';
-  static const String fileSizeMustBeLessThan2MB = 'File size exceeds the maximum limit of 5 MB.';
+  static const String fileSizeMustBeLessThan2MB =
+      'File size exceeds the maximum limit of 5 MB.';
   static const String characters = 'characters.';
   static const String delete = 'Delete';
   static const String yes = 'Yes';
   static const String no = 'No';
-} 
+}

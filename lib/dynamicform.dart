@@ -2129,7 +2129,34 @@ class _DynamicFormState extends State<DynamicForm>
               )
             else
               ElevatedButton(
+                key: const ValueKey('next_button'), // Add key for testing
                 onPressed: () {
+                  // Log before validation
+                  if (kDebugMode) {
+                    print("\n=== NEXT Button Pressed ===");
+
+                    // Check current state
+                    if (_groupAnchors.isNotEmpty &&
+                        _currentGroupPointer < _groupAnchors.length) {
+                      final currentAnchor = _groupAnchors[_currentGroupPointer];
+                      print("Current anchor: $currentAnchor");
+
+                      if (currentAnchor < _internalFields.length) {
+                        final field = _internalFields[currentAnchor];
+                        print(
+                            "Field name: ${field['name']}, isDuplicate: ${field['isDuplicate']}");
+
+                        // Check if field has values
+                        if (controller.form.contains(field['name'])) {
+                          final control =
+                              controller.form.control(field['name']);
+                          print(
+                              "Field value: ${control.value}, isRequired: ${field['required'] == true}");
+                        }
+                      }
+                    }
+                  }
+
                   _moveToNextStep(context);
                 },
                 style: ElevatedButton.styleFrom(
@@ -2179,8 +2206,7 @@ class _DynamicFormState extends State<DynamicForm>
               control.value.toString().isEmpty ||
               control.value == 'null')) {
         control.markAsTouched();
-        AppSnackBar(
-            StringConstants.fillRequiredFields as BuildContext);
+        AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
         return;
       }
 
@@ -2289,6 +2315,194 @@ class _DynamicFormState extends State<DynamicForm>
     return total;
   }
 
+  // Validate the current section including any duplicate cards
+  bool validateCurrentSection() {
+    if (kDebugMode) {
+      print("\n=== validateCurrentSection called ===");
+    }
+
+    // Make sure we have valid anchors
+    if (_groupAnchors.isEmpty) {
+      if (kDebugMode) {
+        print('Warning: No group anchors available for validation');
+      }
+      return true; // Nothing to validate
+    }
+
+    // Get the current anchor and its fields
+    final currentAnchor = _groupAnchors[_currentGroupPointer];
+    if (kDebugMode) {
+      print("Current anchor index: $currentAnchor");
+      if (currentAnchor < _internalFields.length) {
+        final anchorField = _internalFields[currentAnchor];
+        print(
+            "Anchor field: ${anchorField['name']}, isDuplicate: ${anchorField['isDuplicate']}");
+      }
+    }
+
+    // Validate the original card fields
+    final originalIndices =
+        _anchorToFieldIndices[currentAnchor] ?? [currentAnchor];
+    if (kDebugMode) {
+      print("Original card fields: ${originalIndices.length}");
+    }
+
+    // Track if validation passes for all fields
+    bool isValid = true;
+
+    // First validate the original fields
+    for (int idx in originalIndices) {
+      if (idx >= 0 && idx < _internalFields.length) {
+        final field = _internalFields[idx];
+        final fieldName = field['name'].toString();
+        final bool isRequired = field['required'] == true;
+
+        if (kDebugMode) {
+          print("Validating original field: $fieldName, required: $isRequired");
+        }
+
+        // Skip validation for fields that aren't in the form
+        if (!controller.form.contains(fieldName)) {
+          if (kDebugMode) {
+            print("Field $fieldName not in form, skipping validation");
+          }
+          continue;
+        }
+
+        final control = controller.form.control(fieldName);
+
+        // Mark the control as touched to show validation errors
+        control.markAsTouched();
+
+        if (!control.valid) {
+          if (kDebugMode) {
+            print("Field $fieldName validation failed: ${control.errors}");
+          }
+          isValid = false;
+        }
+
+        // Check for required file uploads
+        if (field['type'] == 'file' && isRequired) {
+          final hasFiles =
+              controller.uploadedFiles[fieldName]?.isNotEmpty ?? false;
+          if (!hasFiles) {
+            if (kDebugMode) {
+              print("Required file upload missing for $fieldName");
+            }
+            isValid = false;
+          }
+        }
+
+        // Check for required comments
+        if (field['hasComments'] == true) {
+          final commentControlName = '${fieldName}_comment';
+          if (controller.form.contains(commentControlName)) {
+            final commentControl = controller.form.control(commentControlName);
+            commentControl.markAsTouched();
+
+            if (!commentControl.valid) {
+              if (kDebugMode) {
+                print("Comment for $fieldName validation failed");
+              }
+              isValid = false;
+            }
+          }
+        }
+      }
+    }
+
+    // Now find and validate all duplicate fields related to the current anchor
+    final currentFields = originalIndices
+        .map((idx) => _internalFields[idx]['name'].toString())
+        .toList();
+
+    // Find all duplicates by checking for fields with timestamp suffix
+    final List<String> duplicateFields = [];
+    final timeStampPattern = RegExp(r'_\d+$');
+
+    for (final field in _internalFields) {
+      final fieldName = field['name'].toString();
+      final match = timeStampPattern.firstMatch(fieldName);
+
+      if (match != null && field['isDuplicate'] == true) {
+        // Extract base name (without timestamp)
+        String baseFieldName = fieldName;
+        final lastUnderscore = baseFieldName.lastIndexOf('_');
+        if (lastUnderscore > 0) {
+          baseFieldName = baseFieldName.substring(0, lastUnderscore);
+        }
+
+        // Check if this is a duplicate of any field in the current card
+        for (final currentField in currentFields) {
+          if (baseFieldName == currentField ||
+              baseFieldName.startsWith("${currentField}_") ||
+              currentField.startsWith("${baseFieldName}_")) {
+            duplicateFields.add(fieldName);
+
+            if (controller.form.contains(fieldName)) {
+              final control = controller.form.control(fieldName);
+              final bool isRequired = field['required'] == true;
+
+              if (kDebugMode) {
+                print(
+                    "Validating duplicate field: $fieldName, required: $isRequired");
+              }
+
+              // Mark the control as touched to show validation errors
+              control.markAsTouched();
+
+              if (!control.valid) {
+                if (kDebugMode) {
+                  print(
+                      "Duplicate field $fieldName validation failed: ${control.errors}");
+                }
+                isValid = false;
+              }
+
+              // Check for required file uploads for duplicates
+              if (field['type'] == 'file' && isRequired) {
+                final hasFiles =
+                    controller.uploadedFiles[fieldName]?.isNotEmpty ?? false;
+                if (!hasFiles) {
+                  if (kDebugMode) {
+                    print(
+                        "Required file upload missing for duplicate field $fieldName");
+                  }
+                  isValid = false;
+                }
+              }
+
+              // Check for required comments for duplicates
+              if (field['hasComments'] == true) {
+                final commentControlName = '${fieldName}_comment';
+                if (controller.form.contains(commentControlName)) {
+                  final commentControl =
+                      controller.form.control(commentControlName);
+                  commentControl.markAsTouched();
+
+                  if (!commentControl.valid) {
+                    if (kDebugMode) {
+                      print(
+                          "Comment for duplicate field $fieldName validation failed");
+                    }
+                    isValid = false;
+                  }
+                }
+              }
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    if (kDebugMode) {
+      print("validateCurrentSection result: $isValid");
+    }
+
+    return isValid;
+  }
+
   // --- Duplicate navigation helpers removed (see consolidated implementations later in class) ---
   void _moveToNextStep(BuildContext context) {
     // Make sure we have valid anchors
@@ -2299,452 +2513,47 @@ class _DynamicFormState extends State<DynamicForm>
       return;
     }
 
-    // Validate the current question before moving to the next
+    if (kDebugMode) {
+      print("\n=== _moveToNextStep - Validating Fields ===");
+      print("Current pointer: $_currentGroupPointer");
+    }
+
+    // First validate the current section including all duplicate cards
     if (!validateCurrentSection()) {
       if (kDebugMode) {
-        print('Validation failed, not moving to next question');
+        print("Validation failed - not moving to next step");
       }
-
-      // Show validation errors
+      // Show a snackbar to inform the user that validation failed
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(StringConstants.fillRequiredFields),
-          backgroundColor: Colors.red,
+          content: Text(
+            StringConstants.fillRequiredFields,
+            style: widget.fontFamily,
+          ),
+          duration: const Duration(seconds: 2),
         ),
       );
-      controller.form.markAllAsTouched();
       return;
     }
 
-    // Check if we're at the end of the form
-    if (_currentGroupPointer >= _groupAnchors.length - 1) {
-      // We've reached the end of the form, submit if valid
-      if (controller.form.valid) {
-        if (kDebugMode) {
-          print('Reached end of form, submitting');
-        }
-        controller.submitForm(context);
-      } else {
-        // Show validation errors
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(StringConstants.fillRequiredFields),
-            backgroundColor: Colors.red,
-          ),
-        );
-        controller.form.markAllAsTouched();
-      }
-      return;
+    if (kDebugMode) {
+      print("Validation passed - moving to next step");
     }
 
-    // If we get here, we should increment the group pointer
-    setState(() {
-      // Increment group pointer to move to next question
-      _currentGroupPointer++;
-
-      // Update the controller's current question index to the new anchor
-      if (_currentGroupPointer < _groupAnchors.length) {
-        final nextAnchor = _groupAnchors[_currentGroupPointer];
-        controller.currentQuestionIndex = nextAnchor;
-      }
-    });
-  }
-
-  void moveToNextQuestion(BuildContext context) {
-    _moveToNextStep(context);
-
-    // Force a rebuild to ensure the UI updates with the new question
-    if (mounted) {
+    // Proceed with moving to the next step
+    if (_currentGroupPointer < _groupAnchors.length - 1) {
       setState(() {
-        // This empty setState ensures the build method is called again
-      });
-    }
-  }
-
-  void moveToPreviousValidQuestion() {
-    if (_currentGroupPointer > 0) {
-      setState(() {
-        _currentGroupPointer--;
-        controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
-
-        // Make sure we're not navigating to a duplicate card
-        // This is a safety check in case duplicates somehow get included in _groupAnchors
-        while (_currentGroupPointer > 0 &&
-            _internalFields[_groupAnchors[_currentGroupPointer]]
-                    ['isDuplicate'] ==
-                true) {
-          _currentGroupPointer--;
+        _currentGroupPointer++;
+        // Update the controller index to match the new group
+        if (_groupAnchors.isNotEmpty) {
           controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
         }
       });
-    }
-  }
-
-  bool isCurrentQuestionEffectivelyLast() {
-    return _currentGroupPointer >= _groupAnchors.length - 1;
-  }
-
-  int findNextVisibleQuestionIndex() {
-    // simply return next anchor or -1
-    if (_currentGroupPointer < _groupAnchors.length - 1) {
-      return _groupAnchors[_currentGroupPointer + 1];
-    }
-    return -1;
-  }
-
-  bool _validateCurrentStep() {
-    // Make sure we have valid group anchors
-    if (_groupAnchors.isEmpty || _currentGroupPointer >= _groupAnchors.length) {
-      return true; // Nothing to validate
-    }
-
-    // Get the current anchor and its field indices
-    final int currentAnchor = _groupAnchors[_currentGroupPointer];
-    final List<int> indices =
-        _anchorToFieldIndices[currentAnchor] ?? [currentAnchor];
-
-    if (indices.isEmpty) {
-      return true; // Nothing to validate
-    }
-
-    // First check: Are we validating a duplicated group?
-    bool isCurrentGroupDuplicated = false;
-    if (currentAnchor < _internalFields.length) {
-      isCurrentGroupDuplicated =
-          _internalFields[currentAnchor]['isDuplicate'] == true;
-    }
-
-    // CHANGED: We still need to validate duplicated groups
-    // Original code would return true here and skip validation for duplicated groups
-    // if (isCurrentGroupDuplicated) {
-    //   return true;
-    // }
-
-    // Check each field in this group
-    bool isValid = true;
-
-    for (int idx in indices) {
-      if (idx < 0 || idx >= _internalFields.length) continue;
-
-      final field = _internalFields[idx];
-
-      // CHANGED: Validate all fields including duplicates
-      // Original code would skip validation for duplicate fields
-      // if (field['isDuplicate'] == true) {
-      //   continue;
-      // }
-
-      final fieldName = field['name'].toString();
-
-      // Skip if field doesn't exist in form (might be a bug elsewhere)
-      if (!controller.form.contains(fieldName)) {
-        continue;
-      }
-
-      final control = controller.form.control(fieldName);
-
-      // Check if field is required and validate accordingly
-      if (field['required'] == true) {
-        if (control.value == null || control.value.toString().isEmpty) {
-          control.markAsTouched();
-          isValid = false;
-          if (kDebugMode) {
-            print(
-                "Validation failed for field: $fieldName (required but empty)");
-          }
-        }
-      }
-
-      // Check if field has required attachments
-      if (field['hasAttachments'] == true ||
-          field['requireAttachmentsOn'] == true ||
-          field['requiredAttachmentsOn'] == true) {
-        bool attachmentsRequired = false;
-
-        // Direct attachment requirement
-        if (field['requireAttachmentsOn'] == true ||
-            field['requiredAttachmentsOn'] == true) {
-          attachmentsRequired = true;
-        }
-
-        // Conditional attachment requirement based on selected value
-        if (field['requireAttachmentsOn'] is List) {
-          final requiredOptions = field['requireAttachmentsOn'];
-          final value = control.value;
-
-          if (value is List) {
-            // For multiselect fields
-            if ((value as List).any((v) => requiredOptions.contains(v))) {
-              attachmentsRequired = true;
-            }
-          } else {
-            // For single-value fields
-            if (requiredOptions.contains(value)) {
-              attachmentsRequired = true;
-            }
-          }
-        }
-
-        // Check if enableAttachmentsOn makes attachments required
-        if (!attachmentsRequired && field['enableAttachmentsOn'] != null) {
-          final enabledOptions = field['enableAttachmentsOn'] is List
-              ? field['enableAttachmentsOn']
-              : [field['enableAttachmentsOn']];
-
-          final value = control.value;
-
-          if (value is List) {
-            // For multiselect fields
-            if ((value as List).any((v) => enabledOptions.contains(v))) {
-              attachmentsRequired = true;
-            }
-          } else {
-            // For single-value fields
-            if (enabledOptions.contains(value)) {
-              attachmentsRequired = true;
-            }
-          }
-        }
-
-        // Special case for text fields with hasAttachments=true
-        if (!attachmentsRequired &&
-            field['type'] == 'text' &&
-            field['hasAttachments'] == true) {
-          attachmentsRequired = true;
-        }
-
-        // Now check if required attachments are present
-        if (attachmentsRequired &&
-            (controller.uploadedFiles[fieldName] == null ||
-                controller.uploadedFiles[fieldName]!.isEmpty)) {
-          setState(() {
-            _showAttachmentError = true;
-          });
-
-          isValid = false;
-          if (kDebugMode) {
-            print(
-                "Validation failed for field: $fieldName (missing required attachments)");
-          }
-        }
-      }
-
-      // Check for required comments
-      if (field['hasComments'] == true) {
-        final commentFieldName = '${fieldName}_comment';
-        if (controller.form.contains(commentFieldName)) {
-          final commentControl = controller.form.control(commentFieldName);
-          if (commentControl.value == null ||
-              commentControl.value.toString().isEmpty) {
-            commentControl.markAsTouched();
-            isValid = false;
-            if (kDebugMode) {
-              print(
-                  "Validation failed for field: $fieldName (missing required comment)");
-            }
-          }
-        }
-      }
-    }
-
-    if (!isValid) {
-      // Hide attachment error if there are no attachment validation failures
-      if (_showAttachmentError &&
-          !indices.any((idx) =>
-              _internalFields[idx]['hasAttachments'] == true ||
-              _internalFields[idx]['requireAttachmentsOn'] != null)) {
-        setState(() {
-          _showAttachmentError = false;
-        });
-      }
     } else {
+      // We're at the last question, show submit button
       setState(() {
-        _showAttachmentError = false;
+        // This will trigger the UI to show the submit button
       });
-    }
-
-    return isValid;
-  }
-
-  bool validateCurrentSection() {
-    // Check if we're on a duplicated card
-    if (_groupAnchors.isNotEmpty &&
-        _currentGroupPointer < _groupAnchors.length) {
-      final currentAnchor = _groupAnchors[_currentGroupPointer];
-      if (currentAnchor < _internalFields.length) {
-        final isDuplicate =
-            _internalFields[currentAnchor]['isDuplicate'] == true;
-
-        // CHANGED: No longer bypass validation for duplicated cards
-        // Original code would return true here and skip validation
-        // if (isDuplicate) {
-        //   return true;
-        // }
-
-        if (isDuplicate && kDebugMode) {
-          print("Validating duplicated card with anchor: $currentAnchor");
-        }
-
-        // CHANGED: No longer bypass validation for fields with timestamp in name
-        // Original code would return true here and skip validation
-        // final currentFieldName =
-        //     _internalFields[currentAnchor]['name'].toString();
-        // final isTimestampedDuplicate =
-        //     RegExp(r'_\d+$').hasMatch(currentFieldName);
-        // if (isTimestampedDuplicate) {
-        //   return true;
-        // }
-      }
-    }
-
-    // Proceed with normal validation
-    return _validateCurrentStep();
-  }
-
-  Widget _buildErrorMessage() {
-    return _showAttachmentError
-        ? Container(
-            padding: const EdgeInsets.all(8),
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.red.shade100,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              'Required attachments are missing',
-              style: TextStyle(color: Colors.red.shade900),
-            ),
-          )
-        : const SizedBox.shrink();
-  }
-
-  // Ensure form controls are properly initialized when a field is duplicated
-  void _ensureFormControlsHaveCorrectValidation() {
-    if (kDebugMode) {
-      print("\n=== Checking form control validation ===");
-    }
-
-    try {
-      // Check each field to ensure its form control has the right validation
-      for (final field in _internalFields) {
-        final fieldName = field['name'].toString();
-
-        // Skip if form doesn't have this control
-        if (!controller.form.contains(fieldName)) continue;
-
-        final control = controller.form.control(fieldName);
-        final bool isRequired = field['required'] == true;
-
-        // Check if validator is missing or unexpectedly present
-        final bool hasRequiredValidator = control.validators
-            .any((validator) => validator.toString().contains('required'));
-
-        // CHANGED: Actually fix validation mismatches rather than just logging them
-        if (isRequired != hasRequiredValidator) {
-          if (kDebugMode) {
-            print(
-                "Validation mismatch for $fieldName: Field required=$isRequired, but control hasRequiredValidator=$hasRequiredValidator");
-          }
-
-          // Fix the validation mismatch by updating the control
-          if (isRequired && !hasRequiredValidator) {
-            // Field is required but validator is missing - add it
-            if (control is FormControl) {
-              List<Validator> updatedValidators = List.from(control.validators);
-              updatedValidators.add(Validators.required);
-
-              // Create a new control with the updated validators and preserve the value AND type
-              // Determine the correct type based on the field type
-              dynamic controlValue = control.value;
-              String fieldType = field['type']?.toString() ?? 'text';
-
-              if (fieldType == 'multiselect') {
-                // Handle multiselect which needs List<String> type
-                final newControl = FormControl<List<String>>(
-                  value: controlValue is List
-                      ? List<String>.from(controlValue.map((e) => e.toString()))
-                      : <String>[],
-                  validators: updatedValidators,
-                );
-                controller.form.removeControl(fieldName);
-                controller.form.addAll({fieldName: newControl});
-              } else if (fieldType == 'number') {
-                // Handle number fields
-                final newControl = FormControl<num>(
-                  value: controlValue is num ? controlValue : null,
-                  validators: updatedValidators,
-                );
-                controller.form.removeControl(fieldName);
-                controller.form.addAll({fieldName: newControl});
-              } else {
-                // Default to String for most field types
-                final newControl = FormControl<String>(
-                  value: controlValue?.toString() ?? '',
-                  validators: updatedValidators,
-                );
-                controller.form.removeControl(fieldName);
-                controller.form.addAll({fieldName: newControl});
-              }
-
-              if (kDebugMode) {
-                print("Added required validator to $fieldName");
-              }
-            }
-          } else if (!isRequired && hasRequiredValidator) {
-            // Field is not required but has required validator - remove it
-            if (control is FormControl) {
-              List<Validator> updatedValidators = control.validators
-                  .where((v) => !v.toString().contains('required'))
-                  .toList();
-
-              // Create a new control without the required validator AND preserve type
-              // Determine the correct type based on the field type
-              dynamic controlValue = control.value;
-              String fieldType = field['type']?.toString() ?? 'text';
-
-              if (fieldType == 'multiselect') {
-                // Handle multiselect which needs List<String> type
-                final newControl = FormControl<List<String>>(
-                  value: controlValue is List
-                      ? List<String>.from(controlValue.map((e) => e.toString()))
-                      : <String>[],
-                  validators: updatedValidators,
-                );
-                controller.form.removeControl(fieldName);
-                controller.form.addAll({fieldName: newControl});
-              } else if (fieldType == 'number') {
-                // Handle number fields
-                final newControl = FormControl<num>(
-                  value: controlValue is num ? controlValue : null,
-                  validators: updatedValidators,
-                );
-                controller.form.removeControl(fieldName);
-                controller.form.addAll({fieldName: newControl});
-              } else {
-                // Default to String for most field types
-                final newControl = FormControl<String>(
-                  value: controlValue?.toString() ?? '',
-                  validators: updatedValidators,
-                );
-                controller.form.removeControl(fieldName);
-                controller.form.addAll({fieldName: newControl});
-              }
-
-              if (kDebugMode) {
-                print("Removed required validator from $fieldName");
-              }
-            }
-          }
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print("Error checking form controls validation: $e");
-      }
-    }
-
-    if (kDebugMode) {
-      print("=== Form control validation check complete ===");
     }
   }
 
@@ -3056,6 +2865,9 @@ class _DynamicFormState extends State<DynamicForm>
 
       // Make sure we have valid anchors before proceeding
       if (_groupAnchors.isEmpty) {
+        if (kDebugMode) {
+          print('Warning: No group anchors available for duplication');
+        }
         return;
       }
 
@@ -3073,6 +2885,9 @@ class _DynamicFormState extends State<DynamicForm>
       final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
 
       if (indices.isEmpty) {
+        if (kDebugMode) {
+          print('No fields to duplicate');
+        }
         return;
       }
 
@@ -3104,6 +2919,11 @@ class _DynamicFormState extends State<DynamicForm>
         // Mark as duplicate for delete button visibility
         fieldCopy['isDuplicate'] = true;
 
+        // IMPORTANT: Make sure we preserve the 'required' status
+        if (originalField['required'] == true) {
+          fieldCopy['required'] = true;
+        }
+
         // Add field to list of new fields
         newFields.add(fieldCopy);
       }
@@ -3127,7 +2947,6 @@ class _DynamicFormState extends State<DynamicForm>
           ? 0
           : indices.map((i) => i).reduce((a, b) => a > b ? a : b) + 1;
 
-      // Only keep this specific debug output as requested by the user
       if (kDebugMode) {
         print(
             'Required flags: ${newFields.map((f) => "${f['name']}: ${f['required']}").toList()}');
@@ -3154,6 +2973,28 @@ class _DynamicFormState extends State<DynamicForm>
 
         // Stay on the current card after duplication by restoring the original pointer
         _currentGroupPointer = originalPointer;
+
+        // Debug: Log form controls after adding duplicates
+        if (kDebugMode) {
+          print("Current pointer after duplication: $_currentGroupPointer");
+          print(
+              "Added form controls: ${newFields.map((f) => f['name']).join(', ')}");
+
+          // Check if the form controls exist and have the correct validation rules
+          for (final field in newFields) {
+            final fieldName = field['name'].toString();
+            if (controller.form.contains(fieldName)) {
+              final control = controller.form.control(fieldName);
+              final bool isRequired = field['required'] == true;
+              final bool hasRequiredValidator = control.validators.any(
+                  (validator) => validator.toString().contains('required'));
+              print(
+                  "Field $fieldName - required=$isRequired, hasValidator=$hasRequiredValidator");
+            } else {
+              print("Warning: Form control not found for $fieldName");
+            }
+          }
+        }
       });
 
       // Re-enable PageController updates after a short delay to allow layout to complete
@@ -3302,6 +3143,185 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Get question number if available
     return anchorIndex != null ? _anchorToQuestionNumber[anchorIndex] : null;
+  }
+
+  // Ensure form controls have the correct validation rules
+  void _ensureFormControlsHaveCorrectValidation() {
+    if (kDebugMode) {
+      print("\n=== Ensuring form controls have correct validation ===");
+    }
+
+    try {
+      // Iterate through all fields to check their validation status
+      for (final field in _internalFields) {
+        final fieldName = field['name'].toString();
+        final bool isRequired = field['required'] == true;
+
+        if (controller.form.contains(fieldName)) {
+          final control = controller.form.control(fieldName);
+          final hasRequiredValidator = control.validators
+              .any((validator) => validator.toString().contains('required'));
+
+          // Fix validation mismatch
+          if (isRequired != hasRequiredValidator) {
+            if (kDebugMode) {
+              print(
+                  "Validation mismatch for $fieldName: Field required=$isRequired, but control hasRequiredValidator=$hasRequiredValidator");
+            }
+
+            if (isRequired && !hasRequiredValidator) {
+              // Field is required but validator is missing - add it
+              if (control is FormControl) {
+                List<Validator> updatedValidators =
+                    List.from(control.validators);
+                updatedValidators.add(Validators.required);
+
+                // Create a new control with the updated validators and preserve the value AND type
+                // Determine the correct type based on the field type
+                dynamic controlValue = control.value;
+                String fieldType = field['type']?.toString() ?? 'text';
+
+                if (fieldType == 'multiselect') {
+                  // Handle multiselect which needs List<String> type
+                  final newControl = FormControl<List<String>>(
+                    value: controlValue is List
+                        ? List<String>.from(
+                            controlValue.map((e) => e.toString()))
+                        : <String>[],
+                    validators: updatedValidators,
+                  );
+                  controller.form.removeControl(fieldName);
+                  controller.form.addAll({fieldName: newControl});
+                } else if (fieldType == 'number') {
+                  // Handle number fields
+                  final newControl = FormControl<num>(
+                    value: controlValue is num ? controlValue : null,
+                    validators: updatedValidators,
+                  );
+                  controller.form.removeControl(fieldName);
+                  controller.form.addAll({fieldName: newControl});
+                } else {
+                  // Default to String for most field types
+                  final newControl = FormControl<String>(
+                    value: controlValue?.toString() ?? '',
+                    validators: updatedValidators,
+                  );
+                  controller.form.removeControl(fieldName);
+                  controller.form.addAll({fieldName: newControl});
+                }
+
+                if (kDebugMode) {
+                  print("Added required validator to $fieldName");
+                }
+              }
+            } else if (!isRequired && hasRequiredValidator) {
+              // Field is not required but has required validator - remove it
+              if (control is FormControl) {
+                List<Validator> updatedValidators = control.validators
+                    .where((v) => !v.toString().contains('required'))
+                    .toList();
+
+                // Create a new control without the required validator AND preserve type
+                // Determine the correct type based on the field type
+                dynamic controlValue = control.value;
+                String fieldType = field['type']?.toString() ?? 'text';
+
+                if (fieldType == 'multiselect') {
+                  // Handle multiselect which needs List<String> type
+                  final newControl = FormControl<List<String>>(
+                    value: controlValue is List
+                        ? List<String>.from(
+                            controlValue.map((e) => e.toString()))
+                        : <String>[],
+                    validators: updatedValidators,
+                  );
+                  controller.form.removeControl(fieldName);
+                  controller.form.addAll({fieldName: newControl});
+                } else if (fieldType == 'number') {
+                  // Handle number fields
+                  final newControl = FormControl<num>(
+                    value: controlValue is num ? controlValue : null,
+                    validators: updatedValidators,
+                  );
+                  controller.form.removeControl(fieldName);
+                  controller.form.addAll({fieldName: newControl});
+                } else {
+                  // Default to String for most field types
+                  final newControl = FormControl<String>(
+                    value: controlValue?.toString() ?? '',
+                    validators: updatedValidators,
+                  );
+                  controller.form.removeControl(fieldName);
+                  controller.form.addAll({fieldName: newControl});
+                }
+
+                if (kDebugMode) {
+                  print("Removed required validator from $fieldName");
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print("Error ensuring form controls validation: $e");
+      }
+    }
+
+    if (kDebugMode) {
+      print("=== Form control validation check complete ===");
+    }
+  }
+
+  // Check if the current question is effectively the last one in the form
+  bool isCurrentQuestionEffectivelyLast() {
+    if (_groupAnchors.isEmpty) return true;
+    return _currentGroupPointer >= _groupAnchors.length - 1;
+  }
+
+  // Move to the next question in the form
+  void moveToNextQuestion(BuildContext context) {
+    if (_currentGroupPointer < _groupAnchors.length - 1) {
+      setState(() {
+        _currentGroupPointer++;
+        // Update the controller index to match the new group
+        if (_groupAnchors.isNotEmpty) {
+          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+        }
+      });
+    } else {
+      // We're at the last question, show submit button
+      setState(() {
+        // This will trigger the UI to show the submit button
+      });
+    }
+  }
+
+  // Move to the previous valid question in the form
+  void moveToPreviousValidQuestion() {
+    if (_currentGroupPointer > 0) {
+      _currentGroupPointer--;
+      // Update the controller index to match the new group
+      if (_groupAnchors.isNotEmpty) {
+        controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+      }
+    }
+  }
+
+  // Build error message for attachment validation errors
+  Widget _buildErrorMessage() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Text(
+        StringConstants.pleaseFillOutAllRequiredAttachments,
+        style: TextStyle(
+          color: Colors.red[700],
+          fontSize: 14.0,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
   }
 }
 
@@ -3860,7 +3880,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
         // Parent components already show the label
         const SizedBox(height: 8),
         // Only show the upload button if no file is uploaded yet
-        if (widget.questionNumber != null &&(!widget.hasAttachments))
+        if (widget.questionNumber != null && (!widget.hasAttachments))
           Text(
             'Question ${widget.questionNumber}',
             style: TextStyle(
@@ -3872,28 +3892,28 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
           ),
         if (widget.questionNumber != null) const SizedBox(height: 4.0),
         if (!widget.hasAttachments)
-        Row(
-          children: [
-            Text(
-              widget.fieldLabel,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16.0,
-                fontFamily: widget.fontFamily?.fontFamily,
-              ),
-            ),
-            if (widget.isRequired) ...[
-              const SizedBox(width: 4),
+          Row(
+            children: [
               Text(
-                '*',
-                style: widget.fontFamily.copyWith(
-                  color: const Color.fromARGB(255, 222, 75, 64),
-                  fontSize: 16,
+                widget.fieldLabel,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16.0,
+                  fontFamily: widget.fontFamily?.fontFamily,
                 ),
               ),
+              if (widget.isRequired) ...[
+                const SizedBox(width: 4),
+                Text(
+                  '*',
+                  style: widget.fontFamily.copyWith(
+                    color: const Color.fromARGB(255, 222, 75, 64),
+                    fontSize: 16,
+                  ),
+                ),
+              ],
             ],
-          ],
-        ),
+          ),
         // const SizedBox(height: 8),
         // Only show this row if hasAttachments is false
         if (!widget.hasAttachments)
