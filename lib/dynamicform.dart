@@ -261,18 +261,38 @@ class _DynamicFormState extends State<DynamicForm>
       // Get the current anchor
       final currentAnchor = _groupAnchors[_currentGroupPointer];
       if (currentAnchor >= 0 && currentAnchor < _internalFields.length) {
-        // Check if this field or any field in its group has a groupWith property
+        // NEW LOGIC: Check if this field is referenced by any other field via groupWith
+        // or if it has allowDuplicate property
         final currentField = _internalFields[currentAnchor];
-        currentQuestionHasGroupWith = currentField['groupWith'] != null ||
+        final String currentFieldName = currentField['name'].toString();
+
+        // First check if the field is directly referenced by any other field's groupWith
+        bool isReferencedByOthers = false;
+        for (var field in _internalFields) {
+          if (field['groupWith']?.toString() == currentFieldName) {
+            isReferencedByOthers = true;
+            break;
+          }
+        }
+
+        // Check if this field is a parent in the anchorToFieldIndices
+        bool isParentWithChildren = false;
+        if (_anchorToFieldIndices.containsKey(currentAnchor)) {
+          final childIndices = _anchorToFieldIndices[currentAnchor] ?? [];
+          // If this anchor has more fields than just itself, it has children
+          isParentWithChildren = childIndices.length > 1;
+        }
+
+        currentQuestionHasGroupWith = isReferencedByOthers ||
+            isParentWithChildren ||
             currentField['allowDuplicate'] == true;
 
         // For debugging
         if (kDebugMode) {
           print("Current question has groupWith: $currentQuestionHasGroupWith");
           print("Current field: ${currentField['name']}");
-          if (currentField['groupWith'] != null) {
-            print("GroupWith: ${currentField['groupWith']}");
-          }
+          print("Is referenced by others: $isReferencedByOthers");
+          print("Is parent with children: $isParentWithChildren");
           if (currentField['allowDuplicate'] == true) {
             print("AllowDuplicate: ${currentField['allowDuplicate']}");
           }
@@ -360,17 +380,31 @@ class _DynamicFormState extends State<DynamicForm>
     final List<Map<String, dynamic>> currentGroupFields =
         currentIndices.map((i) => _internalFields[i]).toList();
 
-    bool hasGroupWith = false;
-    for (final field in currentGroupFields) {
-      final groupWithValue = field['groupWith']?.toString() ?? '';
-      if (groupWithValue.isNotEmpty) {
-        hasGroupWith = true;
-        break;
+    // NEW LOGIC: Check if this anchor field is referenced by any other field via groupWith
+    // or if it has children in its group
+    bool shouldShowCard = false;
+
+    // If the anchor has more than just itself in its group, it's a parent with children
+    if (currentIndices.length > 1) {
+      shouldShowCard = true;
+    } else {
+      // Check if the current field is referenced by any other field's groupWith
+      for (var field in _internalFields) {
+        String? groupWith = field['groupWith']?.toString();
+        if (groupWith == currentAnchorName) {
+          shouldShowCard = true;
+          break;
+        }
       }
     }
 
-    // Add the original card
-    if (hasGroupWith) {
+    // For debugging
+    if (kDebugMode) {
+      print("Field '${currentAnchorName}' shouldShowCard: $shouldShowCard");
+    }
+
+    // Add the original card or just the fields based on the shouldShowCard flag
+    if (shouldShowCard) {
       // Add the original question as a card
       widgets.add(_buildCardForFields(currentGroupFields, false));
     } else {
@@ -2815,17 +2849,31 @@ class _DynamicFormState extends State<DynamicForm>
     final List<Map<String, dynamic>> currentGroupFields =
         currentIndices.map((i) => _internalFields[i]).toList();
 
-    bool hasGroupWith = false;
-    for (final field in currentGroupFields) {
-      final groupWithValue = field['groupWith']?.toString() ?? '';
-      if (groupWithValue.isNotEmpty) {
-        hasGroupWith = true;
-        break;
+    // NEW LOGIC: Check if this anchor field is referenced by any other field via groupWith
+    // or if it has children in its group
+    bool shouldShowCard = false;
+
+    // If the anchor has more than just itself in its group, it's a parent with children
+    if (currentIndices.length > 1) {
+      shouldShowCard = true;
+    } else {
+      // Check if the current field is referenced by any other field's groupWith
+      for (var field in _internalFields) {
+        String? groupWith = field['groupWith']?.toString();
+        if (groupWith == currentAnchorName) {
+          shouldShowCard = true;
+          break;
+        }
       }
     }
 
-    // Add the original card
-    if (hasGroupWith) {
+    // For debugging
+    if (kDebugMode) {
+      print("Field '${currentAnchorName}' shouldShowCard: $shouldShowCard");
+    }
+
+    // Add the original card or just the fields based on the shouldShowCard flag
+    if (shouldShowCard) {
       // Add the original question as a card
       widgets.add(_buildCardForFields(currentGroupFields, false));
     } else {
