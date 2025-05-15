@@ -2822,7 +2822,184 @@ class _DynamicFormState extends State<DynamicForm>
     return isValid;
   }
 
-  // --- Duplicate navigation helpers removed (see consolidated implementations later in class) ---
+  /// Checks if the current question has required file attachments and if they've been uploaded
+  bool _checkIfRequiredFilesUploaded() {
+    // Make sure we have valid anchors before proceeding
+    if (_groupAnchors.isEmpty ||
+        _currentGroupPointer < 0 ||
+        _currentGroupPointer >= _groupAnchors.length) {
+      if (kDebugMode) {
+        print("⚠️ No valid anchors to check for file uploads");
+      }
+      return true; // Nothing to validate
+    }
+
+    // Get the current anchor index
+    final currentAnchor = _groupAnchors[_currentGroupPointer];
+
+    // Safety check for valid index
+    if (currentAnchor < 0 || currentAnchor >= _internalFields.length) {
+      if (kDebugMode) {
+        print("⚠️ Invalid current anchor index: $currentAnchor");
+      }
+      return true; // Nothing valid to validate
+    }
+
+    // Get the current field and its indices
+    final currentField = _internalFields[currentAnchor];
+    final List<int> fieldIndices =
+        _anchorToFieldIndices[currentAnchor] ?? [currentAnchor];
+
+    // Print detailed debug information
+    if (kDebugMode) {
+      print("\n=== 📄 Checking file uploads for question group ===");
+      print("Anchor field: ${currentField['name']}");
+      print("hasAttachments flag: ${currentField['hasAttachments']}");
+      print("Total fields in group: ${fieldIndices.length}");
+
+      // Debug all fields in this group
+      for (int i = 0; i < fieldIndices.length; i++) {
+        final idx = fieldIndices[i];
+        if (idx >= 0 && idx < _internalFields.length) {
+          final f = _internalFields[idx];
+          print(
+              "Field #$i: ${f['name']}, hasAttachments: ${f['hasAttachments']}");
+
+          // Print uploaded files for this field
+          final fieldName = f['name'].toString();
+          final uploadedFiles = controller.uploadedFiles[fieldName];
+          print(
+              "  - Uploaded files for ${f['name']}: ${uploadedFiles?.length ?? 0}");
+        }
+      }
+    }
+
+    // Check each field in the current question group
+    for (int idx in fieldIndices) {
+      final field = _internalFields[idx];
+      final String fieldName = field['name'].toString();
+
+      // ----- STEP 1: Determine if this field requires attachments -----
+      bool requiresAttachments = false;
+      String requirementReason = "";
+
+      // --- KEY CHANGE: By default, hasAttachments=true requires file uploads ---
+      if (field['hasAttachments'] == true) {
+        requiresAttachments = true;
+        requirementReason = "Field has hasAttachments=true";
+
+        // Check if there's an explicit rule to disable attachments for the current value
+        if (field['disableAttachmentsOn'] != null) {
+          // Get the field's current value
+          if (!controller.form.contains(fieldName)) {
+            if (kDebugMode) {
+              print("⚠️ Warning: Form control not found for field $fieldName");
+            }
+          } else {
+            final control = controller.form.control(fieldName);
+            final currentValue = control.value;
+            final disableOn = field['disableAttachmentsOn'];
+
+            if (kDebugMode) {
+              print("Field $fieldName has value: $currentValue");
+              print("disableAttachmentsOn: $disableOn");
+            }
+
+            bool shouldDisable = false;
+
+            // Check if the current value matches the disable condition
+            if (disableOn is List) {
+              if (disableOn.contains(currentValue)) {
+                shouldDisable = true;
+              }
+            } else if (disableOn == currentValue) {
+              shouldDisable = true;
+            }
+
+            if (shouldDisable) {
+              requiresAttachments = false;
+              requirementReason =
+                  "Attachment disabled based on value '$currentValue'";
+            }
+          }
+        }
+      } else {
+        // Field doesn't have hasAttachments, but check if attachments are specifically required
+        if (field['attachmentsRequired'] == true) {
+          requiresAttachments = true;
+          requirementReason = "Field has attachmentsRequired=true";
+        }
+
+        // Check if the current value requires attachments
+        if (field['requireAttachmentsOn'] != null) {
+          if (!controller.form.contains(fieldName)) {
+            if (kDebugMode) {
+              print("⚠️ Warning: Form control not found for field $fieldName");
+            }
+          } else {
+            final control = controller.form.control(fieldName);
+            final currentValue = control.value;
+            final requireOn = field['requireAttachmentsOn'];
+
+            bool shouldRequire = false;
+
+            if (requireOn is List) {
+              if (requireOn.contains(currentValue)) {
+                shouldRequire = true;
+              }
+            } else if (requireOn == true) {
+              shouldRequire = true;
+            } else if (requireOn == currentValue) {
+              shouldRequire = true;
+            }
+
+            if (shouldRequire) {
+              requiresAttachments = true;
+              requirementReason =
+                  "Attachment required based on value '$currentValue'";
+            }
+          }
+        }
+      }
+
+      // ----- STEP 2: If attachments are required, verify they exist -----
+      if (requiresAttachments) {
+        if (kDebugMode) {
+          print("✅ Field $fieldName REQUIRES attachments: $requirementReason");
+        }
+
+        final uploadedFiles = controller.uploadedFiles[fieldName];
+
+        // Check if there are no files or the list is empty
+        if (uploadedFiles == null || uploadedFiles.isEmpty) {
+          if (kDebugMode) {
+            print(
+                "❌ VALIDATION FAILED: Required file attachments missing for field: $fieldName");
+            print(
+                "Upload files status: ${uploadedFiles == null ? 'null' : 'empty list'}");
+          }
+          return false; // Files required but not uploaded
+        } else {
+          if (kDebugMode) {
+            print("✓ $fieldName has ${uploadedFiles.length} files uploaded");
+          }
+        }
+      } else {
+        if (kDebugMode) {
+          print(
+              "⏭️ Field $fieldName does NOT require attachments: $requirementReason");
+        }
+      }
+    }
+
+    if (kDebugMode) {
+      print("✓ File upload validation PASSED - all required files are present");
+    }
+
+    // All required file checks passed
+    return true;
+  }
+
   void _moveToNextStep(BuildContext context) {
     // Make sure we have valid anchors
     if (_groupAnchors.isEmpty) {
@@ -2837,7 +3014,26 @@ class _DynamicFormState extends State<DynamicForm>
       print("Current pointer: $_currentGroupPointer");
     }
 
-    // First validate the current section including all duplicate cards
+    // FIRST check file upload requirements - do this before other validation
+    if (!_checkIfRequiredFilesUploaded()) {
+      if (kDebugMode) {
+        print("⛔ File upload validation FAILED - not moving to next step");
+      }
+      // Show a snackbar to inform the user that files need to be uploaded
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            StringConstants.uploadRequiredFiles,
+            style: widget.fontFamily,
+          ),
+          backgroundColor: Colors.red[700],
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // Then validate the current section including all duplicate cards
     if (!validateCurrentSection()) {
       if (kDebugMode) {
         print("Validation failed - not moving to next step");
@@ -2872,6 +3068,50 @@ class _DynamicFormState extends State<DynamicForm>
           controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
 
           // Check if we need to skip this next question too
+          _updateCurrentQuestionBasedOnVisibility();
+        }
+      });
+    } else {
+      // We're at the last question, show submit button
+      setState(() {
+        // This will trigger the UI to show the submit button
+      });
+    }
+  }
+
+  // Move to the next question in the form
+  void moveToNextQuestion(BuildContext context) {
+    // FIRST check file upload requirements - do this before other validation
+    if (!_checkIfRequiredFilesUploaded()) {
+      if (kDebugMode) {
+        print("⛔ File upload validation FAILED - not moving to next question");
+      }
+      // Show a snackbar to inform the user that files need to be uploaded
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            StringConstants.uploadRequiredFiles,
+            style: widget.fontFamily,
+          ),
+          backgroundColor: Colors.red[700],
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // Check if current question is visible, skip to next visible if not
+    _updateCurrentQuestionBasedOnVisibility();
+
+    // Now proceed with normal navigation
+    if (_currentGroupPointer < _groupAnchors.length - 1) {
+      setState(() {
+        _currentGroupPointer++;
+        // Update the controller index to match the new group
+        if (_groupAnchors.isNotEmpty) {
+          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+
+          // Check if we need to skip this question too
           _updateCurrentQuestionBasedOnVisibility();
         }
       });
@@ -3639,31 +3879,6 @@ class _DynamicFormState extends State<DynamicForm>
   bool isCurrentQuestionEffectivelyLast() {
     if (_groupAnchors.isEmpty) return true;
     return _currentGroupPointer >= _groupAnchors.length - 1;
-  }
-
-  // Move to the next question in the form
-  void moveToNextQuestion(BuildContext context) {
-    // Check if current question is visible, skip to next visible if not
-    _updateCurrentQuestionBasedOnVisibility();
-
-    // Now proceed with normal navigation
-    if (_currentGroupPointer < _groupAnchors.length - 1) {
-      setState(() {
-        _currentGroupPointer++;
-        // Update the controller index to match the new group
-        if (_groupAnchors.isNotEmpty) {
-          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
-
-          // Check if we need to skip this question too
-          _updateCurrentQuestionBasedOnVisibility();
-        }
-      });
-    } else {
-      // We're at the last question, show submit button
-      setState(() {
-        // This will trigger the UI to show the submit button
-      });
-    }
   }
 
   // Move to the previous valid question in the form
