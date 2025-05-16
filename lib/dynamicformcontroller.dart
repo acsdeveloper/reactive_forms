@@ -280,6 +280,29 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
+        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
+        // require file upload
+        if (!fileRequired && field['hasAttachments'] == true) {
+          // Check if requireAttachmentsOn is an empty array
+          bool isRequireAttachmentsOnEmpty =
+              field['requireAttachmentsOn'] is List &&
+                  (field['requireAttachmentsOn'] as List).isEmpty;
+
+          // Check if disableAttachmentsOn is an empty array
+          bool isDisableAttachmentsOnEmpty =
+              field['disableAttachmentsOn'] is List &&
+                  (field['disableAttachmentsOn'] as List).isEmpty;
+
+          // If both are empty arrays, require file upload
+          if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
+            if (kDebugMode) {
+              print(
+                  "File required for ${field['name']} because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
+            }
+            fileRequired = true;
+          }
+        }
+
         if (!fileRequired && isTextWithAttachments) {
           fileRequired = true;
         }
@@ -483,6 +506,29 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
+        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
+        // require file upload
+        if (!fileRequired && field['hasAttachments'] == true) {
+          // Check if requireAttachmentsOn is an empty array
+          bool isRequireAttachmentsOnEmpty =
+              field['requireAttachmentsOn'] is List &&
+                  (field['requireAttachmentsOn'] as List).isEmpty;
+
+          // Check if disableAttachmentsOn is an empty array
+          bool isDisableAttachmentsOnEmpty =
+              field['disableAttachmentsOn'] is List &&
+                  (field['disableAttachmentsOn'] as List).isEmpty;
+
+          // If both are empty arrays, require file upload
+          if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
+            if (kDebugMode) {
+              print(
+                  "File required for ${field['name']} because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
+            }
+            fileRequired = true;
+          }
+        }
+
         if (!fileRequired && isTextWithAttachments) {
           fileRequired = true;
         }
@@ -568,6 +614,29 @@ class DynamicFormController extends ChangeNotifier {
                 .any((value) => requireAttachmentsOn.contains(value));
           } else {
             fileRequired = requireAttachmentsOn.contains(selectedValue);
+          }
+        }
+
+        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
+        // require file upload
+        if (!fileRequired && field['hasAttachments'] == true) {
+          // Check if requireAttachmentsOn is an empty array
+          bool isRequireAttachmentsOnEmpty =
+              field['requireAttachmentsOn'] is List &&
+                  (field['requireAttachmentsOn'] as List).isEmpty;
+
+          // Check if disableAttachmentsOn is an empty array
+          bool isDisableAttachmentsOnEmpty =
+              field['disableAttachmentsOn'] is List &&
+                  (field['disableAttachmentsOn'] as List).isEmpty;
+
+          // If both are empty arrays, require file upload
+          if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
+            if (kDebugMode) {
+              print(
+                  "File required for ${field['name']} because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
+            }
+            fileRequired = true;
           }
         }
 

@@ -3171,6 +3171,27 @@ class _DynamicFormState extends State<DynamicForm>
           requiresAttachments = true;
           reasonForRequirement = "hasAttachments=true with no conditions";
         }
+        // NEW CHECK: If both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
+        // require file uploads
+        else {
+          bool isRequireAttachmentsOnEmpty =
+              field['requireAttachmentsOn'] is List &&
+                  (field['requireAttachmentsOn'] as List).isEmpty;
+
+          bool isDisableAttachmentsOnEmpty =
+              field['disableAttachmentsOn'] is List &&
+                  (field['disableAttachmentsOn'] as List).isEmpty;
+
+          if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
+            requiresAttachments = true;
+            reasonForRequirement =
+                "hasAttachments=true with empty requireAttachmentsOn and disableAttachmentsOn arrays";
+            if (kDebugMode) {
+              print(
+                  "📄 VALIDATION: Attachments required for field '$fieldName' because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
+            }
+          }
+        }
       }
 
       // NEW RULE #4.5: When hasAttachments=true, disableAttachmentsOn is not empty, and selected value is NOT in disableAttachmentsOn
@@ -3332,7 +3353,7 @@ class _DynamicFormState extends State<DynamicForm>
         SnackBar(
           content: Text(
             _lastValidationErrorField != null
-                ? 'Please upload required files'
+                ? 'Please upload the required files for "${_lastValidationErrorField!['label']}"'
                 : StringConstants.uploadRequiredFiles,
             style: widget.fontFamily,
           ),
@@ -3349,15 +3370,8 @@ class _DynamicFormState extends State<DynamicForm>
         print("⛔ FIELD VALIDATION FAILED - Navigation blocked");
       }
       // Show a snackbar to inform the user that validation failed
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            StringConstants.fillRequiredFields,
-            style: widget.fontFamily,
-          ),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
+      
       return;
     }
 
@@ -3414,7 +3428,7 @@ class _DynamicFormState extends State<DynamicForm>
         SnackBar(
           content: Text(
             _lastValidationErrorField != null
-                ? 'Please upload required files'
+                ? 'Please upload the required files for "${_lastValidationErrorField!['label']}"'
                 : StringConstants.uploadRequiredFiles,
             style: widget.fontFamily,
           ),
