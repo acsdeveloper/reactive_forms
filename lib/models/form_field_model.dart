@@ -74,6 +74,23 @@ class FormFieldModel {
         return null;
       }
 
+      // Handle legacy properties
+      dynamic requireAttachmentsOnValue = json['requireAttachmentsOn'];
+
+      // If enableAttachmentsOn exists, use it as requireAttachmentsOn (they're functionally identical)
+      if (json['enableAttachmentsOn'] != null &&
+          requireAttachmentsOnValue == null) {
+        requireAttachmentsOnValue = json['enableAttachmentsOn'];
+      }
+
+      // If attachmentsRequired is true, set requireAttachmentsOn to true (boolean flag)
+      if (json['attachmentsRequired'] == true &&
+          (requireAttachmentsOnValue == null ||
+              (requireAttachmentsOnValue is List &&
+                  requireAttachmentsOnValue.isEmpty))) {
+        requireAttachmentsOnValue = true;
+      }
+
       return FormFieldModel(
         name: json['name']?.toString() ?? '',
         type: json['type']?.toString() ?? 'text',
@@ -81,7 +98,7 @@ class FormFieldModel {
         options: parseOptions(json['options'], json['type']?.toString() ?? ''),
         required: parseRequired(json['required']),
         hasAttachments: parseBooleanField(json['hasAttachments']),
-        requireAttachmentsOn: json['requireAttachmentsOn'],
+        requireAttachmentsOn: requireAttachmentsOnValue,
         showAttachmentsOn: json['showAttachmentsOn'],
         disableAttachmentsOn: json['disableAttachmentsOn'],
         hasComments: parseBooleanField(json['hasComments']),

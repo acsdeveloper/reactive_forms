@@ -961,7 +961,7 @@ class _DynamicFormState extends State<DynamicForm>
                       }
                     }
 
-                    // Check enableAttachmentsOn (works the same as requireAttachmentsOn for visibility)
+                    // Check for legacy attachmentsRequired property
                     if (!shouldShowAttachments &&
                         field['enableAttachmentsOn'] != null) {
                       List<dynamic> enabledOptions =
@@ -1524,7 +1524,7 @@ class _DynamicFormState extends State<DynamicForm>
                   }
                 }
 
-                // Check enableAttachmentsOn (works the same as requireAttachmentsOn for visibility)
+                // Check for legacy attachmentsRequired property
                 if (!shouldShowAttachments &&
                     field['enableAttachmentsOn'] != null) {
                   List<dynamic> enabledOptions =
@@ -1776,7 +1776,7 @@ class _DynamicFormState extends State<DynamicForm>
                 }
               }
 
-              // Check enableAttachmentsOn (works the same as requireAttachmentsOn for visibility)
+              // Check for legacy attachmentsRequired property
               if (!shouldShowAttachments &&
                   field['enableAttachmentsOn'] != null) {
                 List<dynamic> enabledOptions =
@@ -3150,11 +3150,21 @@ class _DynamicFormState extends State<DynamicForm>
         }
       }
 
+      // Rule #3 (new): Check for legacy attachmentsRequired property
+      if (field['attachmentsRequired'] == true && !requiresAttachments) {
+        requiresAttachments = true;
+        reasonForRequirement = "Legacy property attachmentsRequired=true";
+        if (kDebugMode) {
+          print(
+              "📄 VALIDATION: Legacy property 'attachmentsRequired' detected for ${field['name']}");
+        }
+      }
+
       // Rule #4: For fields with hasAttachments=true but no specific conditions
       if (field['hasAttachments'] == true && !requiresAttachments) {
         bool hasConditionalAttachments =
             field['requireAttachmentsOn'] != null ||
-                field['enableAttachmentsOn'] != null;
+                field['disableAttachmentsOn'] != null;
 
         // If there are no specific conditions, hasAttachments=true means files are required
         if (!hasConditionalAttachments) {

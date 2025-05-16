@@ -280,24 +280,13 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        if (!fileRequired && field['enableAttachmentsOn'] != null) {
-          final enabledOptions = field['enableAttachmentsOn'] is List
-              ? field['enableAttachmentsOn']
-              : [field['enableAttachmentsOn']];
-
-          if (isMultiselect && selectedValue is List) {
-            fileRequired =
-                selectedValue.any((value) => enabledOptions.contains(value));
-          } else {
-            fileRequired = enabledOptions.contains(selectedValue);
-          }
-        }
-
         if (!fileRequired && isTextWithAttachments) {
           fileRequired = true;
         }
 
-        if (field['requiredAttachmentsOn'] == true) {
+        if (!fileRequired && field['attachmentsRequired'] == true) {
+          print(
+              "Legacy property 'attachmentsRequired' detected - treating as requireAttachmentsOn");
           fileRequired = true;
         }
 
@@ -494,24 +483,13 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        if (!fileRequired && field['enableAttachmentsOn'] != null) {
-          final enabledOptions = field['enableAttachmentsOn'] is List
-              ? field['enableAttachmentsOn']
-              : [field['enableAttachmentsOn']];
-
-          if (isMultiselect && selectedValue is List) {
-            fileRequired =
-                selectedValue.any((value) => enabledOptions.contains(value));
-          } else {
-            fileRequired = enabledOptions.contains(selectedValue);
-          }
-        }
-
         if (!fileRequired && isTextWithAttachments) {
           fileRequired = true;
         }
 
-        if (field['requiredAttachmentsOn'] == true) {
+        if (!fileRequired && field['attachmentsRequired'] == true) {
+          print(
+              "Legacy property 'attachmentsRequired' detected - treating as requireAttachmentsOn");
           fileRequired = true;
         }
 
@@ -593,24 +571,13 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        if (!fileRequired && field['enableAttachmentsOn'] != null) {
-          final enabledOptions = field['enableAttachmentsOn'] is List
-              ? field['enableAttachmentsOn']
-              : [field['enableAttachmentsOn']];
-
-          if (isMultiselect && selectedValue is List) {
-            fileRequired =
-                selectedValue.any((value) => enabledOptions.contains(value));
-          } else {
-            fileRequired = enabledOptions.contains(selectedValue);
-          }
-        }
-
         if (!fileRequired && isTextWithAttachments) {
           fileRequired = true;
         }
 
-        if (field['requiredAttachmentsOn'] == true) {
+        if (!fileRequired && field['attachmentsRequired'] == true) {
+          print(
+              "Legacy property 'attachmentsRequired' detected - treating as requireAttachmentsOn");
           fileRequired = true;
         }
 
