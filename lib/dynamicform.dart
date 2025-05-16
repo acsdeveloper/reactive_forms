@@ -908,82 +908,105 @@ class _DynamicFormState extends State<DynamicForm>
                           ? [control.value]
                           : [];
 
+                  // Implementing exact logic as specified (adapted for multiselect):
+                  // IF disableAttachmentsOn is NOT empty AND any selectedAnswer is in disableAttachmentsOn
                   bool isAttachmentDisabled = false;
-                  if (selectedValues.isNotEmpty) {
+                  if (disabledOptions.isNotEmpty && selectedValues.isNotEmpty) {
                     isAttachmentDisabled = selectedValues
                         .any((value) => disabledOptions.contains(value));
                   }
 
-                  // If the current value is in disabledOptions, don't show attachments
+                  // If any selected value is in disabledOptions, don't show attachments
                   if (isAttachmentDisabled) {
+                    if (kDebugMode) {
+                      print(
+                          "📄 HIDING UPLOAD: At least one selected value is in disableAttachmentsOn list for multiselect");
+                    }
                     return const SizedBox.shrink();
                   }
+                  // ELSE: Show file upload (subject to other rules)
 
                   // Check if the value is in requireAttachmentsOn or enableAttachmentsOn
                   bool shouldShowAttachments = false;
                   bool isRequired = false;
 
-                  // Check requireAttachmentsOn
-                  if (field['requireAttachmentsOn'] != null) {
-                    List<dynamic> requiredOptions =
-                        field['requireAttachmentsOn'] is List
-                            ? field['requireAttachmentsOn']
-                            : [field['requireAttachmentsOn']];
+                  // NEW RULE: If hasAttachments is true, disableAttachmentsOn is not empty,
+                  // and no selected value is in disableAttachmentsOn, show and require upload
+                  if (field['hasAttachments'] == true &&
+                      disabledOptions.isNotEmpty &&
+                      selectedValues.isNotEmpty &&
+                      !isAttachmentDisabled) {
+                    if (kDebugMode) {
+                      print(
+                          "📄 SHOWING UPLOAD: hasAttachments=true and no selected values are in disableAttachmentsOn for multiselect");
+                    }
+                    shouldShowAttachments = true;
+                    isRequired = true;
+                  }
+                  // Continue with existing conditions if the new rule didn't apply
+                  else {
+                    // Check requireAttachmentsOn
+                    if (field['requireAttachmentsOn'] != null) {
+                      List<dynamic> requiredOptions =
+                          field['requireAttachmentsOn'] is List
+                              ? field['requireAttachmentsOn']
+                              : [field['requireAttachmentsOn']];
 
-                    if (selectedValues.isNotEmpty) {
-                      if (selectedValues
-                          .any((value) => requiredOptions.contains(value))) {
-                        shouldShowAttachments = true;
-                        isRequired = true;
+                      if (selectedValues.isNotEmpty) {
+                        if (selectedValues
+                            .any((value) => requiredOptions.contains(value))) {
+                          shouldShowAttachments = true;
+                          isRequired = true;
+                        }
                       }
                     }
-                  }
 
-                  // Check enableAttachmentsOn (works the same as requireAttachmentsOn for visibility)
-                  if (!shouldShowAttachments &&
-                      field['enableAttachmentsOn'] != null) {
-                    List<dynamic> enabledOptions =
-                        field['enableAttachmentsOn'] is List
-                            ? field['enableAttachmentsOn']
-                            : [field['enableAttachmentsOn']];
+                    // Check enableAttachmentsOn (works the same as requireAttachmentsOn for visibility)
+                    if (!shouldShowAttachments &&
+                        field['enableAttachmentsOn'] != null) {
+                      List<dynamic> enabledOptions =
+                          field['enableAttachmentsOn'] is List
+                              ? field['enableAttachmentsOn']
+                              : [field['enableAttachmentsOn']];
 
-                    if (selectedValues.isNotEmpty) {
-                      if (selectedValues
-                          .any((value) => enabledOptions.contains(value))) {
-                        shouldShowAttachments = true;
-                        isRequired = true;
+                      if (selectedValues.isNotEmpty) {
+                        if (selectedValues
+                            .any((value) => enabledOptions.contains(value))) {
+                          shouldShowAttachments = true;
+                          isRequired = true;
+                        }
                       }
                     }
-                  }
 
-                  // If the value is not in requireAttachmentsOn or enableAttachmentsOn, don't show upload
-                  if (!shouldShowAttachments) {
-                    // NEW CHECK: If hasAttachments is true and none of the above conditions applied, check if we should still show attachments
-                    if (field['hasAttachments'] == true) {
-                      // Check if requireAttachmentsOn is empty or null
-                      bool isRequireAttachmentsOnEmpty =
-                          field['requireAttachmentsOn'] == null ||
-                              (field['requireAttachmentsOn'] is List &&
-                                  (field['requireAttachmentsOn'] as List)
-                                      .isEmpty);
+                    // If the value is not in requireAttachmentsOn or enableAttachmentsOn, don't show upload
+                    if (!shouldShowAttachments) {
+                      // Original fallback check: If hasAttachments is true and none of the above conditions applied
+                      if (field['hasAttachments'] == true) {
+                        // Check if requireAttachmentsOn is empty or null
+                        bool isRequireAttachmentsOnEmpty =
+                            field['requireAttachmentsOn'] == null ||
+                                (field['requireAttachmentsOn'] is List &&
+                                    (field['requireAttachmentsOn'] as List)
+                                        .isEmpty);
 
-                      // Check if enableAttachmentsOn is empty or null
-                      bool isEnableAttachmentsOnEmpty =
-                          field['enableAttachmentsOn'] == null ||
-                              (field['enableAttachmentsOn'] is List &&
-                                  (field['enableAttachmentsOn'] as List)
-                                      .isEmpty);
+                        // Check if enableAttachmentsOn is empty or null
+                        bool isEnableAttachmentsOnEmpty =
+                            field['enableAttachmentsOn'] == null ||
+                                (field['enableAttachmentsOn'] is List &&
+                                    (field['enableAttachmentsOn'] as List)
+                                        .isEmpty);
 
-                      // If both are empty or null, show file uploads and make them required
-                      if (isRequireAttachmentsOnEmpty &&
-                          isEnableAttachmentsOnEmpty) {
-                        shouldShowAttachments = true;
-                        isRequired = true;
+                        // If both are empty or null, show file uploads and make them required
+                        if (isRequireAttachmentsOnEmpty &&
+                            isEnableAttachmentsOnEmpty) {
+                          shouldShowAttachments = true;
+                          isRequired = true;
+                        } else {
+                          return const SizedBox.shrink();
+                        }
                       } else {
                         return const SizedBox.shrink();
                       }
-                    } else {
-                      return const SizedBox.shrink();
                     }
                   }
 
@@ -1457,68 +1480,92 @@ class _DynamicFormState extends State<DynamicForm>
                           ? [field['disableAttachmentsOn']]
                           : [];
 
-              // If the current value is in disabledOptions, don't show attachments
-              if (disabledOptions.contains(control.value)) {
+              // Implementing exact logic as specified:
+              // IF disableAttachmentsOn is NOT empty AND selectedAnswer is in disableAttachmentsOn
+              if (disabledOptions.isNotEmpty &&
+                  disabledOptions.contains(control.value)) {
+                // THEN: Do NOT show file upload
+                if (kDebugMode) {
+                  print(
+                      "📄 HIDING UPLOAD: '${control.value}' is in disableAttachmentsOn list for dropdown");
+                }
                 return const SizedBox.shrink();
               }
+              // ELSE: Show file upload (subject to other rules like requireAttachmentsOn or required)
 
               // Check if the value is in requireAttachmentsOn or enableAttachmentsOn
               bool shouldShowAttachments = false;
               bool isRequired = false;
 
-              // Check requireAttachmentsOn
-              if (field['requireAttachmentsOn'] != null) {
-                List<dynamic> requiredOptions =
-                    field['requireAttachmentsOn'] is List
-                        ? field['requireAttachmentsOn']
-                        : [field['requireAttachmentsOn']];
-
-                if (requiredOptions.contains(control.value)) {
-                  shouldShowAttachments = true;
-                  isRequired = true;
+              // NEW RULE: If hasAttachments is true, disableAttachmentsOn is not empty,
+              // and selected answer is NOT in disableAttachmentsOn, show and require upload
+              if (field['hasAttachments'] == true &&
+                  disabledOptions.isNotEmpty &&
+                  !disabledOptions.contains(control.value)) {
+                if (kDebugMode) {
+                  print(
+                      "📄 SHOWING UPLOAD: hasAttachments=true and value '${control.value}' is NOT in disableAttachmentsOn for dropdown");
                 }
+                shouldShowAttachments = true;
+                isRequired = true;
               }
+              // Continue with existing conditions if the new rule didn't apply
+              else {
+                // Check requireAttachmentsOn
+                if (field['requireAttachmentsOn'] != null) {
+                  List<dynamic> requiredOptions =
+                      field['requireAttachmentsOn'] is List
+                          ? field['requireAttachmentsOn']
+                          : [field['requireAttachmentsOn']];
 
-              // Check enableAttachmentsOn (works the same as requireAttachmentsOn for visibility)
-              if (!shouldShowAttachments &&
-                  field['enableAttachmentsOn'] != null) {
-                List<dynamic> enabledOptions =
-                    field['enableAttachmentsOn'] is List
-                        ? field['enableAttachmentsOn']
-                        : [field['enableAttachmentsOn']];
-
-                if (enabledOptions.contains(control.value)) {
-                  shouldShowAttachments = true;
-                  isRequired = true;
-                }
-              }
-
-              // If the value is not in requireAttachmentsOn or enableAttachmentsOn, don't show upload
-              if (!shouldShowAttachments) {
-                // NEW CHECK: If hasAttachments is true and none of the above conditions applied, check if we should still show attachments
-                if (field['hasAttachments'] == true) {
-                  // Check if requireAttachmentsOn is empty or null
-                  bool isRequireAttachmentsOnEmpty =
-                      field['requireAttachmentsOn'] == null ||
-                          (field['requireAttachmentsOn'] is List &&
-                              (field['requireAttachmentsOn'] as List).isEmpty);
-
-                  // Check if enableAttachmentsOn is empty or null
-                  bool isEnableAttachmentsOnEmpty =
-                      field['enableAttachmentsOn'] == null ||
-                          (field['enableAttachmentsOn'] is List &&
-                              (field['enableAttachmentsOn'] as List).isEmpty);
-
-                  // If both are empty or null, show file uploads and make them required
-                  if (isRequireAttachmentsOnEmpty &&
-                      isEnableAttachmentsOnEmpty) {
+                  if (requiredOptions.contains(control.value)) {
                     shouldShowAttachments = true;
                     isRequired = true;
+                  }
+                }
+
+                // Check enableAttachmentsOn (works the same as requireAttachmentsOn for visibility)
+                if (!shouldShowAttachments &&
+                    field['enableAttachmentsOn'] != null) {
+                  List<dynamic> enabledOptions =
+                      field['enableAttachmentsOn'] is List
+                          ? field['enableAttachmentsOn']
+                          : [field['enableAttachmentsOn']];
+
+                  if (enabledOptions.contains(control.value)) {
+                    shouldShowAttachments = true;
+                    isRequired = true;
+                  }
+                }
+
+                // If the value is not in requireAttachmentsOn or enableAttachmentsOn, don't show upload
+                if (!shouldShowAttachments) {
+                  // Original fallback check: If hasAttachments is true and none of the above conditions applied
+                  if (field['hasAttachments'] == true) {
+                    // Check if requireAttachmentsOn is empty or null
+                    bool isRequireAttachmentsOnEmpty =
+                        field['requireAttachmentsOn'] == null ||
+                            (field['requireAttachmentsOn'] is List &&
+                                (field['requireAttachmentsOn'] as List)
+                                    .isEmpty);
+
+                    // Check if enableAttachmentsOn is empty or null
+                    bool isEnableAttachmentsOnEmpty =
+                        field['enableAttachmentsOn'] == null ||
+                            (field['enableAttachmentsOn'] is List &&
+                                (field['enableAttachmentsOn'] as List).isEmpty);
+
+                    // If both are empty or null, show file uploads and make them required
+                    if (isRequireAttachmentsOnEmpty &&
+                        isEnableAttachmentsOnEmpty) {
+                      shouldShowAttachments = true;
+                      isRequired = true;
+                    } else {
+                      return const SizedBox.shrink();
+                    }
                   } else {
                     return const SizedBox.shrink();
                   }
-                } else {
-                  return const SizedBox.shrink();
                 }
               }
 
@@ -3113,6 +3160,45 @@ class _DynamicFormState extends State<DynamicForm>
         if (!hasConditionalAttachments) {
           requiresAttachments = true;
           reasonForRequirement = "hasAttachments=true with no conditions";
+        }
+      }
+
+      // NEW RULE #4.5: When hasAttachments=true, disableAttachmentsOn is not empty, and selected value is NOT in disableAttachmentsOn
+      if (field['hasAttachments'] == true &&
+          field['disableAttachmentsOn'] != null &&
+          !requiresAttachments) {
+        List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
+            ? field['disableAttachmentsOn']
+            : [field['disableAttachmentsOn']];
+
+        if (disabledOptions.isNotEmpty) {
+          // For multiselect fields
+          if (currentValue is List && currentValue.isNotEmpty) {
+            // Check if NO selected value is in disabledOptions
+            bool noValueDisablesAttachments =
+                !currentValue.any((value) => disabledOptions.contains(value));
+
+            if (noValueDisablesAttachments) {
+              requiresAttachments = true;
+              reasonForRequirement =
+                  "hasAttachments=true, disableAttachmentsOn not empty, and no selected value in disableAttachmentsOn";
+              if (kDebugMode) {
+                print(
+                    "📄 VALIDATION: Attachments required for field '$fieldName' because hasAttachments=true, disableAttachmentsOn not empty, and no selected value in disableAttachmentsOn");
+              }
+            }
+          }
+          // For radio, dropdown, and other single-value fields
+          else if (currentValue != null &&
+              !disabledOptions.contains(currentValue)) {
+            requiresAttachments = true;
+            reasonForRequirement =
+                "hasAttachments=true, disableAttachmentsOn not empty, and selected value not in disableAttachmentsOn";
+            if (kDebugMode) {
+              print(
+                  "📄 VALIDATION: Attachments required for field '$fieldName' because hasAttachments=true, disableAttachmentsOn not empty, and value '$currentValue' not in disableAttachmentsOn");
+            }
+          }
         }
       }
 
