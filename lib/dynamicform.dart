@@ -254,11 +254,27 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Calculate initial progress
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Recompute group structure
+      _recomputeGroupStructure();
+
+      // Make sure we start with a visible question
+      _updateCurrentQuestionBasedOnVisibility();
+
+      // Update progress
       _safeCalculateProgress();
       _pageControllerReady = true;
-    });
 
-    _recomputeGroupStructure();
+      // Debug current state
+      if (kDebugMode) {
+        print("\n=== Form Initialized ===");
+        print("Current question index: ${controller.currentQuestionIndex}");
+        print("Current group pointer: $_currentGroupPointer");
+        print("Total anchors: ${_groupAnchors.length}");
+        print(
+            "Current question visible: ${controller.shouldDisplayQuestion(controller.currentQuestionIndex)}");
+        controller.debugNavigationState();
+      }
+    });
 
     // Listen to form value changes and update question visibility
     _formValueChangeSubscription =
@@ -3371,7 +3387,6 @@ class _DynamicFormState extends State<DynamicForm>
       }
       // Show a snackbar to inform the user that validation failed
       AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
-      
       return;
     }
 
@@ -3379,35 +3394,44 @@ class _DynamicFormState extends State<DynamicForm>
       print("✅ All validations passed - Proceeding with navigation");
     }
 
-    // Check if current question is visible, skip to next visible if not
-    _updateCurrentQuestionBasedOnVisibility();
+    // Use the controller's logic to determine the next question
+    // This will handle all the branching logic and navigation history
+    bool proceeded = controller.validateAndProceed(context);
 
-    // Proceed with moving to the next step
-    if (_currentGroupPointer < _groupAnchors.length - 1) {
+    if (proceeded) {
       setState(() {
-        _currentGroupPointer++;
+        // Find the anchor that corresponds to the controller's current index
+        int matchingAnchorPointer = -1;
+        for (int i = 0; i < _groupAnchors.length; i++) {
+          if (_groupAnchors[i] == controller.currentQuestionIndex) {
+            matchingAnchorPointer = i;
+            break;
+          }
+        }
 
-        // Update the controller index to match the new group
-        if (_groupAnchors.isNotEmpty) {
-          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
-
-          // Check if we need to skip this next question too
-          _updateCurrentQuestionBasedOnVisibility();
-
+        if (matchingAnchorPointer != -1) {
+          _currentGroupPointer = matchingAnchorPointer;
           if (kDebugMode) {
             print(
-                "➡️ Navigated to next question: ${_internalFields[_groupAnchors[_currentGroupPointer]]['name']}");
+                "Updated group pointer to $_currentGroupPointer to match controller index ${controller.currentQuestionIndex}");
+            print(
+                "➡️ Navigated to question: ${_internalFields[_groupAnchors[_currentGroupPointer]]['name']}");
           }
+        } else {
+          if (kDebugMode) {
+            print(
+                "Warning: Could not find anchor for controller index ${controller.currentQuestionIndex}");
+          }
+
+          // If we can't find a matching anchor, check if current question is visible
+          _updateCurrentQuestionBasedOnVisibility();
         }
       });
     } else {
-      // We're at the last question, show submit button
-      setState(() {
-        // This will trigger the UI to show the submit button
-        if (kDebugMode) {
-          print("🏁 Reached final question - Submit button will be shown");
-        }
-      });
+      if (kDebugMode) {
+        print(
+            "⚠️ Controller validateAndProceed returned false - Navigation blocked");
+      }
     }
   }
 
@@ -3439,34 +3463,43 @@ class _DynamicFormState extends State<DynamicForm>
       return;
     }
 
-    // Check if current question is visible, skip to next visible if not
-    _updateCurrentQuestionBasedOnVisibility();
+    // Use the controller's validateAndProceed method to handle navigation
+    bool proceeded = controller.validateAndProceed(context);
 
-    // Now proceed with normal navigation
-    if (_currentGroupPointer < _groupAnchors.length - 1) {
+    if (proceeded) {
       setState(() {
-        _currentGroupPointer++;
-        // Update the controller index to match the new group
-        if (_groupAnchors.isNotEmpty) {
-          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+        // Find the anchor that corresponds to the controller's current index
+        int matchingAnchorPointer = -1;
+        for (int i = 0; i < _groupAnchors.length; i++) {
+          if (_groupAnchors[i] == controller.currentQuestionIndex) {
+            matchingAnchorPointer = i;
+            break;
+          }
+        }
 
-          // Check if we need to skip this question too
-          _updateCurrentQuestionBasedOnVisibility();
-
+        if (matchingAnchorPointer != -1) {
+          _currentGroupPointer = matchingAnchorPointer;
           if (kDebugMode) {
             print(
-                "➡️ Navigated to next question: ${_internalFields[_groupAnchors[_currentGroupPointer]]['name']}");
+                "Updated group pointer to $_currentGroupPointer to match controller index ${controller.currentQuestionIndex}");
+            print(
+                "➡️ Navigated to question: ${_internalFields[_groupAnchors[_currentGroupPointer]]['name']}");
           }
+        } else {
+          if (kDebugMode) {
+            print(
+                "Warning: Could not find anchor for controller index ${controller.currentQuestionIndex}");
+          }
+
+          // If we can't find a matching anchor, check if current question is visible
+          _updateCurrentQuestionBasedOnVisibility();
         }
       });
     } else {
-      // We're at the last question, show submit button
-      setState(() {
-        // This will trigger the UI to show the submit button
-        if (kDebugMode) {
-          print("🏁 Reached final question - Submit button will be shown");
-        }
-      });
+      if (kDebugMode) {
+        print(
+            "⚠️ Controller validateAndProceed returned false - Navigation blocked");
+      }
     }
   }
 
@@ -4230,11 +4263,39 @@ class _DynamicFormState extends State<DynamicForm>
 
   // Move to the previous valid question in the form
   void moveToPreviousValidQuestion() {
-    if (_currentGroupPointer > 0) {
-      _currentGroupPointer--;
-      // Update the controller index to match the new group
-      if (_groupAnchors.isNotEmpty) {
-        controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+    if (kDebugMode) {
+      print("\n=== moveToPreviousValidQuestion called ===");
+    }
+
+    // Use the controller's method to navigate to the previous visible question
+    bool success = controller.moveToPreviousQuestion();
+
+    if (success) {
+      // Update the UI pointer to match the controller
+      // Find the anchor that corresponds to the controller's current index
+      int matchingAnchorPointer = -1;
+      for (int i = 0; i < _groupAnchors.length; i++) {
+        if (_groupAnchors[i] == controller.currentQuestionIndex) {
+          matchingAnchorPointer = i;
+          break;
+        }
+      }
+
+      if (matchingAnchorPointer != -1) {
+        _currentGroupPointer = matchingAnchorPointer;
+        if (kDebugMode) {
+          print(
+              "Updated group pointer to $_currentGroupPointer to match controller index ${controller.currentQuestionIndex}");
+        }
+      } else {
+        if (kDebugMode) {
+          print(
+              "Warning: Could not find anchor for controller index ${controller.currentQuestionIndex}");
+        }
+      }
+    } else {
+      if (kDebugMode) {
+        print("No previous visible question found");
       }
     }
   }

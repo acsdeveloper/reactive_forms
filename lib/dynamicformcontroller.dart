@@ -13,6 +13,7 @@ class DynamicFormController extends ChangeNotifier {
   late FormGroup form;
   Map<String, List<Map<String, dynamic>>> uploadedFiles = {};
   int _currentQuestionIndex = 0;
+  List<int> _navigationHistory = [];
   Map<String, dynamic> _values = {};
   final List<FormFieldModel> _fields;
 
@@ -133,6 +134,18 @@ class DynamicFormController extends ChangeNotifier {
     // Debug: Print initial form values
     if (kDebugMode) {
       print('Initial form values: ${form.value}');
+    }
+
+    // Ensure we start with a visible question
+    if (!shouldDisplayQuestion(_currentQuestionIndex)) {
+      int nextVisibleIndex = findNextVisibleQuestionIndex();
+      if (nextVisibleIndex != -1) {
+        _currentQuestionIndex = nextVisibleIndex;
+        if (kDebugMode) {
+          print(
+              'First question not visible, moving to index: $_currentQuestionIndex');
+        }
+      }
     }
   }
 
@@ -344,12 +357,26 @@ class DynamicFormController extends ChangeNotifier {
     int nextQuestionIndex = findNextVisibleQuestionIndex();
 
     if (nextQuestionIndex != -1) {
+      // Add current question to navigation history before moving
+      _navigationHistory.add(_currentQuestionIndex);
       _currentQuestionIndex = nextQuestionIndex;
       print("Navigation: Moving to question at index $nextQuestionIndex");
     } else if (_currentQuestionIndex < formJson.length - 1) {
-      _currentQuestionIndex++;
-      print(
-          "Navigation: No conditional question found, moving to next question ${_currentQuestionIndex}");
+      // Find the next visible question by incrementing and checking visibility
+      int nextIndex = _currentQuestionIndex + 1;
+      while (nextIndex < formJson.length && !shouldDisplayQuestion(nextIndex)) {
+        nextIndex++;
+      }
+
+      if (nextIndex < formJson.length) {
+        // Add current question to navigation history before moving
+        _navigationHistory.add(_currentQuestionIndex);
+        _currentQuestionIndex = nextIndex;
+        print(
+            "Navigation: Moving to next visible question at index $nextIndex");
+      } else {
+        print("Navigation: No more visible questions found");
+      }
     }
 
     notifyListeners();
@@ -701,16 +728,24 @@ class DynamicFormController extends ChangeNotifier {
     if (_currentQuestionIndex >= formJson.length) return false;
 
     final currentField = formJson[_currentQuestionIndex];
-    if (currentField['branching'] == null) return false;
 
-    var branchTo = currentField['branching'];
-    if (branchTo is Map<String, dynamic>) {
-      String? targetQuestion =
-          branchTo[form.control(currentField['name']).value?.toString()];
-      return targetQuestion == 'end';
+    // Case 1: Current question has explicit branching to "end"
+    if (currentField['branching'] != null) {
+      var branchTo = currentField['branching'];
+      if (branchTo is Map<String, dynamic>) {
+        String? targetQuestion =
+            branchTo[form.control(currentField['name']).value?.toString()];
+        if (targetQuestion == 'end') return true;
+      }
     }
 
-    return false;
+    // Case 2: Check if there are no more visible questions after this one
+    bool noMoreVisibleQuestions = findNextVisibleQuestionIndex() == -1;
+
+    // Case 3: We've reached the last question in the form
+    bool isLastQuestion = _currentQuestionIndex == formJson.length - 1;
+
+    return noMoreVisibleQuestions || isLastQuestion;
   }
 
   void addFormControls(List<Map<String, dynamic>> newFields) {
@@ -974,4 +1009,59 @@ class DynamicFormController extends ChangeNotifier {
   }
 
   int get currentQuestionIndex => _currentQuestionIndex;
+
+  /// Moves to the previous question that the user actually saw
+  /// Returns true if successful, false if there's no previous question
+  bool moveToPreviousQuestion() {
+    if (_navigationHistory.isEmpty) {
+      return false;
+    }
+
+    int previousIndex = _navigationHistory.removeLast();
+
+    // Ensure the previous question is visible with current form values
+    // If not, keep going back until finding a visible one
+    while (!shouldDisplayQuestion(previousIndex) &&
+        _navigationHistory.isNotEmpty) {
+      previousIndex = _navigationHistory.removeLast();
+    }
+
+    // Only update if we found a visible previous question
+    if (shouldDisplayQuestion(previousIndex)) {
+      _currentQuestionIndex = previousIndex;
+      notifyListeners();
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Calculates the visual question number based on visible questions only
+  /// Returns a 1-based index (first question is #1)
+  int calculateVisualQuestionNumber(int questionIndex) {
+    int visualNumber = 1; // Start with 1
+
+    // Count only visible questions before this one
+    for (int i = 0; i < questionIndex; i++) {
+      if (shouldDisplayQuestion(i)) {
+        visualNumber++;
+      }
+    }
+
+    return visualNumber;
+  }
+
+  /// Adds debugging information about the current navigation state
+  void debugNavigationState() {
+    if (kDebugMode) {
+      print("Current index: $_currentQuestionIndex");
+      print("Navigation history: $_navigationHistory");
+      print(
+          "Is current question visible: ${shouldDisplayQuestion(_currentQuestionIndex)}");
+      print("Next visible question index: ${findNextVisibleQuestionIndex()}");
+      print("Should show submit button: ${shouldShowSubmitButton()}");
+      print(
+          "Visual question number: ${calculateVisualQuestionNumber(_currentQuestionIndex)}");
+    }
+  }
 }
