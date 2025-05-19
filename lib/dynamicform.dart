@@ -1107,65 +1107,76 @@ class _DynamicFormState extends State<DynamicForm>
     }
   }
 
-  Widget _buildLabelRow(Map<String, dynamic> field) {
-    if (field['label'] == null) return const SizedBox.shrink();
+  Widget _buildLabelRow(Map<String, dynamic> field, [int? index]) {
+  if (field['label'] == null) return const SizedBox.shrink();
 
-    // Find the anchor index for this field
-    int? anchorIndex;
-    for (var entry in _anchorToFieldIndices.entries) {
-      if (entry.value.any((idx) =>
-          idx < _internalFields.length &&
-          _internalFields[idx]['name'] == field['name'])) {
-        anchorIndex = entry.key;
-        break;
-      }
+  // Find the anchor index for this field
+  int? anchorIndex;
+  for (var entry in _anchorToFieldIndices.entries) {
+    if (entry.value.any((idx) =>
+        idx < _internalFields.length &&
+        _internalFields[idx]['name'] == field['name'])) {
+      anchorIndex = entry.key;
+      break;
     }
+  }
 
-    // Use the controller's visual numbering logic instead of _anchorToQuestionNumber
-    int? questionNumber = _getQuestionNumberForField(field);
+  // Use the controller's visual numbering logic instead of _anchorToQuestionNumber
+  int? questionNumber = _getQuestionNumberForField(field);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (questionNumber != null)
-            Text(
-              'Question $questionNumber',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18.0,
-                color: widget.primaryColor ?? Theme.of(context).primaryColor,
-                fontFamily: widget.fontFamily?.fontFamily,
-              ),
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8.0),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (questionNumber != null)
+          Text(
+            'Question $questionNumber',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18.0,
+              color: widget.primaryColor ?? Theme.of(context).primaryColor,
+              fontFamily: widget.fontFamily?.fontFamily,
             ),
-          const SizedBox(height: 8),
-          Row(
+          ),
+        const SizedBox(height: 8),
+        Text.rich(
+          TextSpan(
             children: [
-              Expanded(
-                child: Text(
-                  field['label'],
+              if (index != null)
+                TextSpan(
+                  text: '${index + 1}: ', // numbered prefix if index provided
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16.0,
                     fontFamily: widget.fontFamily?.fontFamily,
                   ),
                 ),
+              TextSpan(
+                text: field['label'],
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16.0,
+                  fontFamily: widget.fontFamily?.fontFamily,
+                ),
               ),
               if (field['required'] == true)
-                Text(' *',
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16.0,
-                      fontFamily: widget.fontFamily?.fontFamily,
-                    )),
+                TextSpan(
+                  text: ' *',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16.0,
+                    fontFamily: widget.fontFamily?.fontFamily,
+                  ),
+                ),
             ],
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildQuestionHeader(Map<String, dynamic> field) {
     return Column(
@@ -2556,17 +2567,16 @@ class _DynamicFormState extends State<DynamicForm>
         visibleIndices.add(i);
       }
     }
-
+    
     if (visibleIndices.isEmpty) return "0/0";
-
+    
     // Find the current question's position in the visible questions
-    int currentPosition =
-        visibleIndices.indexOf(controller.currentQuestionIndex);
+    int currentPosition = visibleIndices.indexOf(controller.currentQuestionIndex);
     if (currentPosition == -1) {
       // Current question is not visible - unusual state
       return "${controller.calculateVisualQuestionNumber(controller.currentQuestionIndex)}/${visibleIndices.length}";
     }
-
+    
     return "${currentPosition + 1}/${visibleIndices.length}";
   }
 
@@ -4816,7 +4826,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Question number if provided and not just an attachment field
-        if (widget.questionNumber != null && (!widget.hasAttachments))
+        if (widget.questionNumber != null && !widget.hasAttachments)
           Text(
             'Question ${widget.questionNumber}',
             style: TextStyle(
@@ -4830,28 +4840,28 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
 
         // Field label if this is a standalone field (not just an attachment widget)
         if (!widget.hasAttachments)
-          Row(
+          Text.rich(
+          TextSpan(
             children: [
-              Expanded(
-                child: Text(
-                  widget.fieldLabel,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16.0,
-                    fontFamily: widget.fontFamily?.fontFamily,
-                  ),
+              TextSpan(
+                text: widget.fieldLabel,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16.0,
+                  fontFamily: widget.fontFamily?.fontFamily,
                 ),
               ),
               if (widget.isRequired)
-                Text(
-                  '*',
-                  style: widget.fontFamily.copyWith(
+                TextSpan(
+                  text: ' *',
+                  style: TextStyle(
                     color: const Color.fromARGB(255, 222, 75, 64),
                     fontSize: 16,
                   ),
                 ),
             ],
           ),
+        ),
 
         // Clear vertical spacing
         const SizedBox(height: 12),
@@ -4889,8 +4899,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: widget.primaryColor,
                 foregroundColor: widget.buttonTextColor,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                 elevation: 2,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -4900,11 +4909,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.upload_file_rounded,
-                    color: widget.buttonTextColor,
-                    size: 32,
-                  ),
+                  Icon(Icons.upload_file_rounded, color: widget.buttonTextColor, size: 32),
                   const SizedBox(width: 12),
                   Text(
                     "Select File",
@@ -4937,8 +4942,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
               ),
               trailing: IconButton(
                 icon: const Icon(Icons.delete),
-                onPressed: () =>
-                    widget.onRemoveUploadedFile(widget.uploadedFiles[0]),
+                onPressed: () => widget.onRemoveUploadedFile(widget.uploadedFiles[0]),
               ),
               // Add onTap handler to preview the file
               onTap: () {
