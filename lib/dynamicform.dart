@@ -1121,9 +1121,8 @@ class _DynamicFormState extends State<DynamicForm>
       }
     }
 
-    // Get question number if available
-    int? questionNumber =
-        anchorIndex != null ? _anchorToQuestionNumber[anchorIndex] : null;
+    // Use the controller's visual numbering logic instead of _anchorToQuestionNumber
+    int? questionNumber = _getQuestionNumberForField(field);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
@@ -1140,7 +1139,7 @@ class _DynamicFormState extends State<DynamicForm>
                 fontFamily: widget.fontFamily?.fontFamily,
               ),
             ),
-          if (questionNumber != null) const SizedBox(height: 4.0),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -1266,157 +1265,20 @@ class _DynamicFormState extends State<DynamicForm>
   /// on the input field parameters. The returned widgets include RadioListTile widgets for options,
   /// FileUploadWidget for attachments if specified, and a TextField for comments if specified.
   Widget _buildRadioField(Map<String, dynamic> field) {
-    // Ensure we always use ["Yes", "No"] for empty options
-    final List<dynamic> rawOptions = (field['options'] as List<dynamic>?) ?? [];
+    final List<dynamic> rawOptions = field['options'] ?? [];
+    // Convert options to List<String> to ensure type safety
     final List<String> options =
-        rawOptions.isEmpty ? ['Yes', 'No'] : rawOptions.cast<String>();
+        rawOptions.map((option) => option.toString()).toList();
 
-    if (kDebugMode && rawOptions.isEmpty) {
-      print(
-          "📄 RADIO: Field '${field['name']}' has empty options - defaulting to Yes/No");
-    }
-
-    // SPECIAL HANDLING for question_6 to guarantee the file upload UI appears
-    if (field['name'] == 'question_6') {
+    // Handle case where options might be empty
+    if (options.isEmpty) {
       if (kDebugMode) {
-        print("\n⭐ FIXING QUESTION_6: Initializing upload structure");
+        print(
+            "📄 RADIO: Field '${field['name']}' has empty options - defaulting to Yes/No");
       }
-
-      // Fix: Initialize the uploadedFiles structure for question_6 immediately
-      // This ensures the FileUploadWidget will be visible right away
-      if (!controller.uploadedFiles.containsKey(field['name'])) {
-        controller.uploadedFiles[field['name']] = [];
-        if (kDebugMode) {
-          print("⭐ FIXING QUESTION_6: Created empty uploadedFiles entry");
-        }
-      }
-
-      // Build the radio group
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Add label and radio options
-          _buildLabelRow(field),
-          const SizedBox(height: 4),
-          ...options.map<Widget>((option) {
-            return RadioListTile<String>(
-              title: Text(option, style: widget.fontFamily),
-              value: option,
-              groupValue: controller.form.control(field['name']).value,
-              activeColor: widget.primaryColor,
-              onChanged: (value) {
-                if (kDebugMode) {
-                  print("\n⭐ FIXING QUESTION_6: Selected option: $value");
-                }
-
-                // Update the form control value
-                controller.form.control(field['name']).value = value;
-
-                // If Yes is selected, make sure uploadedFiles entry exists
-                if (value == 'Yes') {
-                  if (!controller.uploadedFiles.containsKey(field['name'])) {
-                    controller.uploadedFiles[field['name']] = [];
-                  }
-                  if (kDebugMode) {
-                    print(
-                        "⭐ FIXING QUESTION_6: 'Yes' selected - ensuring upload UI shows");
-                  }
-                }
-
-                // Force rebuild to update visibility
-                setState(() {});
-
-                // Navigate if appropriate
-                if (widget.showOneByOne &&
-                    !isCurrentQuestionEffectivelyLast()) {
-                  Future.delayed(const Duration(milliseconds: 300), () {
-                    // Only validate if Yes is selected
-                    if (value == 'Yes') {
-                      if (validateCurrentSection()) {
-                        moveToNextQuestion(context);
-                      }
-                    } else {
-                      // If No is selected, no need to validate files
-                      moveToNextQuestion(context);
-                    }
-                  });
-                }
-              },
-            );
-          }).toList(),
-
-          // Always add the file upload widget after radio buttons for question_6
-          const SizedBox(height: 16),
-          FileUploadWidget(
-            fieldName: field['name'],
-            fieldLabel: field['label'],
-            primaryColor: widget.primaryColor,
-            fontFamily: widget.fontFamily,
-            buttonTextColor: widget.buttonTextColor,
-            onFilesUploaded: (files) {
-              setState(() {
-                controller.uploadedFiles[field['name']] = files;
-                if (kDebugMode) {
-                  print("⭐ FIXING QUESTION_6: Files uploaded: ${files.length}");
-                }
-              });
-            },
-            uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
-            onRemoveUploadedFile: (file) {
-              setState(() {
-                controller.uploadedFiles[field['name']] = [];
-              });
-            },
-            isRequired: controller.form.control(field['name']).value == 'Yes',
-            questionNumber: _getQuestionNumberForField(field),
-            hasAttachments: true,
-          ),
-
-          // Add comments section if needed
-          if (field['hasComments'] == true) ...[
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Text(
-                  field['commentLabel'] ?? StringConstants.comments,
-                  style: widget.fontFamily,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '*',
-                  style: widget.fontFamily.copyWith(
-                    color: const Color.fromARGB(255, 222, 75, 64),
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-            ReactiveTextField(
-              formControlName: '${field['name']}_comment',
-              decoration: InputDecoration(
-                hintText: field['commentHint'] ?? '',
-                labelStyle: widget.fontFamily,
-                hintStyle: widget.fontFamily,
-                errorStyle: widget.fontFamily
-                    .copyWith(color: Colors.red[700], fontSize: 12),
-              ),
-              maxLines: 3,
-              validationMessages: {
-                'required': (_) => StringConstants.commentsAreRequired,
-              },
-              onSubmitted: (_) {
-                if (widget.showOneByOne &&
-                    !isCurrentQuestionEffectivelyLast()) {
-                  validateCurrentSection();
-                }
-              },
-            ),
-          ],
-        ],
-      );
     }
 
-    // Regular implementation for other radio fields
+    // Regular implementation for all radio fields
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1477,17 +1339,12 @@ class _DynamicFormState extends State<DynamicForm>
             )
             .toList(),
 
-        // Directly copied from the working dropdown implementation
-        if (field['hasAttachments'] == true)
+        // Add the file upload widget if hasAttachments is true
+        if (field['hasAttachments'] == true) ...[
+          const SizedBox(height: 16),
           ReactiveValueListenableBuilder(
             formControlName: field['name'],
             builder: (context, control, child) {
-              if (kDebugMode) {
-                print(
-                    "\n📄 RADIO UPLOAD: Building file upload UI for ${field['name']}");
-                print("📄 RADIO UPLOAD: Current value=${control.value}");
-              }
-
               // Get the disabledOptions list if it exists
               List<dynamic> disabledOptions =
                   field['disableAttachmentsOn'] is List
@@ -1496,98 +1353,76 @@ class _DynamicFormState extends State<DynamicForm>
                           ? [field['disableAttachmentsOn']]
                           : [];
 
-              // Implementing exact logic as specified:
-              // IF disableAttachmentsOn is NOT empty AND selectedAnswer is in disableAttachmentsOn
-              if (disabledOptions.isNotEmpty &&
-                  disabledOptions.contains(control.value)) {
-                // THEN: Do NOT show file upload
+              // Check if the selected value is in disabledOptions
+              final selectedValue = control.value;
+              final bool isAttachmentDisabled = disabledOptions.isNotEmpty &&
+                  disabledOptions.contains(selectedValue);
+
+              // If the value is in disabledOptions, don't show attachments
+              if (isAttachmentDisabled) {
                 if (kDebugMode) {
                   print(
-                      "📄 HIDING UPLOAD: '${control.value}' is in disableAttachmentsOn list for dropdown");
+                      "📄 RADIO UPLOAD: Hiding upload for ${field['name']} because value $selectedValue is in disabledOptions");
                 }
                 return const SizedBox.shrink();
               }
-              // ELSE: Show file upload (subject to other rules like requireAttachmentsOn or required)
 
-              // Check if the value is in requireAttachmentsOn or enableAttachmentsOn
               bool shouldShowAttachments = false;
               bool isRequired = false;
 
-              // NEW RULE: If hasAttachments is true, disableAttachmentsOn is not empty,
-              // and selected answer is NOT in disableAttachmentsOn, show and require upload
+              // If hasAttachments is true and disabledOptions is not empty and value not in disabledOptions,
+              // show and require upload
               if (field['hasAttachments'] == true &&
                   disabledOptions.isNotEmpty &&
-                  !disabledOptions.contains(control.value)) {
+                  !isAttachmentDisabled) {
                 if (kDebugMode) {
                   print(
-                      "📄 SHOWING UPLOAD: hasAttachments=true and value '${control.value}' is NOT in disableAttachmentsOn for dropdown");
+                      "📄 RADIO UPLOAD: Showing uploads for ${field['name']} because hasAttachments=true and value not in disabledOptions");
                 }
                 shouldShowAttachments = true;
                 isRequired = true;
-              }
-              // Continue with existing conditions if the new rule didn't apply
-              else {
+              } else {
                 // Check requireAttachmentsOn
                 if (field['requireAttachmentsOn'] != null) {
-                  List<dynamic> requiredOptions =
+                  final List<dynamic> requiredOptions =
                       field['requireAttachmentsOn'] is List
                           ? field['requireAttachmentsOn']
                           : [field['requireAttachmentsOn']];
 
-                  if (requiredOptions.contains(control.value)) {
+                  if (requiredOptions.contains(selectedValue)) {
                     shouldShowAttachments = true;
                     isRequired = true;
                   }
                 }
 
-                // Check for legacy attachmentsRequired property
-                if (!shouldShowAttachments &&
-                    field['enableAttachmentsOn'] != null) {
-                  List<dynamic> enabledOptions =
-                      field['enableAttachmentsOn'] is List
-                          ? field['enableAttachmentsOn']
-                          : [field['enableAttachmentsOn']];
+                // If the value is not in requireAttachmentsOn, check if hasAttachments is true
+                if (!shouldShowAttachments && field['hasAttachments'] == true) {
+                  // Check if requireAttachmentsOn is empty or null
+                  bool isRequireAttachmentsOnEmpty =
+                      field['requireAttachmentsOn'] == null ||
+                          (field['requireAttachmentsOn'] is List &&
+                              (field['requireAttachmentsOn'] as List).isEmpty);
 
-                  if (enabledOptions.contains(control.value)) {
+                  // If requireAttachmentsOn is empty or null, show file uploads
+                  if (isRequireAttachmentsOnEmpty) {
                     shouldShowAttachments = true;
                     isRequired = true;
-                  }
-                }
-
-                // If the value is not in requireAttachmentsOn or enableAttachmentsOn, don't show upload
-                if (!shouldShowAttachments) {
-                  // Original fallback check: If hasAttachments is true and none of the above conditions applied
-                  if (field['hasAttachments'] == true) {
-                    // Check if requireAttachmentsOn is empty or null
-                    bool isRequireAttachmentsOnEmpty =
-                        field['requireAttachmentsOn'] == null ||
-                            (field['requireAttachmentsOn'] is List &&
-                                (field['requireAttachmentsOn'] as List)
-                                    .isEmpty);
-
-                    // Check if enableAttachmentsOn is empty or null
-                    bool isEnableAttachmentsOnEmpty =
-                        field['enableAttachmentsOn'] == null ||
-                            (field['enableAttachmentsOn'] is List &&
-                                (field['enableAttachmentsOn'] as List).isEmpty);
-
-                    // If both are empty or null, show file uploads and make them required
-                    if (isRequireAttachmentsOnEmpty &&
-                        isEnableAttachmentsOnEmpty) {
-                      shouldShowAttachments = true;
-                      isRequired = true;
-                    } else {
-                      return const SizedBox.shrink();
-                    }
-                  } else {
-                    return const SizedBox.shrink();
                   }
                 }
               }
 
-              // Ensure uploadedFiles is initialized when needed
-              if (shouldShowAttachments &&
-                  !controller.uploadedFiles.containsKey(field['name'])) {
+              if (!shouldShowAttachments) {
+                return const SizedBox.shrink();
+              }
+
+              if (kDebugMode) {
+                print(
+                    "📄 RADIO UPLOAD: Building file upload UI for ${field['name']}");
+                print("📄 RADIO UPLOAD: Current value=$selectedValue");
+              }
+
+              // Initialize the uploadedFiles for this field if it doesn't exist
+              if (!controller.uploadedFiles.containsKey(field['name'])) {
                 controller.uploadedFiles[field['name']] = [];
                 if (kDebugMode) {
                   print(
@@ -1595,37 +1430,32 @@ class _DynamicFormState extends State<DynamicForm>
                 }
               }
 
-              return Column(
-                children: [
-                  const SizedBox(height: 16),
-                  // Remove the duplicate "Upload Files" label since FileUploadWidget will show it
-                  FileUploadWidget(
-                    fieldName: field['name'],
-                    fieldLabel: field['label'],
-                    primaryColor: widget.primaryColor,
-                    fontFamily: widget.fontFamily,
-                    buttonTextColor: widget.buttonTextColor,
-                    onFilesUploaded: (files) {
-                      setState(() {
-                        controller.uploadedFiles[field['name']] = files;
-                      });
-                    },
-                    uploadedFiles:
-                        controller.uploadedFiles[field['name']] ?? [],
-                    onRemoveUploadedFile: (file) {
-                      setState(() {
-                        // For single file upload, set to empty list when file is removed
-                        controller.uploadedFiles[field['name']] = [];
-                      });
-                    },
-                    isRequired: isRequired,
-                    questionNumber: _getQuestionNumberForField(field),
-                    hasAttachments: field['hasAttachments'] == true,
-                  ),
-                ],
+              return FileUploadWidget(
+                fieldName: field['name'],
+                fieldLabel: field['label'],
+                primaryColor: widget.primaryColor,
+                fontFamily: widget.fontFamily,
+                buttonTextColor: widget.buttonTextColor,
+                onFilesUploaded: (files) {
+                  setState(() {
+                    controller.uploadedFiles[field['name']] = files;
+                  });
+                },
+                uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+                onRemoveUploadedFile: (file) {
+                  setState(() {
+                    controller.uploadedFiles[field['name']]?.remove(file);
+                  });
+                },
+                isRequired: isRequired,
+                questionNumber: _getQuestionNumberForField(field),
+                hasAttachments: true,
               );
             },
           ),
+        ],
+
+        // Add comments section if needed
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
           Row(
@@ -1647,11 +1477,9 @@ class _DynamicFormState extends State<DynamicForm>
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
               hintText: field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
               hintStyle: widget.fontFamily,
-              // Add error style
               errorStyle: widget.fontFamily
                   .copyWith(color: Colors.red[700], fontSize: 12),
             ),
@@ -1659,7 +1487,6 @@ class _DynamicFormState extends State<DynamicForm>
             validationMessages: {
               'required': (_) => StringConstants.commentsAreRequired,
             },
-            // Add onSubmitted to validate the form when user submits via keyboard
             onSubmitted: (_) {
               if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
                 validateCurrentSection();
@@ -2722,8 +2549,25 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   String getCurrentQuestionNumber() {
-    if (_groupAnchors.isEmpty) return "0/0";
-    return '${_currentGroupPointer + 1}/${_groupAnchors.length}';
+    // Count how many questions are visible
+    List<int> visibleIndices = [];
+    for (int i = 0; i < widget.formJson.length; i++) {
+      if (controller.shouldDisplayQuestion(i)) {
+        visibleIndices.add(i);
+      }
+    }
+
+    if (visibleIndices.isEmpty) return "0/0";
+
+    // Find the current question's position in the visible questions
+    int currentPosition =
+        visibleIndices.indexOf(controller.currentQuestionIndex);
+    if (currentPosition == -1) {
+      // Current question is not visible - unusual state
+      return "${controller.calculateVisualQuestionNumber(controller.currentQuestionIndex)}/${visibleIndices.length}";
+    }
+
+    return "${currentPosition + 1}/${visibleIndices.length}";
   }
 
   int getTotalQuestions() {
@@ -4111,19 +3955,44 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   int? _getQuestionNumberForField(Map<String, dynamic> field) {
-    // Find the anchor index for this field
-    int? anchorIndex;
-    for (var entry in _anchorToFieldIndices.entries) {
-      if (entry.value.any((idx) =>
-          idx < _internalFields.length &&
-          _internalFields[idx]['name'] == field['name'])) {
-        anchorIndex = entry.key;
+    // First find the index of this field in the formJson array to use the controller's visual numbering
+    int formIndex = -1;
+    for (int i = 0; i < widget.formJson.length; i++) {
+      if (widget.formJson[i]['name'] == field['name']) {
+        formIndex = i;
         break;
       }
     }
 
-    // Get question number if available
-    return anchorIndex != null ? _anchorToQuestionNumber[anchorIndex] : null;
+    // If we found the field in the formJson, use the controller's visual numbering
+    if (formIndex != -1) {
+      return controller.calculateVisualQuestionNumber(formIndex);
+    }
+
+    // Fallback: For fields not directly in formJson (like duplicates or children),
+    // find associated original field index and use its numbering
+    String originalFieldName = field['name'].toString();
+
+    // If this is a duplicate field with timestamp suffix, extract the base name
+    final timestampPattern = RegExp(r'(.+)_\d+$');
+    final match = timestampPattern.firstMatch(originalFieldName);
+    if (match != null) {
+      originalFieldName = match.group(1) ?? originalFieldName;
+    }
+
+    // Find the original field in formJson
+    for (int i = 0; i < widget.formJson.length; i++) {
+      if (widget.formJson[i]['name'] == originalFieldName) {
+        return controller.calculateVisualQuestionNumber(i);
+      }
+    }
+
+    // Last resort fallback: return null if we can't determine the question number
+    if (kDebugMode) {
+      print(
+          "Warning: Could not determine question number for field: ${field['name']}");
+    }
+    return null;
   }
 
   // Ensure form controls have the correct validation rules

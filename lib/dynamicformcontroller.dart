@@ -223,8 +223,22 @@ class DynamicFormController extends ChangeNotifier {
   }
 
   bool validateAndProceed(BuildContext context) {
+    // Ensure we're not out of bounds
+    if (_currentQuestionIndex < 0 || _currentQuestionIndex >= formJson.length) {
+      if (kDebugMode) {
+        print(
+            "Error: Current question index out of bounds: $_currentQuestionIndex");
+      }
+      return false;
+    }
+
     final field = formJson[_currentQuestionIndex];
     final currentFieldName = field['name'];
+
+    if (kDebugMode) {
+      print("Validating field: $currentFieldName");
+    }
+
     final currentControl = form.control(currentFieldName);
 
     currentControl.markAsTouched();
@@ -238,6 +252,7 @@ class DynamicFormController extends ChangeNotifier {
       return false;
     }
 
+    // Validate comments if required
     if (field['hasComments'] == true) {
       final commentControlName = '${currentFieldName}_comment';
       if (form.contains(commentControlName)) {
@@ -254,6 +269,7 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
+    // Validate file uploads if required
     if (field['hasAttachments'] != false) {
       final selectedValue = currentControl.value;
 
@@ -293,7 +309,7 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
+        // Check: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
         // require file upload
         if (!fileRequired && field['hasAttachments'] == true) {
           // Check if requireAttachmentsOn is an empty array
@@ -320,12 +336,6 @@ class DynamicFormController extends ChangeNotifier {
           fileRequired = true;
         }
 
-        if (!fileRequired && field['attachmentsRequired'] == true) {
-          print(
-              "Legacy property 'attachmentsRequired' detected - treating as requireAttachmentsOn");
-          fileRequired = true;
-        }
-
         if (fileRequired &&
             (uploadedFiles[currentFieldName]?.isEmpty ?? true)) {
           AppSnackBar(context)
@@ -336,6 +346,7 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
+    // Validate multiselect fields
     if (field['type'] == 'multiselect' && field['required'] == true) {
       if (currentControl.value == null) {
         AppSnackBar(context)
@@ -354,28 +365,79 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    int nextQuestionIndex = findNextVisibleQuestionIndex();
+    // Field validation passed, add current question to navigation history before moving
+    _navigationHistory.add(_currentQuestionIndex);
 
-    if (nextQuestionIndex != -1) {
-      // Add current question to navigation history before moving
-      _navigationHistory.add(_currentQuestionIndex);
-      _currentQuestionIndex = nextQuestionIndex;
-      print("Navigation: Moving to question at index $nextQuestionIndex");
-    } else if (_currentQuestionIndex < formJson.length - 1) {
-      // Find the next visible question by incrementing and checking visibility
-      int nextIndex = _currentQuestionIndex + 1;
-      while (nextIndex < formJson.length && !shouldDisplayQuestion(nextIndex)) {
-        nextIndex++;
+    // Check for branching rules first - they take precedence
+    if (field['branching'] != null &&
+        field['branching'] is Map<String, dynamic>) {
+      final Map<String, dynamic> branchingRules = field['branching'];
+      final String? selectedValue = currentControl.value?.toString();
+
+      if (selectedValue != null && branchingRules.containsKey(selectedValue)) {
+        final dynamic targetQuestion = branchingRules[selectedValue];
+
+        if (targetQuestion == 'end') {
+          // This branch leads to the end of the form - show submit button
+          if (kDebugMode) {
+            print("Navigation: Branching to 'end' - form complete");
+          }
+          notifyListeners();
+          return true;
+        } else if (targetQuestion is String) {
+          // Find the index of the target question
+          int targetIndex = -1;
+          for (int i = 0; i < formJson.length; i++) {
+            if (formJson[i]['name'] == targetQuestion) {
+              targetIndex = i;
+              break;
+            }
+          }
+
+          if (targetIndex != -1) {
+            if (shouldDisplayQuestion(targetIndex)) {
+              _currentQuestionIndex = targetIndex;
+              if (kDebugMode) {
+                print(
+                    "Navigation: Branching to question '$targetQuestion' at index $targetIndex");
+              }
+              notifyListeners();
+              return true;
+            } else {
+              if (kDebugMode) {
+                print(
+                    "Navigation: Branching target '$targetQuestion' is not visible - finding next visible question");
+              }
+              // The branching target is not visible, find next visible
+              int nextVisibleIndex = findNextVisibleQuestionIndex(targetIndex);
+              if (nextVisibleIndex != -1) {
+                _currentQuestionIndex = nextVisibleIndex;
+                if (kDebugMode) {
+                  print(
+                      "Navigation: Found next visible question at index $nextVisibleIndex");
+                }
+                notifyListeners();
+                return true;
+              }
+            }
+          }
+        }
       }
+    }
 
-      if (nextIndex < formJson.length) {
-        // Add current question to navigation history before moving
-        _navigationHistory.add(_currentQuestionIndex);
-        _currentQuestionIndex = nextIndex;
+    // No branching or branching target not found/valid, find next visible question
+    int nextVisibleIndex = findNextVisibleQuestionIndex();
+
+    if (nextVisibleIndex != -1) {
+      _currentQuestionIndex = nextVisibleIndex;
+      if (kDebugMode) {
         print(
-            "Navigation: Moving to next visible question at index $nextIndex");
-      } else {
-        print("Navigation: No more visible questions found");
+            "Navigation: Moving to next visible question at index $nextVisibleIndex");
+      }
+    } else {
+      // No more visible questions - we're at the end of the form
+      if (kDebugMode) {
+        print("Navigation: No more visible questions found - form complete");
       }
     }
 
@@ -383,60 +445,25 @@ class DynamicFormController extends ChangeNotifier {
     return true;
   }
 
-  int findNextVisibleQuestionIndex() {
-    print("Finding next visible question after ${_currentQuestionIndex}");
+  int findNextVisibleQuestionIndex([int? startFromIndex]) {
+    int startIndex = startFromIndex ?? _currentQuestionIndex;
+    if (kDebugMode) {
+      print("Finding next visible question after index $startIndex");
+    }
 
-    for (int i = _currentQuestionIndex + 1; i < formJson.length; i++) {
-      final question = formJson[i];
-      final questionName = question['name'];
-
-      if (question['showWhen'] == null) {
-        print("Question $questionName has no conditions - will be shown");
-        return i;
-      }
-
-      final Map<String, dynamic> conditions = question['showWhen'];
-      bool shouldShow = true;
-
-      conditions.forEach((dependentField, expectedValues) {
-        if (!form.contains(dependentField)) {
-          print("Field $dependentField not found in form");
-          shouldShow = false;
-          return;
+    for (int i = startIndex + 1; i < formJson.length; i++) {
+      if (shouldDisplayQuestion(i)) {
+        if (kDebugMode) {
+          print(
+              "Found next visible question at index $i (${formJson[i]['name']})");
         }
-
-        final fieldValue = form.control(dependentField).value;
-        bool fieldMatches = false;
-
-        if (fieldValue is List && expectedValues is List) {
-          fieldMatches = fieldValue.any((v) => expectedValues.contains(v));
-          print(
-              "Checking if list $fieldValue intersects with $expectedValues: $fieldMatches");
-        } else if (fieldValue is List) {
-          fieldMatches = fieldValue.contains(expectedValues);
-          print(
-              "Checking if list $fieldValue contains $expectedValues: $fieldMatches");
-        } else if (expectedValues is List) {
-          fieldMatches = expectedValues.contains(fieldValue);
-          print(
-              "Checking if $fieldValue is in list $expectedValues: $fieldMatches");
-        } else {
-          fieldMatches = (fieldValue == expectedValues);
-          print(
-              "Checking if $fieldValue equals $expectedValues: $fieldMatches");
-        }
-
-        shouldShow = shouldShow && fieldMatches;
-      });
-
-      if (shouldShow) {
-        print("All conditions met for $questionName, it will be shown");
         return i;
-      } else {
-        print("Conditions not met for $questionName, checking next question");
       }
     }
 
+    if (kDebugMode) {
+      print("No more visible questions found after index $startIndex");
+    }
     return -1;
   }
 
@@ -1014,6 +1041,9 @@ class DynamicFormController extends ChangeNotifier {
   /// Returns true if successful, false if there's no previous question
   bool moveToPreviousQuestion() {
     if (_navigationHistory.isEmpty) {
+      if (kDebugMode) {
+        print("Navigation history is empty, cannot go back further");
+      }
       return false;
     }
 
@@ -1023,28 +1053,83 @@ class DynamicFormController extends ChangeNotifier {
     // If not, keep going back until finding a visible one
     while (!shouldDisplayQuestion(previousIndex) &&
         _navigationHistory.isNotEmpty) {
+      if (kDebugMode) {
+        print(
+            "Question at index $previousIndex is no longer visible, checking earlier question");
+      }
       previousIndex = _navigationHistory.removeLast();
     }
 
     // Only update if we found a visible previous question
     if (shouldDisplayQuestion(previousIndex)) {
       _currentQuestionIndex = previousIndex;
+      if (kDebugMode) {
+        print(
+            "Moving back to visible question at index $previousIndex (${formJson[previousIndex]['name']})");
+      }
       notifyListeners();
       return true;
+    } else {
+      if (kDebugMode) {
+        print("No visible previous questions found in navigation history");
+      }
+      // If the last item in navigation history is not visible,
+      // and we have no more history, go to the first visible question
+      int firstVisibleIndex = findFirstVisibleQuestionIndex();
+      if (firstVisibleIndex != -1) {
+        _currentQuestionIndex = firstVisibleIndex;
+        if (kDebugMode) {
+          print(
+              "Falling back to first visible question at index $firstVisibleIndex");
+        }
+        notifyListeners();
+        return true;
+      }
     }
 
     return false;
   }
 
+  /// Finds the index of the first visible question in the form
+  int findFirstVisibleQuestionIndex() {
+    for (int i = 0; i < formJson.length; i++) {
+      if (shouldDisplayQuestion(i)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
   /// Calculates the visual question number based on visible questions only
   /// Returns a 1-based index (first question is #1)
   int calculateVisualQuestionNumber(int questionIndex) {
-    int visualNumber = 1; // Start with 1
+    // Start with the first question being #1
+    int visualNumber = 1;
 
-    // Count only visible questions before this one
-    for (int i = 0; i < questionIndex; i++) {
+    // Get all visible question indices first to ensure proper sequence
+    List<int> visibleIndices = [];
+    for (int i = 0; i < formJson.length; i++) {
       if (shouldDisplayQuestion(i)) {
-        visualNumber++;
+        visibleIndices.add(i);
+      }
+    }
+
+    // Find the position of the current question in the visible questions list
+    int position = visibleIndices.indexOf(questionIndex);
+
+    // If we found the question in our visible list, its number is position + 1
+    // Otherwise, default to 1
+    if (position != -1) {
+      visualNumber = position + 1;
+      if (kDebugMode) {
+        print(
+            "Visual question number for index $questionIndex (${formJson[questionIndex]['name']}): $visualNumber");
+        print("Total visible questions: ${visibleIndices.length}");
+      }
+    } else {
+      if (kDebugMode) {
+        print(
+            "Warning: Question at index $questionIndex is not in visible questions list!");
       }
     }
 
