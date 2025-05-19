@@ -27,129 +27,126 @@ class DynamicFormController extends ChangeNotifier {
   void _initializeForm() {
     Map<String, AbstractControl<dynamic>> controls = {};
 
-    // Initialize form controls and uploadedFiles
-    for (var field in formJson) {
-      final fieldName = field['name'];
+    void _addControlsForFields(Iterable<Map<String, dynamic>> fieldList) {
+      for (var field in fieldList) {
+        final fieldName = field['name'];
 
-      if (field['type'] == 'multiselect') {
-        // Create a properly typed FormControl for multiselect
-        List<String> initialValue = [];
-        if (field['defaultValue'] != null) {
-          if (field['defaultValue'] is List) {
+        if (controls.containsKey(fieldName)) {
+          continue;
+        }
+
+        if (field['type'] == 'multiselect') {
+          List<String> initialValue = [];
+          if (field['defaultValue'] != null && field['defaultValue'] is List) {
             initialValue = (field['defaultValue'] as List)
                 .map((item) => item.toString())
                 .toList();
           }
-        }
 
-        // Debug print
-        print(
-            'Initializing multiselect field: $fieldName with initial value: $initialValue');
-
-        controls[fieldName] = FormControl<List<String>>(
-          value: initialValue,
-          validators: field['required'] == true ? [Validators.required] : [],
-        );
-
-        // Add comment field for multiselect fields if hasComments is true
-        if (field['hasComments'] == true) {
-          controls['${fieldName}_comment'] = FormControl<String>(
-            value: '',
-            validators: [Validators.required],
+          controls[fieldName] = FormControl<List<String>>(
+            value: initialValue,
+            validators: field['required'] == true ? [Validators.required] : [],
           );
-        }
-      } else if (field['type'] == 'file') {
-        uploadedFiles[fieldName] = []; // Initialize empty list for file uploads
-        controls[fieldName] = FormControl<String>(value: '');
 
-        // Add comment field for file fields if hasComments is true
-        if (field['hasComments'] == true) {
-          controls['${fieldName}_comment'] = FormControl<String>(
+          if (field['hasComments'] == true) {
+            controls['${fieldName}_comment'] = FormControl<String>(
+              value: '',
+              validators: [Validators.required],
+            );
+          }
+        } else if (field['type'] == 'file') {
+          uploadedFiles[fieldName] = [];
+          controls[fieldName] = FormControl<String>(
             value: '',
-            validators: [Validators.required],
+            validators: field['required'] == true ? [Validators.required] : [],
           );
-        }
-      } else if (field['type'] == 'number') {
-        // Special handling for number fields
-        controls[fieldName] = FormControl<num>(
-          value: null,
-          validators: _getValidators(field['required'], field),
-        );
 
-        // Add comment field for number fields if hasComments is true
-        if (field['hasComments'] == true) {
-          // When hasComments is true, make the comment field mandatory
-          controls['${fieldName}_comment'] = FormControl<String>(
-            value: '',
-            validators: [Validators.required],
+          if (field['hasComments'] == true) {
+            controls['${fieldName}_comment'] = FormControl<String>(
+              value: '',
+              validators: [Validators.required],
+            );
+          }
+        } else if (field['type'] == 'number') {
+          controls[fieldName] = FormControl<num>(
+            value: null,
+            validators: _getValidators(field['required'] == true, field),
           );
-        }
-      } else if (field['type'] == 'radio') {
-        // Set default Yes/No options for radio type if no options provided
-        if (field['options'] == null || (field['options'] as List).isEmpty) {
-          field['options'] = ['Yes', 'No'];
-        }
-        controls[fieldName] = FormControl<String>(
-          value: field['defaultValue'] ??
-              '', // Initialize with default value if provided
-          validators: _getValidators(field['required'], field),
-        );
 
-        if (field['hasComments'] == true) {
-          // When hasComments is true, make the comment field mandatory
-          controls['${fieldName}_comment'] = FormControl<String>(
-            value: '',
-            validators: [Validators.required],
+          if (field['hasComments'] == true) {
+            controls['${fieldName}_comment'] = FormControl<String>(
+              value: '',
+              validators: [Validators.required],
+            );
+          }
+        } else if (field['type'] == 'radio') {
+          if (field['options'] == null || (field['options'] as List).isEmpty) {
+            field['options'] = ['Yes', 'No'];
+          }
+          controls[fieldName] = FormControl<String>(
+            value: field['defaultValue'] ?? '',
+            validators: _getValidators(field['required'] == true, field),
           );
-        }
-      } else {
-        // Initialize form controls for non-file fields
-        controls[fieldName] = FormControl<String>(
-          value: field['defaultValue'] ?? '',
-          validators: _getValidators(field['required'], field),
-        );
 
-        if (field['hasComments'] == true) {
-          // When hasComments is true, make the comment field mandatory
-          controls['${fieldName}_comment'] = FormControl<String>(
-            value: '',
-            validators: [Validators.required],
+          if (field['hasComments'] == true) {
+            controls['${fieldName}_comment'] = FormControl<String>(
+              value: '',
+              validators: [Validators.required],
+            );
+          }
+        } else {
+          controls[fieldName] = FormControl<String>(
+            value: field['defaultValue'] ?? '',
+            validators: _getValidators(field['required'] == true, field),
           );
-        }
 
-        if (field['subQuestions'] != null) {
-          (field['subQuestions'] as Map<String, dynamic>)
-              .forEach((answer, subQuestions) {
-            if (subQuestions is List) {
-              for (var subField in subQuestions) {
-                if (subField is Map<String, dynamic>) {
-                  controls[subField['name']] = FormControl<String>(
-                    validators: _getValidators(subField['required'], subField),
-                  );
+          if (field['hasComments'] == true) {
+            controls['${fieldName}_comment'] = FormControl<String>(
+              value: '',
+              validators: [Validators.required],
+            );
+          }
+
+          if (field['subQuestions'] != null) {
+            (field['subQuestions'] as Map<String, dynamic>)
+                .forEach((answer, subQuestions) {
+              if (subQuestions is List) {
+                for (var subField in subQuestions) {
+                  if (subField is Map<String, dynamic>) {
+                    controls[subField['name']] = FormControl<String>(
+                      validators: _getValidators(
+                          subField['required'] == true, subField),
+                    );
+                  }
                 }
               }
-            }
-          });
+            });
+          }
         }
       }
     }
 
+    _addControlsForFields(formJson);
+
     form = FormGroup(controls);
 
     // Debug: Print initial form values
-    print('Initial form values: ${form.value}');
+    if (kDebugMode) {
+      print('Initial form values: ${form.value}');
+    }
   }
 
   List<Validator<dynamic>> _getValidators(
-      bool validators, Map<String, dynamic>? field) {
+      bool isRequired, Map<String, dynamic>? field) {
     List<Validator<dynamic>> validatorsList = [];
 
-    // Add required validator if present
-    if (validators == true) {
+    if (isRequired) {
       validatorsList.add(Validators.required);
+      if (kDebugMode) {
+        print("Adding required validator for field ${field?['name']}");
+      }
     }
 
-    // Add min/max validators for number fields
     if (field?['type'] == 'number') {
       if (field?['min'] != null) {
         validatorsList.add(Validators.min(field!['min']));
@@ -174,27 +171,10 @@ class DynamicFormController extends ChangeNotifier {
   void submitForm(BuildContext context) {
     bool isValid = true;
 
-    // Print the current form value for debugging
-    print('Form value at submission: ${form.value}');
-
-    // Check each field's validation
     for (var field in formJson) {
       final fieldName = field['name'];
       final control = form.control(fieldName);
 
-      // Debug info
-      print(
-          'Field: $fieldName, Value: ${control.value}, Valid: ${control.valid}');
-
-      // If field is file type, check uploaded files
-      if (field['type'] == 'file') {
-        if (field['required'] == true) {
-          isValid = isValid && (uploadedFiles[fieldName]?.isNotEmpty ?? false);
-        }
-        continue; // Skip further validation for file fields
-      }
-
-      // For non-file fields, check form control validity
       if (!control.valid && field['required'] == true) {
         isValid = false;
         break;
@@ -202,7 +182,6 @@ class DynamicFormController extends ChangeNotifier {
     }
 
     if (isValid) {
-      // Make a deep copy of the form value to ensure we get everything
       final formValue = Map<String, dynamic>.from(form.value);
       onSubmit(formValue, uploadedFiles);
     } else {
@@ -230,31 +209,13 @@ class DynamicFormController extends ChangeNotifier {
     }
   }
 
-  /// The function `validateAndProceed` in Dart validates form fields, handles file uploads, and
-  /// navigates to the next question based on user input.
-  ///
-  /// Args:
-  ///   context (BuildContext): The `context` parameter in the `validateAndProceed` function is of type
-  /// `BuildContext`. It is typically used in Flutter to provide access to the nearest BuildContext
-  /// ancestor in the widget tree. This context is necessary for various operations such as showing
-  /// dialogs, navigating between screens, accessing theme data, and
-  ///
-  /// Returns:
-  ///   The function `validateAndProceed` returns a boolean value - `true` if the current field is valid
-  /// and all necessary conditions are met to proceed to the next question, and `false` if there are
-  /// validation errors or requirements that prevent moving to the next question.
   bool validateAndProceed(BuildContext context) {
     final field = formJson[_currentQuestionIndex];
     final currentFieldName = field['name'];
     final currentControl = form.control(currentFieldName);
 
-    // Debug information
-    print("Current question: ${currentFieldName}, value: ${field}");
-
-    // Mark the current field as touched to trigger validation
     currentControl.markAsTouched();
 
-    // Check if the current field is valid
     if (!currentControl.valid) {
       String errorMessage = _getErrorMessage(field, currentControl);
       if (!(field["type"] == "text" || field["type"] == "number")) {
@@ -264,16 +225,13 @@ class DynamicFormController extends ChangeNotifier {
       return false;
     }
 
-    // Check if the field has a required comment and validate it
     if (field['hasComments'] == true) {
       final commentControlName = '${currentFieldName}_comment';
       if (form.contains(commentControlName)) {
         final commentControl = form.control(commentControlName);
 
-        // Mark comment field as touched to trigger validation
         commentControl.markAsTouched();
 
-        // Check if comment field is valid
         if (!commentControl.valid) {
           AppSnackBar(context)
               .showErrorSnackBar(StringConstants.commentsAreRequired);
@@ -283,86 +241,78 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    // Skip all attachment validation if hasAttachments is explicitly set to false
     if (field['hasAttachments'] != false) {
-      // Get the selected value
       final selectedValue = currentControl.value;
 
-      // Check if this is a multiselect field
       final bool isMultiselect = field['type'] == 'multiselect';
 
-      // Special handling for text fields with hasAttachments=true
       bool isTextWithAttachments =
           field['type'] == 'text' && field['hasAttachments'] == true;
 
-      // Get the disabledOptions list if it exists
       List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
           ? field['disableAttachmentsOn']
           : field['disableAttachmentsOn'] != null
               ? [field['disableAttachmentsOn']]
               : [];
 
-      // For multiselect, check if any selected value is in disabledOptions
-      // For other field types, check if the single selected value is in disabledOptions
       bool isAttachmentDisabled = false;
 
       if (isMultiselect && selectedValue is List) {
-        // For multiselect: check if any selected value is in disabledOptions
         isAttachmentDisabled =
             selectedValue.any((value) => disabledOptions.contains(value));
       } else {
-        // For dropdown/radio: direct check
         isAttachmentDisabled = disabledOptions.contains(selectedValue);
       }
 
-      // Only check attachment validation if attachments are not disabled for this value
       if (!isAttachmentDisabled) {
-        // Attachment validation - check if file is required based on selected value
         bool fileRequired = false;
 
-        // Check requireAttachmentsOn
         if (field['requireAttachmentsOn'] != null) {
           final requireAttachmentsOn = field['requireAttachmentsOn'] is List
               ? field['requireAttachmentsOn']
               : [field['requireAttachmentsOn']];
 
           if (isMultiselect && selectedValue is List) {
-            // For multiselect: check if any selected value is in requireAttachmentsOn
             fileRequired = selectedValue
                 .any((value) => requireAttachmentsOn.contains(value));
           } else {
-            // For dropdown/radio: direct check
             fileRequired = requireAttachmentsOn.contains(selectedValue);
           }
         }
 
-        // Check enableAttachmentsOn (now works the same as requireAttachmentsOn)
-        if (!fileRequired && field['enableAttachmentsOn'] != null) {
-          final enabledOptions = field['enableAttachmentsOn'] is List
-              ? field['enableAttachmentsOn']
-              : [field['enableAttachmentsOn']];
+        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
+        // require file upload
+        if (!fileRequired && field['hasAttachments'] == true) {
+          // Check if requireAttachmentsOn is an empty array
+          bool isRequireAttachmentsOnEmpty =
+              field['requireAttachmentsOn'] is List &&
+                  (field['requireAttachmentsOn'] as List).isEmpty;
 
-          if (isMultiselect && selectedValue is List) {
-            // For multiselect: check if any selected value is in enabledOptions
-            fileRequired =
-                selectedValue.any((value) => enabledOptions.contains(value));
-          } else {
-            // For dropdown/radio: direct check
-            fileRequired = enabledOptions.contains(selectedValue);
+          // Check if disableAttachmentsOn is an empty array
+          bool isDisableAttachmentsOnEmpty =
+              field['disableAttachmentsOn'] is List &&
+                  (field['disableAttachmentsOn'] as List).isEmpty;
+
+          // If both are empty arrays, require file upload
+          if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
+            if (kDebugMode) {
+              print(
+                  "File required for ${field['name']} because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
+            }
+            fileRequired = true;
           }
         }
 
-        // If it's a text field with hasAttachments=true, file upload is mandatory
         if (!fileRequired && isTextWithAttachments) {
           fileRequired = true;
         }
 
-        // Also handle the case when requiredAttachmentsOn is true
-        if (field['requiredAttachmentsOn'] == true) {
+        if (!fileRequired && field['attachmentsRequired'] == true) {
+          print(
+              "Legacy property 'attachmentsRequired' detected - treating as requireAttachmentsOn");
           fileRequired = true;
         }
 
-        // If files are required, check if they're uploaded
         if (fileRequired &&
             (uploadedFiles[currentFieldName]?.isEmpty ?? true)) {
           AppSnackBar(context)
@@ -373,7 +323,6 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    // Special handling for multiselect validation
     if (field['type'] == 'multiselect' && field['required'] == true) {
       if (currentControl.value == null) {
         AppSnackBar(context)
@@ -392,15 +341,12 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    // Find the next question that should be shown based on current answers
     int nextQuestionIndex = findNextVisibleQuestionIndex();
 
     if (nextQuestionIndex != -1) {
       _currentQuestionIndex = nextQuestionIndex;
       print("Navigation: Moving to question at index $nextQuestionIndex");
     } else if (_currentQuestionIndex < formJson.length - 1) {
-      // If no conditional question found but we're not at the end,
-      // move to the next sequential question
       _currentQuestionIndex++;
       print(
           "Navigation: No conditional question found, moving to next question ${_currentQuestionIndex}");
@@ -410,73 +356,52 @@ class DynamicFormController extends ChangeNotifier {
     return true;
   }
 
-  // Helper method to find the next question that should be visible
   int findNextVisibleQuestionIndex() {
     print("Finding next visible question after ${_currentQuestionIndex}");
 
-    // Check questions sequentially starting from the next one
     for (int i = _currentQuestionIndex + 1; i < formJson.length; i++) {
       final question = formJson[i];
       final questionName = question['name'];
 
-      // If no conditions, this question should always be shown
       if (question['showWhen'] == null) {
         print("Question $questionName has no conditions - will be shown");
         return i;
       }
 
-      // Check if this question's conditions are met
       final Map<String, dynamic> conditions = question['showWhen'];
-      bool shouldShow = true; // Start with true for AND logic between fields
+      bool shouldShow = true;
 
-      print("Checking conditions for $questionName: $conditions");
-
-      // Check each condition
       conditions.forEach((dependentField, expectedValues) {
-        // Skip if the dependent field doesn't exist in the form
         if (!form.contains(dependentField)) {
           print("Field $dependentField not found in form");
           shouldShow = false;
           return;
         }
 
-        // Get the value of the dependent field
-        final dependentControl = form.control(dependentField);
-        final fieldValue = dependentControl.value;
-
-        print("Field $dependentField has value: $fieldValue");
-
-        // Check if the field value matches any expected value
+        final fieldValue = form.control(dependentField).value;
         bool fieldMatches = false;
 
-        // Handle different types of field values and expected values
         if (fieldValue is List && expectedValues is List) {
-          // If both are lists, check if there's any intersection
           fieldMatches = fieldValue.any((v) => expectedValues.contains(v));
           print(
               "Checking if list $fieldValue intersects with $expectedValues: $fieldMatches");
         } else if (fieldValue is List) {
-          // If field value is a list but expected value is single, check if the list contains the expected value
           fieldMatches = fieldValue.contains(expectedValues);
           print(
               "Checking if list $fieldValue contains $expectedValues: $fieldMatches");
         } else if (expectedValues is List) {
-          // If expected value is a list but field value is single, check if the expected list contains the field value
           fieldMatches = expectedValues.contains(fieldValue);
           print(
               "Checking if $fieldValue is in list $expectedValues: $fieldMatches");
         } else {
-          // Simple equality check for single values
           fieldMatches = (fieldValue == expectedValues);
           print(
               "Checking if $fieldValue equals $expectedValues: $fieldMatches");
         }
 
-        // For this question to show, ALL conditions must be met (AND logic)
         shouldShow = shouldShow && fieldMatches;
       });
 
-      // If this question's conditions are met, it should be shown
       if (shouldShow) {
         print("All conditions met for $questionName, it will be shown");
         return i;
@@ -485,7 +410,6 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    // No more questions should be shown
     return -1;
   }
 
@@ -496,7 +420,6 @@ class DynamicFormController extends ChangeNotifier {
 
     final question = formJson[questionIndex];
 
-    // If no conditions, always show the question
     if (question['showWhen'] == null) {
       return true;
     }
@@ -513,18 +436,13 @@ class DynamicFormController extends ChangeNotifier {
       final fieldValue = form.control(dependentField).value;
       bool fieldMatches = false;
 
-      // Handle different types of field values and expected values
       if (fieldValue is List && expectedValue is List) {
-        // If both are lists, check if there's any intersection
         fieldMatches = fieldValue.any((v) => expectedValue.contains(v));
       } else if (fieldValue is List) {
-        // If field value is a list but expected value is single, check if the list contains the expected value
         fieldMatches = fieldValue.contains(expectedValue);
       } else if (expectedValue is List) {
-        // If expected value is a list but field value is single, check if the expected list contains the field value
         fieldMatches = expectedValue.contains(fieldValue);
       } else {
-        // Simple equality check for single values
         fieldMatches = (fieldValue == expectedValue);
       }
 
@@ -536,7 +454,6 @@ class DynamicFormController extends ChangeNotifier {
 
   bool _hasValidationError(Map<String, dynamic> field,
       AbstractControl currentControl, String fieldName) {
-    // Add multiselect validation
     if (field['type'] == 'multiselect' && field['required'] == true) {
       final List<String>? values = currentControl.value as List<String>?;
       if (values == null || values.isEmpty) {
@@ -544,100 +461,90 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    // Required field validation
     if (field['required'] == true &&
         (currentControl.value == null ||
             currentControl.value.toString().isEmpty)) {
       return true;
     }
 
-    // Skip all attachment validation if hasAttachments is explicitly set to false
     if (field['hasAttachments'] != false) {
-      // Get the selected value
       final selectedValue = currentControl.value;
 
-      // Check if this is a multiselect field
       final bool isMultiselect = field['type'] == 'multiselect';
 
-      // Special handling for text fields with hasAttachments=true
       bool isTextWithAttachments =
           field['type'] == 'text' && field['hasAttachments'] == true;
 
-      // Get the disabledOptions list if it exists
       List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
           ? field['disableAttachmentsOn']
           : field['disableAttachmentsOn'] != null
               ? [field['disableAttachmentsOn']]
               : [];
 
-      // For multiselect, check if any selected value is in disabledOptions
-      // For other field types, check if the single selected value is in disabledOptions
       bool isAttachmentDisabled = false;
 
       if (isMultiselect && selectedValue is List) {
-        // For multiselect: check if any selected value is in disabledOptions
         isAttachmentDisabled =
             selectedValue.any((value) => disabledOptions.contains(value));
       } else {
-        // For dropdown/radio: direct check
         isAttachmentDisabled = disabledOptions.contains(selectedValue);
       }
 
-      // Only check attachment validation if attachments are not disabled for this value
       if (!isAttachmentDisabled) {
-        // Attachment validation - check if file is required based on selected value
         bool fileRequired = false;
 
-        // Check requireAttachmentsOn
         if (field['requireAttachmentsOn'] != null) {
           final requireAttachmentsOn = field['requireAttachmentsOn'] is List
               ? field['requireAttachmentsOn']
               : [field['requireAttachmentsOn']];
 
           if (isMultiselect && selectedValue is List) {
-            // For multiselect: check if any selected value is in requireAttachmentsOn
             fileRequired = selectedValue
                 .any((value) => requireAttachmentsOn.contains(value));
           } else {
-            // For dropdown/radio: direct check
             fileRequired = requireAttachmentsOn.contains(selectedValue);
           }
         }
 
-        // Check enableAttachmentsOn (now works the same as requireAttachmentsOn)
-        if (!fileRequired && field['enableAttachmentsOn'] != null) {
-          final enabledOptions = field['enableAttachmentsOn'] is List
-              ? field['enableAttachmentsOn']
-              : [field['enableAttachmentsOn']];
+        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
+        // require file upload
+        if (!fileRequired && field['hasAttachments'] == true) {
+          // Check if requireAttachmentsOn is an empty array
+          bool isRequireAttachmentsOnEmpty =
+              field['requireAttachmentsOn'] is List &&
+                  (field['requireAttachmentsOn'] as List).isEmpty;
 
-          if (isMultiselect && selectedValue is List) {
-            // For multiselect: check if any selected value is in enabledOptions
-            fileRequired =
-                selectedValue.any((value) => enabledOptions.contains(value));
-          } else {
-            // For dropdown/radio: direct check
-            fileRequired = enabledOptions.contains(selectedValue);
+          // Check if disableAttachmentsOn is an empty array
+          bool isDisableAttachmentsOnEmpty =
+              field['disableAttachmentsOn'] is List &&
+                  (field['disableAttachmentsOn'] as List).isEmpty;
+
+          // If both are empty arrays, require file upload
+          if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
+            if (kDebugMode) {
+              print(
+                  "File required for ${field['name']} because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
+            }
+            fileRequired = true;
           }
         }
 
-        // If it's a text field with hasAttachments=true, file upload is mandatory
         if (!fileRequired && isTextWithAttachments) {
           fileRequired = true;
         }
 
-        // Also handle the case when requiredAttachmentsOn is true
-        if (field['requiredAttachmentsOn'] == true) {
+        if (!fileRequired && field['attachmentsRequired'] == true) {
+          print(
+              "Legacy property 'attachmentsRequired' detected - treating as requireAttachmentsOn");
           fileRequired = true;
         }
 
-        // If file is required, check if it's uploaded
         if (fileRequired && (uploadedFiles[fieldName]?.isEmpty ?? true)) {
           return true;
         }
       }
     }
 
-    // Sub-questions validation
     if (field['subQuestions']?[currentControl.value] != null) {
       for (var subField in field['subQuestions'][currentControl.value]) {
         final subControl = form.control(subField['name']);
@@ -651,28 +558,8 @@ class DynamicFormController extends ChangeNotifier {
     return false;
   }
 
-  /// The function `_getErrorMessage` checks for various conditions and returns error messages based on
-  /// the field type and control value.
-  ///
-  /// Args:
-  ///   field (Map<String, dynamic>): The `field` parameter is a map containing information about a form
-  /// field. It includes properties like `type`, `required`, and `requireAttachmentsOn`.
-  ///   control (AbstractControl): The `control` parameter in the `_getErrorMessage` function is an
-  /// instance of `AbstractControl`. This parameter is likely used to access the current value of a form
-  /// control in an Angular application. The function checks various conditions based on the type of
-  /// field and the value of the control to determine the appropriate
-  ///
-  /// Returns:
-  ///   The function `_getErrorMessage` returns an error message based on the conditions specified in
-  /// the code. The specific error message returned depends on the type of field, whether it is
-  /// required, the control value, and other conditions. The possible error messages that can be
-  /// returned are:
-  /// - 'Please select at least one option' if a multiselect field is required and no option is
-  /// selected.
-  /// - 'Please select
   String _getErrorMessage(Map<String, dynamic> field, AbstractControl control) {
     if (field['type'] == 'multiselect') {
-      // First check if value is actually a List
       final dynamic rawValue = control.value;
       final List<dynamic>? values = rawValue is List ? rawValue : null;
 
@@ -692,80 +579,74 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    // Skip all attachment validation if hasAttachments is explicitly set to false
     if (field['hasAttachments'] != false) {
-      // Check if file upload is required based on the selected value
       bool fileRequired = false;
       final selectedValue = control.value;
 
-      // Check if this is a multiselect field
       final bool isMultiselect = field['type'] == 'multiselect';
 
-      // Special handling for text fields with hasAttachments=true
       bool isTextWithAttachments =
           field['type'] == 'text' && field['hasAttachments'] == true;
 
-      // Get the disabledOptions list if it exists
       List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
           ? field['disableAttachmentsOn']
           : field['disableAttachmentsOn'] != null
               ? [field['disableAttachmentsOn']]
               : [];
 
-      // For multiselect, check if any selected value is in disabledOptions
-      // For other field types, check if the single selected value is in disabledOptions
       bool isAttachmentDisabled = false;
 
       if (isMultiselect && selectedValue is List) {
-        // For multiselect: check if any selected value is in disabledOptions
         isAttachmentDisabled =
             selectedValue.any((value) => disabledOptions.contains(value));
       } else {
-        // For dropdown/radio: direct check
         isAttachmentDisabled = disabledOptions.contains(selectedValue);
       }
 
-      // Only proceed with attachment validation if attachments are not disabled for this value
       if (!isAttachmentDisabled) {
-        // Check requireAttachmentsOn
         if (field['requireAttachmentsOn'] != null) {
           final requireAttachmentsOn = field['requireAttachmentsOn'] is List
               ? field['requireAttachmentsOn']
               : [field['requireAttachmentsOn']];
 
           if (isMultiselect && selectedValue is List) {
-            // For multiselect: check if any selected value is in requireAttachmentsOn
             fileRequired = selectedValue
                 .any((value) => requireAttachmentsOn.contains(value));
           } else {
-            // For dropdown/radio: direct check
             fileRequired = requireAttachmentsOn.contains(selectedValue);
           }
         }
 
-        // Check enableAttachmentsOn (now works the same as requireAttachmentsOn)
-        if (!fileRequired && field['enableAttachmentsOn'] != null) {
-          final enabledOptions = field['enableAttachmentsOn'] is List
-              ? field['enableAttachmentsOn']
-              : [field['enableAttachmentsOn']];
+        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
+        // require file upload
+        if (!fileRequired && field['hasAttachments'] == true) {
+          // Check if requireAttachmentsOn is an empty array
+          bool isRequireAttachmentsOnEmpty =
+              field['requireAttachmentsOn'] is List &&
+                  (field['requireAttachmentsOn'] as List).isEmpty;
 
-          if (isMultiselect && selectedValue is List) {
-            // For multiselect: check if any selected value is in enabledOptions
-            fileRequired =
-                selectedValue.any((value) => enabledOptions.contains(value));
-          } else {
-            // For dropdown/radio: direct check
-            fileRequired = enabledOptions.contains(selectedValue);
+          // Check if disableAttachmentsOn is an empty array
+          bool isDisableAttachmentsOnEmpty =
+              field['disableAttachmentsOn'] is List &&
+                  (field['disableAttachmentsOn'] as List).isEmpty;
+
+          // If both are empty arrays, require file upload
+          if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
+            if (kDebugMode) {
+              print(
+                  "File required for ${field['name']} because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
+            }
+            fileRequired = true;
           }
         }
 
-        // If it's a text field with hasAttachments=true, file upload is mandatory
         if (!fileRequired && isTextWithAttachments) {
           fileRequired = true;
         }
 
-        // Also handle the case when requiredAttachmentsOn is true
-        if (field['requiredAttachmentsOn'] == true) {
+        if (!fileRequired && field['attachmentsRequired'] == true) {
+          print(
+              "Legacy property 'attachmentsRequired' detected - treating as requireAttachmentsOn");
           fileRequired = true;
         }
 
@@ -832,11 +713,173 @@ class DynamicFormController extends ChangeNotifier {
     return false;
   }
 
+  void addFormControls(List<Map<String, dynamic>> newFields) {
+    final Map<String, AbstractControl> newControls = {};
+
+    if (kDebugMode) {
+      print("\n=== Adding Form Controls ===");
+    }
+
+    void _addControls(Iterable<Map<String, dynamic>> fields) {
+      for (var f in fields) {
+        final n = f['name'];
+        if (form.contains(n)) continue;
+
+        // Make sure we correctly determine if field is required
+        final bool isRequired = f['required'] == true;
+
+        // Log the field we're adding
+        if (kDebugMode) {
+          print(
+              "Adding control for field: $n, type: ${f['type']}, required: $isRequired, isDuplicate: ${f['isDuplicate'] == true}");
+        }
+
+        if (f['type'] == 'multiselect') {
+          List<String> initialValue = [];
+          if (f['defaultValue'] != null && f['defaultValue'] is List) {
+            initialValue = (f['defaultValue'] as List)
+                .map((item) => item.toString())
+                .toList();
+          }
+
+          // Use _getValidators to ensure consistency
+          List<Validator> validators = _getValidators(isRequired, f);
+
+          if (kDebugMode) {
+            print(
+                "Adding multiselect field $n with ${validators.length} validators, required=$isRequired");
+          }
+
+          newControls[n] = FormControl<List<String>>(
+              value: initialValue, validators: validators);
+
+          if (f['hasComments'] == true) {
+            newControls['${n}_comment'] = FormControl<String>(
+                value: '', validators: [Validators.required]);
+          }
+        } else if (f['type'] == 'file') {
+          // For file fields, we need to ensure the uploadedFiles entry is initialized
+          uploadedFiles[n] = [];
+
+          // Use _getValidators to ensure consistency
+          List<Validator> validators = _getValidators(isRequired, f);
+
+          if (kDebugMode) {
+            print(
+                "Adding file field $n with ${validators.length} validators, required=$isRequired");
+          }
+
+          newControls[n] = FormControl<String>(
+            value: '',
+            validators: validators,
+          );
+
+          if (f['hasComments'] == true) {
+            newControls['${n}_comment'] = FormControl<String>(
+                value: '', validators: [Validators.required]);
+          }
+        } else if (f['type'] == 'number') {
+          // Use the getValidators helper to ensure consistency
+          List<Validator> validators = _getValidators(isRequired, f);
+
+          if (kDebugMode) {
+            print(
+                "Adding number field $n with ${validators.length} validators, required=$isRequired");
+          }
+
+          newControls[n] =
+              FormControl<num>(value: null, validators: validators);
+
+          if (f['hasComments'] == true) {
+            newControls['${n}_comment'] = FormControl<String>(
+                value: '', validators: [Validators.required]);
+          }
+        } else if (f['type'] == 'radio') {
+          if (f['options'] == null || (f['options'] as List).isEmpty) {
+            f['options'] = ['Yes', 'No'];
+          }
+
+          // Use _getValidators to ensure consistency
+          List<Validator> validators = _getValidators(isRequired, f);
+
+          if (kDebugMode) {
+            print(
+                "Adding radio field $n with ${validators.length} validators, required=$isRequired");
+          }
+
+          newControls[n] = FormControl<String>(
+            value: f['defaultValue'] ?? '',
+            validators: validators,
+          );
+
+          if (f['hasComments'] == true) {
+            newControls['${n}_comment'] = FormControl<String>(
+                value: '', validators: [Validators.required]);
+          }
+        } else {
+          // Default case for text and other field types
+          List<Validator> validators = _getValidators(isRequired, f);
+
+          if (kDebugMode) {
+            print(
+                "Adding text field $n with ${validators.length} validators, required=$isRequired");
+          }
+
+          newControls[n] = FormControl<String>(
+              value: f['defaultValue'] ?? '', validators: validators);
+
+          if (f['hasComments'] == true) {
+            newControls['${n}_comment'] = FormControl<String>(
+                value: '', validators: [Validators.required]);
+          }
+        }
+      }
+    }
+
+    _addControls(newFields);
+    form.addAll(newControls);
+
+    // Debug log of all controls after adding
+    if (kDebugMode) {
+      print("=== Form Controls After Adding ===");
+      newControls.forEach((key, control) {
+        final hasRequiredValidator = control.validators
+            .any((validator) => validator.toString().contains('required'));
+        print("Control: $key, hasRequiredValidator: $hasRequiredValidator");
+      });
+    }
+
+    notifyListeners();
+  }
+
+  /// Removes form controls for deleted fields
+  ///
+  /// This method is called when question sets are removed from the form
+  /// via the delete button. It removes the main control, any associated
+  /// comment fields, and cleans up uploaded files.
+  void removeFormControls(Iterable<String> names) {
+    for (var n in names) {
+      // Remove the main control
+      if (form.contains(n)) {
+        form.removeControl(n);
+      }
+
+      // Remove any associated comment control
+      final commentField = '${n}_comment';
+      if (form.contains(commentField)) {
+        form.removeControl(commentField);
+      }
+
+      // Remove any uploaded files
+      uploadedFiles.remove(n);
+    }
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     super.dispose();
-    form.dispose(); // Dispose the ReactiveForm
-    // Dispose of any other resources held by the controller
+    form.dispose();
     if (kDebugMode) {
       print('DynamicFormController disposed');
     }
@@ -845,7 +888,6 @@ class DynamicFormController extends ChangeNotifier {
   void updateFieldValue(String fieldId, dynamic value) {
     FormFieldModel field = _fields.firstWhere((f) => f.name == fieldId);
     if (field.type == 'multiselect') {
-      // Ensure the value is always a List<String>
       _values[fieldId] = (value as List).cast<String>();
     } else {
       _values[fieldId] = value;
@@ -884,18 +926,13 @@ class DynamicFormController extends ChangeNotifier {
       final fieldValue = form.control(dependentField).value;
       bool fieldMatches = false;
 
-      // Handle different types of field values and expected values
       if (fieldValue is List && expectedValue is List) {
-        // If both are lists, check if there's any intersection
         fieldMatches = fieldValue.any((v) => expectedValue.contains(v));
       } else if (fieldValue is List) {
-        // If field value is a list but expected value is single, check if the list contains the expected value
         fieldMatches = fieldValue.contains(expectedValue);
       } else if (expectedValue is List) {
-        // If expected value is a list but field value is single, check if the expected list contains the field value
         fieldMatches = expectedValue.contains(fieldValue);
       } else {
-        // Simple equality check for single values
         fieldMatches = (fieldValue == expectedValue);
       }
 
@@ -905,32 +942,26 @@ class DynamicFormController extends ChangeNotifier {
     return shouldShow;
   }
 
-  // Add this helper method to get properly typed multiselect values
   List<String> getMultiselectValue(String fieldName) {
     final value = form.control(fieldName).value;
 
-    // Convert to List<String> regardless of current type
     if (value == null || value == "") {
       return [];
     } else if (value is List) {
       return List<String>.from(value.map((item) => item.toString()));
     } else {
-      // Handle unexpected single value
       return [value.toString()];
     }
   }
 
-  // Modify the updateMultiselectValue method
   void updateMultiselectValue(String fieldName, List<String> selectedValues) {
     print('Updating multiselect: $fieldName with values: $selectedValues');
 
-    // Update value in form using various approaches to ensure it sticks
     form.patchValue({fieldName: selectedValues});
 
     final control = form.control(fieldName);
     control.updateValue(selectedValues);
 
-    // Verify the update
     print('After update, control value type: ${control.value.runtimeType}');
     print('After update, control value: ${control.value}');
   }
@@ -938,7 +969,7 @@ class DynamicFormController extends ChangeNotifier {
   set currentQuestionIndex(int value) {
     if (_currentQuestionIndex != value) {
       _currentQuestionIndex = value;
-      notifyListeners(); // This is crucial to trigger the UI update
+      notifyListeners();
     }
   }
 

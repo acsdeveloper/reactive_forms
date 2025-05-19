@@ -22,6 +22,7 @@ class FormFieldModel {
   final Map<String, dynamic>? branching;
   final int? min;
   final int? max;
+  final String? groupWith;
 
   FormFieldModel({
     required this.name,
@@ -38,6 +39,7 @@ class FormFieldModel {
     this.branching,
     this.min,
     this.max,
+    this.groupWith,
   });
 
   factory FormFieldModel.fromJson(Map<String, dynamic> json) {
@@ -72,6 +74,23 @@ class FormFieldModel {
         return null;
       }
 
+      // Handle legacy properties
+      dynamic requireAttachmentsOnValue = json['requireAttachmentsOn'];
+
+      // If enableAttachmentsOn exists, use it as requireAttachmentsOn (they're functionally identical)
+      if (json['enableAttachmentsOn'] != null &&
+          requireAttachmentsOnValue == null) {
+        requireAttachmentsOnValue = json['enableAttachmentsOn'];
+      }
+
+      // If attachmentsRequired is true, set requireAttachmentsOn to true (boolean flag)
+      if (json['attachmentsRequired'] == true &&
+          (requireAttachmentsOnValue == null ||
+              (requireAttachmentsOnValue is List &&
+                  requireAttachmentsOnValue.isEmpty))) {
+        requireAttachmentsOnValue = true;
+      }
+
       return FormFieldModel(
         name: json['name']?.toString() ?? '',
         type: json['type']?.toString() ?? 'text',
@@ -79,7 +98,7 @@ class FormFieldModel {
         options: parseOptions(json['options'], json['type']?.toString() ?? ''),
         required: parseRequired(json['required']),
         hasAttachments: parseBooleanField(json['hasAttachments']),
-        requireAttachmentsOn: json['requireAttachmentsOn'],
+        requireAttachmentsOn: requireAttachmentsOnValue,
         showAttachmentsOn: json['showAttachmentsOn'],
         disableAttachmentsOn: json['disableAttachmentsOn'],
         hasComments: parseBooleanField(json['hasComments']),
@@ -87,6 +106,7 @@ class FormFieldModel {
         branching: json['branching'] as Map<String, dynamic>?,
         min: json['min'] != null ? int.tryParse(json['min'].toString()) : null,
         max: json['max'] != null ? int.tryParse(json['max'].toString()) : null,
+        groupWith: json['groupWith']?.toString(),
       );
     } catch (e) {
       print('Error parsing field ${json['name']}: $e');
@@ -109,4 +129,4 @@ class FormFieldModel {
         return value;
     }
   }
-} 
+}
