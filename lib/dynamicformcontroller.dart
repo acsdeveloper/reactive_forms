@@ -474,6 +474,17 @@ class DynamicFormController extends ChangeNotifier {
 
     final question = formJson[questionIndex];
 
+    // NEW: Questions with groupWith should not appear as standalone questions
+    // They should only appear as part of their parent question's group
+    if (question['groupWith'] != null &&
+        question['groupWith'].toString().isNotEmpty) {
+      if (kDebugMode) {
+        print(
+            "Question ${question['name']} has groupWith=${question['groupWith']}, excluding from standalone navigation");
+      }
+      return false;
+    }
+
     if (question['showWhen'] == null) {
       return true;
     }
