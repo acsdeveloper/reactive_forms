@@ -3221,6 +3221,7 @@ class _DynamicFormState extends State<DynamicForm>
     if (kDebugMode) {
       print("\n=== _moveToNextStep - Starting Form Navigation ===");
       print("Current pointer: $_currentGroupPointer");
+      print("Current controller index: ${controller.currentQuestionIndex}");
     }
 
     // FIRST check file upload requirements - do this before other validation
@@ -3259,18 +3260,92 @@ class _DynamicFormState extends State<DynamicForm>
       print("✅ All validations passed - Proceeding with navigation");
     }
 
+    // Get the current anchor and find the corresponding original question
+    if (_currentGroupPointer >= _groupAnchors.length) {
+      if (kDebugMode) {
+        print("Current group pointer out of bounds");
+      }
+      return;
+    }
+
+    final currentAnchor = _groupAnchors[_currentGroupPointer];
+    final currentAnchorField = _internalFields[currentAnchor];
+    final currentAnchorName = currentAnchorField['name'].toString();
+
+    // Find the original question index in formJson that corresponds to this anchor
+    int originalQuestionIndex = -1;
+    for (int i = 0; i < widget.formJson.length; i++) {
+      final question = widget.formJson[i];
+      final questionName = question['name'].toString();
+
+      // Check if this is the same question (handle both original and duplicate names)
+      if (questionName == currentAnchorName) {
+        originalQuestionIndex = i;
+        break;
+      }
+
+      // For duplicates, check if the base name matches
+      final timestampPattern = RegExp(r'(.+)_\d+$');
+      final match = timestampPattern.firstMatch(currentAnchorName);
+      if (match != null) {
+        final baseName = match.group(1) ?? '';
+        if (questionName == baseName) {
+          originalQuestionIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (originalQuestionIndex == -1) {
+      if (kDebugMode) {
+        print(
+            "Could not find original question for anchor: $currentAnchorName");
+      }
+      return;
+    }
+
+    if (kDebugMode) {
+      print("Found original question at index: $originalQuestionIndex");
+    }
+
+    // Update the controller to point to this question
+    controller.currentQuestionIndex = originalQuestionIndex;
+
     // Use the controller's logic to determine the next question
     // This will handle all the branching logic and navigation history
     bool proceeded = controller.validateAndProceed(context);
 
     if (proceeded) {
       setState(() {
-        // Find the anchor that corresponds to the controller's current index
+        // Find the anchor that corresponds to the controller's NEW current index
         int matchingAnchorPointer = -1;
         for (int i = 0; i < _groupAnchors.length; i++) {
-          if (_groupAnchors[i] == controller.currentQuestionIndex) {
-            matchingAnchorPointer = i;
-            break;
+          final anchorIndex = _groupAnchors[i];
+          final anchorField = _internalFields[anchorIndex];
+          final anchorName = anchorField['name'].toString();
+
+          // Check if this anchor corresponds to the controller's current question
+          if (controller.currentQuestionIndex < widget.formJson.length) {
+            final controllerQuestionName = widget
+                .formJson[controller.currentQuestionIndex]['name']
+                .toString();
+
+            // Direct match
+            if (anchorName == controllerQuestionName) {
+              matchingAnchorPointer = i;
+              break;
+            }
+
+            // For duplicates, check base name
+            final timestampPattern = RegExp(r'(.+)_\d+$');
+            final match = timestampPattern.firstMatch(anchorName);
+            if (match != null) {
+              final baseName = match.group(1) ?? '';
+              if (baseName == controllerQuestionName) {
+                matchingAnchorPointer = i;
+                break;
+              }
+            }
           }
         }
 
@@ -3304,6 +3379,8 @@ class _DynamicFormState extends State<DynamicForm>
   void moveToNextQuestion(BuildContext context) {
     if (kDebugMode) {
       print("\n=== moveToNextQuestion - Starting Form Navigation ===");
+      print("Current group pointer: $_currentGroupPointer");
+      print("Current controller index: ${controller.currentQuestionIndex}");
     }
 
     // FIRST check file upload requirements - do this before other validation
@@ -3328,17 +3405,111 @@ class _DynamicFormState extends State<DynamicForm>
       return;
     }
 
+    // NEW LOGIC: Instead of using controller.validateAndProceed directly,
+    // we need to handle navigation at the group level to avoid duplicate issues
+
+    // First validate the current section (including all duplicates)
+    if (!validateCurrentSection()) {
+      if (kDebugMode) {
+        print("⛔ FIELD VALIDATION FAILED - Navigation blocked");
+      }
+      // Show a snackbar to inform the user that validation failed
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(StringConstants.fillRequiredFields,
+              style: widget.fontFamily),
+          backgroundColor: Colors.red[700],
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // Get the current anchor and find the corresponding original question
+    if (_groupAnchors.isEmpty || _currentGroupPointer >= _groupAnchors.length) {
+      if (kDebugMode) {
+        print("No valid anchors available for navigation");
+      }
+      return;
+    }
+
+    final currentAnchor = _groupAnchors[_currentGroupPointer];
+    final currentAnchorField = _internalFields[currentAnchor];
+    final currentAnchorName = currentAnchorField['name'].toString();
+
+    // Find the original question index in formJson that corresponds to this anchor
+    int originalQuestionIndex = -1;
+    for (int i = 0; i < widget.formJson.length; i++) {
+      final question = widget.formJson[i];
+      final questionName = question['name'].toString();
+
+      // Check if this is the same question (handle both original and duplicate names)
+      if (questionName == currentAnchorName) {
+        originalQuestionIndex = i;
+        break;
+      }
+
+      // For duplicates, check if the base name matches
+      final timestampPattern = RegExp(r'(.+)_\d+$');
+      final match = timestampPattern.firstMatch(currentAnchorName);
+      if (match != null) {
+        final baseName = match.group(1) ?? '';
+        if (questionName == baseName) {
+          originalQuestionIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (originalQuestionIndex == -1) {
+      if (kDebugMode) {
+        print(
+            "Could not find original question for anchor: $currentAnchorName");
+      }
+      return;
+    }
+
+    if (kDebugMode) {
+      print("Found original question at index: $originalQuestionIndex");
+    }
+
+    // Update the controller to point to this question and validate it
+    controller.currentQuestionIndex = originalQuestionIndex;
+
     // Use the controller's validateAndProceed method to handle navigation
     bool proceeded = controller.validateAndProceed(context);
 
     if (proceeded) {
       setState(() {
-        // Find the anchor that corresponds to the controller's current index
+        // Find the anchor that corresponds to the controller's NEW current index
         int matchingAnchorPointer = -1;
         for (int i = 0; i < _groupAnchors.length; i++) {
-          if (_groupAnchors[i] == controller.currentQuestionIndex) {
-            matchingAnchorPointer = i;
-            break;
+          final anchorIndex = _groupAnchors[i];
+          final anchorField = _internalFields[anchorIndex];
+          final anchorName = anchorField['name'].toString();
+
+          // Check if this anchor corresponds to the controller's current question
+          if (controller.currentQuestionIndex < widget.formJson.length) {
+            final controllerQuestionName = widget
+                .formJson[controller.currentQuestionIndex]['name']
+                .toString();
+
+            // Direct match
+            if (anchorName == controllerQuestionName) {
+              matchingAnchorPointer = i;
+              break;
+            }
+
+            // For duplicates, check base name
+            final timestampPattern = RegExp(r'(.+)_\d+$');
+            final match = timestampPattern.firstMatch(anchorName);
+            if (match != null) {
+              final baseName = match.group(1) ?? '';
+              if (baseName == controllerQuestionName) {
+                matchingAnchorPointer = i;
+                break;
+              }
+            }
           }
         }
 
