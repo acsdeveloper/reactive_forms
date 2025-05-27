@@ -762,6 +762,33 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   Widget _buildField(Map<String, dynamic> field) {
+    // Special handling for duplicate fields
+    if (field['isDuplicate'] == true) {
+      // Get the current anchor/question
+      final currentAnchor = _groupAnchors.isNotEmpty ? _groupAnchors[_currentGroupPointer] : -1;
+      final String currentAnchorName = currentAnchor >= 0 && currentAnchor < _internalFields.length ?
+                                      _internalFields[currentAnchor]['name'].toString() : "";
+      
+      // Check if this duplicate belongs to the current question
+      if (field['parentQuestionName'] != null) {
+        String parentName = field['parentQuestionName'].toString();
+        // Only show if it belongs to the current question
+        if (parentName != currentAnchorName) {
+          // This duplicate belongs to a different question, don't show it here
+          return const SizedBox.shrink();
+        }
+      } else if (field['parentQuestionIndex'] != null) {
+        int parentIdx = field['parentQuestionIndex'] as int;
+        if (parentIdx != currentAnchor) {
+          // This duplicate belongs to a different question, don't show it here
+          return const SizedBox.shrink();
+        }
+      }
+      
+      // This duplicate belongs to this page, so show it regardless of other conditions
+      return _buildFieldWidget(field);
+    }
+    
     // If field has persistVisibility flag set to true, always show it regardless of other conditions
     // This ensures duplicate fields remain visible during navigation
     if (field['persistVisibility'] == true) {
@@ -3906,6 +3933,9 @@ class _DynamicFormState extends State<DynamicForm>
       // Get the current anchor and its field indices
       final anchor = _groupAnchors[_currentGroupPointer];
       final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+      
+      // Get the current anchor field's name for reference when creating duplicates
+      final String currentAnchorName = _internalFields[anchor]['name'].toString();
 
       if (indices.isEmpty) {
         if (kDebugMode) {
@@ -3947,6 +3977,13 @@ class _DynamicFormState extends State<DynamicForm>
         
         // Set persistVisibility to true to keep the duplicate visible during navigation
         fieldCopy['persistVisibility'] = true;
+        
+        // CRITICAL FIX: Store which question anchor this duplicate belongs to
+        // This will prevent duplicates from appearing on multiple pages
+        fieldCopy['parentQuestionName'] = currentAnchorName;
+        
+        // Also store the parent question index to help with page association
+        fieldCopy['parentQuestionIndex'] = anchor;
 
         // IMPORTANT: Make sure we preserve the 'required' status
         if (originalField['required'] == true) {
