@@ -762,6 +762,12 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   Widget _buildField(Map<String, dynamic> field) {
+    // If field has persistVisibility flag set to true, always show it regardless of other conditions
+    // This ensures duplicate fields remain visible during navigation
+    if (field['persistVisibility'] == true) {
+      return _buildFieldWidget(field);
+    }
+    
     if (field['showWhen'] != null) {
       return ReactiveFormConsumer(
         builder: (context, form, child) {
@@ -3935,6 +3941,12 @@ class _DynamicFormState extends State<DynamicForm>
 
         // Mark as duplicate for delete button visibility
         fieldCopy['isDuplicate'] = true;
+        
+        // Add a persistent ID to help track duplicates across state changes
+        fieldCopy['duplicationId'] = millis.toString();
+        
+        // Set persistVisibility to true to keep the duplicate visible during navigation
+        fieldCopy['persistVisibility'] = true;
 
         // IMPORTANT: Make sure we preserve the 'required' status
         if (originalField['required'] == true) {
@@ -4187,6 +4199,9 @@ class _DynamicFormState extends State<DynamicForm>
     return null;
   }
 
+  // The _recomputeGroupStructure method is already implemented earlier in the code at line 3547.
+  // This was a duplicate declaration that has been removed to fix the lint error.
+
   // Ensure form controls have the correct validation rules
   void _ensureFormControlsHaveCorrectValidation() {
     if (kDebugMode) {
@@ -4326,39 +4341,77 @@ class _DynamicFormState extends State<DynamicForm>
   void moveToPreviousValidQuestion() {
     if (kDebugMode) {
       print("\n=== moveToPreviousValidQuestion called ===");
+      print("Current group pointer: $_currentGroupPointer");
+      print("Current internal fields count: ${_internalFields.length}");
+      print("Group anchors: $_groupAnchors");
     }
-
-    // Use the controller's method to navigate to the previous visible question
-    bool success = controller.moveToPreviousQuestion();
-
-    if (success) {
-      // Update the UI pointer to match the controller
-      // Find the anchor that corresponds to the controller's current index
-      int matchingAnchorPointer = -1;
-      for (int i = 0; i < _groupAnchors.length; i++) {
-        if (_groupAnchors[i] == controller.currentQuestionIndex) {
-          matchingAnchorPointer = i;
-          break;
-        }
-      }
-
-      if (matchingAnchorPointer != -1) {
-        _currentGroupPointer = matchingAnchorPointer;
-        if (kDebugMode) {
-          print(
-              "Updated group pointer to $_currentGroupPointer to match controller index ${controller.currentQuestionIndex}");
-        }
-      } else {
-        if (kDebugMode) {
-          print(
-              "Warning: Could not find anchor for controller index ${controller.currentQuestionIndex}");
-        }
-      }
-    } else {
+    
+    // Safety check
+    if (_groupAnchors.isEmpty || _currentGroupPointer >= _groupAnchors.length) {
       if (kDebugMode) {
-        print("No previous visible question found");
+        print("Invalid state for backward navigation");
+      }
+      return;
+    }
+    
+    // Store the current question for debugging
+    int currentAnchorIndex = _groupAnchors[_currentGroupPointer];
+    String currentQuestion = _internalFields[currentAnchorIndex]['name'];
+    
+    if (kDebugMode) {
+      print("Navigating back from question: $currentQuestion");
+    }
+    
+    // Identify the previous visible anchor/question to navigate to
+    int prevGroupPointer = _currentGroupPointer - 1;
+    
+    // If we're already at the first question or no previous anchor exists
+    if (prevGroupPointer < 0) {
+      if (kDebugMode) {
+        print("Already at first question, can't go back further");
+      }
+      return;
+    }
+    
+    int prevAnchorIndex = _groupAnchors[prevGroupPointer];
+    
+    // Check if the previous question is in the form JSON (for non-duplicated questions)
+    String prevAnchorName = _internalFields[prevAnchorIndex]['name'];
+    int prevFormIndex = -1;
+    
+    // Try to find the corresponding index in the original form JSON
+    for (int i = 0; i < widget.formJson.length; i++) {
+      if (widget.formJson[i]['name'] == prevAnchorName) {
+        prevFormIndex = i;
+        break;
       }
     }
+    
+    if (kDebugMode) {
+      print("Previous anchor name: $prevAnchorName, form index: $prevFormIndex");
+    }
+    
+    // Update our pointers to the previous question
+    setState(() {
+      _currentGroupPointer = prevGroupPointer;
+      
+      // If the previous question exists in the form JSON, update controller index
+      if (prevFormIndex >= 0) {
+        controller.currentQuestionIndex = prevFormIndex;
+      } else {
+        // For duplicated questions that might not be in the original form
+        controller.currentQuestionIndex = prevAnchorIndex;
+      }
+      
+      if (kDebugMode) {
+        print("Updated group pointer to: $_currentGroupPointer");
+        print("Updated controller index to: ${controller.currentQuestionIndex}");
+        print("Navigated back to question: $prevAnchorName");
+      }
+      
+      // Ensure the question we're navigating to is visible
+      _updateCurrentQuestionBasedOnVisibility();
+    });
   }
 
   // Build error message for attachment validation errors
