@@ -131,11 +131,20 @@ class DynamicFormController extends ChangeNotifier {
 
     form = FormGroup(controls);
 
+    // Debug: Print initial form values
+    if (kDebugMode) {
+      print('Initial form values: ${form.value}');
+    }
+
     // Ensure we start with a visible question
     if (!shouldDisplayQuestion(_currentQuestionIndex)) {
       int nextVisibleIndex = findNextVisibleQuestionIndex();
       if (nextVisibleIndex != -1) {
         _currentQuestionIndex = nextVisibleIndex;
+        if (kDebugMode) {
+          print(
+              'First question not visible, moving to index: $_currentQuestionIndex');
+        }
       }
     }
   }
@@ -146,6 +155,9 @@ class DynamicFormController extends ChangeNotifier {
 
     if (isRequired) {
       validatorsList.add(Validators.required);
+      // if (kDebugMode) {
+      //   print("Adding required validator for field ${field?['name']}");
+      // }
     }
 
     if (field?['type'] == 'number') {
@@ -213,11 +225,19 @@ class DynamicFormController extends ChangeNotifier {
   bool validateAndProceed(BuildContext context) {
     // Ensure we're not out of bounds
     if (_currentQuestionIndex < 0 || _currentQuestionIndex >= formJson.length) {
+      if (kDebugMode) {
+        print(
+            "Error: Current question index out of bounds: $_currentQuestionIndex");
+      }
       return false;
     }
 
     final field = formJson[_currentQuestionIndex];
     final currentFieldName = field['name'];
+
+    if (kDebugMode) {
+      print("Validating field: $currentFieldName");
+    }
 
     final currentControl = form.control(currentFieldName);
 
@@ -304,6 +324,10 @@ class DynamicFormController extends ChangeNotifier {
 
           // If both are empty arrays, require file upload
           if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
+            if (kDebugMode) {
+              print(
+                  "File required for ${field['name']} because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
+            }
             fileRequired = true;
           }
         }
@@ -355,6 +379,9 @@ class DynamicFormController extends ChangeNotifier {
 
         if (targetQuestion == 'end') {
           // This branch leads to the end of the form - show submit button
+          if (kDebugMode) {
+            print("Navigation: Branching to 'end' - form complete");
+          }
           notifyListeners();
           return true;
         } else if (targetQuestion is String) {
@@ -370,13 +397,25 @@ class DynamicFormController extends ChangeNotifier {
           if (targetIndex != -1) {
             if (shouldDisplayQuestion(targetIndex)) {
               _currentQuestionIndex = targetIndex;
+              if (kDebugMode) {
+                print(
+                    "Navigation: Branching to question '$targetQuestion' at index $targetIndex");
+              }
               notifyListeners();
               return true;
             } else {
+              if (kDebugMode) {
+                print(
+                    "Navigation: Branching target '$targetQuestion' is not visible - finding next visible question");
+              }
               // The branching target is not visible, find next visible
               int nextVisibleIndex = findNextVisibleQuestionIndex(targetIndex);
               if (nextVisibleIndex != -1) {
                 _currentQuestionIndex = nextVisibleIndex;
+                if (kDebugMode) {
+                  print(
+                      "Navigation: Found next visible question at index $nextVisibleIndex");
+                }
                 notifyListeners();
                 return true;
               }
@@ -391,6 +430,15 @@ class DynamicFormController extends ChangeNotifier {
 
     if (nextVisibleIndex != -1) {
       _currentQuestionIndex = nextVisibleIndex;
+      if (kDebugMode) {
+        print(
+            "Navigation: Moving to next visible question at index $nextVisibleIndex");
+      }
+    } else {
+      // No more visible questions - we're at the end of the form
+      if (kDebugMode) {
+        print("Navigation: No more visible questions found - form complete");
+      }
     }
 
     notifyListeners();
@@ -399,13 +447,23 @@ class DynamicFormController extends ChangeNotifier {
 
   int findNextVisibleQuestionIndex([int? startFromIndex]) {
     int startIndex = startFromIndex ?? _currentQuestionIndex;
+    if (kDebugMode) {
+      print("Finding next visible question after index $startIndex");
+    }
 
     for (int i = startIndex + 1; i < formJson.length; i++) {
       if (shouldDisplayQuestion(i)) {
+        if (kDebugMode) {
+          print(
+              "Found next visible question at index $i (${formJson[i]['name']})");
+        }
         return i;
       }
     }
 
+    if (kDebugMode) {
+      print("No more visible questions found after index $startIndex");
+    }
     return -1;
   }
 
@@ -420,6 +478,10 @@ class DynamicFormController extends ChangeNotifier {
     // They should only appear as part of their parent question's group
     if (question['groupWith'] != null &&
         question['groupWith'].toString().isNotEmpty) {
+      if (kDebugMode) {
+        print(
+            "Question ${question['name']} has groupWith=${question['groupWith']}, excluding from standalone navigation");
+      }
       return false;
     }
 
@@ -524,6 +586,10 @@ class DynamicFormController extends ChangeNotifier {
 
           // If both are empty arrays, require file upload
           if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
+            if (kDebugMode) {
+              print(
+                  "File required for ${field['name']} because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
+            }
             fileRequired = true;
           }
         }
@@ -631,6 +697,10 @@ class DynamicFormController extends ChangeNotifier {
 
           // If both are empty arrays, require file upload
           if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
+            if (kDebugMode) {
+              print(
+                  "File required for ${field['name']} because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
+            }
             fileRequired = true;
           }
         }
@@ -981,53 +1051,118 @@ class DynamicFormController extends ChangeNotifier {
   /// Moves to the previous question that the user actually saw
   /// Returns true if successful, false if there's no previous question
   bool moveToPreviousQuestion() {
+    if (kDebugMode) {
+      print("moveToPreviousQuestion called");
+      print("Current index: $_currentQuestionIndex");
+      print("Navigation history: $_navigationHistory");
+    }
+
+    // If navigation history is empty, try to find the previous visible question
     if (_navigationHistory.isEmpty) {
       if (kDebugMode) {
-        print("Navigation history is empty, cannot go back further");
+        print(
+            "Navigation history is empty, looking for previous visible question");
       }
-      return false;
+
+      // Find the previous visible question before the current one
+      int previousVisibleIndex = -1;
+      for (int i = _currentQuestionIndex - 1; i >= 0; i--) {
+        if (shouldDisplayQuestion(i)) {
+          previousVisibleIndex = i;
+          break;
+        }
+      }
+
+      if (previousVisibleIndex != -1) {
+        _currentQuestionIndex = previousVisibleIndex;
+        if (kDebugMode) {
+          print(
+              "Found previous visible question at index $previousVisibleIndex");
+        }
+        notifyListeners();
+        return true;
+      } else {
+        if (kDebugMode) {
+          print("No previous visible question found");
+        }
+        return false;
+      }
     }
 
     int previousIndex = _navigationHistory.removeLast();
-
-    // Ensure the previous question is visible with current form values
-    // If not, keep going back until finding a visible one
-    while (!shouldDisplayQuestion(previousIndex) &&
-        _navigationHistory.isNotEmpty) {
-      if (kDebugMode) {
-        print(
-            "Question at index $previousIndex is no longer visible, checking earlier question");
-      }
-      previousIndex = _navigationHistory.removeLast();
+    if (kDebugMode) {
+      print("Trying to navigate back to index $previousIndex");
     }
 
-    // Only update if we found a visible previous question
+    // Check if the previous question from history is still visible
     if (shouldDisplayQuestion(previousIndex)) {
       _currentQuestionIndex = previousIndex;
       if (kDebugMode) {
         print(
-            "Moving back to visible question at index $previousIndex (${formJson[previousIndex]['name']})");
+            "Successfully navigated back to visible question at index $previousIndex");
       }
       notifyListeners();
       return true;
-    } else {
-      if (kDebugMode) {
-        print("No visible previous questions found in navigation history");
+    }
+
+    // If the previous question from history is no longer visible,
+    // find the closest previous visible question to our current position
+    if (kDebugMode) {
+      print(
+          "Question at index $previousIndex is no longer visible, finding alternative");
+    }
+
+    // Try to find a visible question before the one that's no longer visible
+    int alternativeIndex = -1;
+    for (int i = previousIndex - 1; i >= 0; i--) {
+      if (shouldDisplayQuestion(i)) {
+        alternativeIndex = i;
+        break;
       }
-      // If the last item in navigation history is not visible,
-      // and we have no more history, go to the first visible question
-      int firstVisibleIndex = findFirstVisibleQuestionIndex();
-      if (firstVisibleIndex != -1) {
-        _currentQuestionIndex = firstVisibleIndex;
+    }
+
+    // If we found an alternative, use it
+    if (alternativeIndex != -1) {
+      _currentQuestionIndex = alternativeIndex;
+      if (kDebugMode) {
+        print("Found alternative previous question at index $alternativeIndex");
+      }
+      notifyListeners();
+      return true;
+    }
+
+    // If no alternative found, check if there are more items in navigation history
+    while (_navigationHistory.isNotEmpty) {
+      previousIndex = _navigationHistory.removeLast();
+      if (kDebugMode) {
+        print("Checking next item in history: index $previousIndex");
+      }
+
+      if (shouldDisplayQuestion(previousIndex)) {
+        _currentQuestionIndex = previousIndex;
         if (kDebugMode) {
-          print(
-              "Falling back to first visible question at index $firstVisibleIndex");
+          print("Found visible question in history at index $previousIndex");
         }
         notifyListeners();
         return true;
       }
     }
 
+    // As a last resort, go to the first visible question
+    int firstVisibleIndex = findFirstVisibleQuestionIndex();
+    if (firstVisibleIndex != -1) {
+      _currentQuestionIndex = firstVisibleIndex;
+      if (kDebugMode) {
+        print(
+            "Falling back to first visible question at index $firstVisibleIndex");
+      }
+      notifyListeners();
+      return true;
+    }
+
+    if (kDebugMode) {
+      print("No visible questions found, navigation failed");
+    }
     return false;
   }
 

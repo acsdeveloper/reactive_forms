@@ -4279,107 +4279,72 @@ class _DynamicFormState extends State<DynamicForm>
     if (kDebugMode) {
       print("\n=== moveToPreviousValidQuestion called ===");
       print("Current group pointer: $_currentGroupPointer");
-      print("Current internal fields count: ${_internalFields.length}");
-      print("Group anchors: $_groupAnchors");
+      print("Current controller index: ${controller.currentQuestionIndex}");
     }
 
-    // Safety check
-    if (_groupAnchors.isEmpty || _currentGroupPointer >= _groupAnchors.length) {
-      if (kDebugMode) {
-        print("Invalid state for backward navigation");
-      }
-      return;
-    }
+    // Use the controller's navigation logic which properly handles conditional visibility
+    bool navigationSuccessful = controller.moveToPreviousQuestion();
 
-    // Store the current question for debugging
-    int currentAnchorIndex = _groupAnchors[_currentGroupPointer];
-    String currentQuestion = _internalFields[currentAnchorIndex]['name'];
+    if (navigationSuccessful) {
+      // Update the UI state to match the controller's new position
+      setState(() {
+        // Find the group pointer that corresponds to the controller's current question
+        int matchingGroupPointer = -1;
 
-    if (kDebugMode) {
-      print("Navigating back from question: $currentQuestion");
-    }
+        // Look for a matching anchor in our group structure
+        for (int i = 0; i < _groupAnchors.length; i++) {
+          final anchorIndex = _groupAnchors[i];
+          if (anchorIndex < _internalFields.length) {
+            final anchorField = _internalFields[anchorIndex];
+            final anchorName = anchorField['name'].toString();
 
-    // Identify the previous visible anchor/question to navigate to
-    int prevGroupPointer = _currentGroupPointer - 1;
+            // Check if this anchor corresponds to the controller's current question
+            if (controller.currentQuestionIndex < widget.formJson.length) {
+              final controllerQuestionName = widget
+                  .formJson[controller.currentQuestionIndex]['name']
+                  .toString();
 
-    // If we're already at the first question or no previous anchor exists
-    if (prevGroupPointer < 0) {
-      if (kDebugMode) {
-        print("Already at first question, can't go back further");
-      }
-      return;
-    }
+              // Direct match
+              if (anchorName == controllerQuestionName) {
+                matchingGroupPointer = i;
+                break;
+              }
 
-    int prevAnchorIndex = _groupAnchors[prevGroupPointer];
-
-    // Check if the previous question is in the form JSON (for non-duplicated questions)
-    String prevAnchorName = _internalFields[prevAnchorIndex]['name'];
-    int prevFormIndex = -1;
-
-    // For duplicate questions, we need to find the original question they were duplicated from
-    if (_internalFields[prevAnchorIndex]['isDuplicate'] == true) {
-      // Extract the base name from the duplicate (remove timestamp suffix)
-      final timestampPattern = RegExp(r'(.+)_\d+$');
-      final match = timestampPattern.firstMatch(prevAnchorName);
-      if (match != null) {
-        final baseName = match.group(1) ?? '';
-        // Find the original question in the form JSON
-        for (int i = 0; i < widget.formJson.length; i++) {
-          if (widget.formJson[i]['name'] == baseName) {
-            prevFormIndex = i;
-            break;
+              // For duplicates, check base name
+              final timestampPattern = RegExp(r'(.+)_\d+$');
+              final match = timestampPattern.firstMatch(anchorName);
+              if (match != null) {
+                final baseName = match.group(1) ?? '';
+                if (baseName == controllerQuestionName) {
+                  matchingGroupPointer = i;
+                  break;
+                }
+              }
+            }
           }
         }
-      }
-    } else {
-      // For original questions, find them directly in the form JSON
-      for (int i = 0; i < widget.formJson.length; i++) {
-        if (widget.formJson[i]['name'] == prevAnchorName) {
-          prevFormIndex = i;
-          break;
-        }
-      }
-    }
 
-    if (kDebugMode) {
-      print(
-          "Previous anchor name: $prevAnchorName, form index: $prevFormIndex");
-    }
-
-    // Update our pointers to the previous question
-    setState(() {
-      _currentGroupPointer = prevGroupPointer;
-
-      // Set the controller index to the original question index if found
-      // This ensures proper navigation and form state management
-      if (prevFormIndex >= 0) {
-        controller.currentQuestionIndex = prevFormIndex;
-      } else {
-        // Fallback: if we can't find the original question, use the first visible question
-        int firstVisibleIndex = -1;
-        for (int i = 0; i < widget.formJson.length; i++) {
-          if (controller.shouldDisplayQuestion(i)) {
-            firstVisibleIndex = i;
-            break;
+        if (matchingGroupPointer != -1) {
+          _currentGroupPointer = matchingGroupPointer;
+          if (kDebugMode) {
+            print(
+                "Updated group pointer to $_currentGroupPointer to match controller index ${controller.currentQuestionIndex}");
           }
-        }
-        if (firstVisibleIndex >= 0) {
-          controller.currentQuestionIndex = firstVisibleIndex;
         } else {
-          controller.currentQuestionIndex = 0; // Ultimate fallback
+          if (kDebugMode) {
+            print(
+                "Warning: Could not find matching group pointer for controller index ${controller.currentQuestionIndex}");
+          }
+          // Update current question visibility as fallback
+          _updateCurrentQuestionBasedOnVisibility();
         }
-      }
-
+      });
+    } else {
       if (kDebugMode) {
-        print("Updated group pointer to: $_currentGroupPointer");
         print(
-            "Updated controller index to: ${controller.currentQuestionIndex}");
-        print("Navigated back to question: $prevAnchorName");
+            "Controller navigation failed - already at first question or no valid previous question");
       }
-
-      // Ensure the question we're navigating to is visible
-      _updateCurrentQuestionBasedOnVisibility();
-    });
+    }
   }
 
   // Build error message for attachment validation errors
