@@ -141,19 +141,19 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Critical: If no questions are visible, make the first question visible as fallback
     if (visibleIndices.isEmpty && widget.formJson.isNotEmpty) {
-      if (kDebugMode) {
-        print(
-            "Warning: No visible questions found! Making first question visible as fallback.");
-      }
+      // if (kDebugMode) {
+      //   print(
+      //       "Warning: No visible questions found! Making first question visible as fallback.");
+      // }
       visibleIndices = [0]; // Make the first question visible as fallback
     }
 
     // Check if current question is visible
     if (!visibleIndices.contains(currentQuestionIndex)) {
-      if (kDebugMode) {
-        print(
-            "Current question at index $currentQuestionIndex is not visible. Finding next visible question.");
-      }
+      // if (kDebugMode) {
+      //   print(
+      //       "Current question at index $currentQuestionIndex is not visible. Finding next visible question.");
+      // }
 
       // Current question is not visible - find the next visible question
       int nextVisibleIndex = -1;
@@ -221,10 +221,10 @@ class _DynamicFormState extends State<DynamicForm>
         } else if (anchorPointer == -1) {
           // If we couldn't find a proper anchor but we know a question should be visible,
           // this is a serious issue - log it
-          if (kDebugMode) {
-            print(
-                "ERROR: Could not find anchor for visible question at index $nextVisibleIndex");
-          }
+          // if (kDebugMode) {
+          //   print(
+          //       "ERROR: Could not find anchor for visible question at index $nextVisibleIndex");
+          // }
         }
       } else {
         // This should never happen since we ensure visibleIndices is not empty
@@ -265,15 +265,15 @@ class _DynamicFormState extends State<DynamicForm>
       _pageControllerReady = true;
 
       // Debug current state
-      if (kDebugMode) {
-        print("\n=== Form Initialized ===");
-        print("Current question index: ${controller.currentQuestionIndex}");
-        print("Current group pointer: $_currentGroupPointer");
-        print("Total anchors: ${_groupAnchors.length}");
-        print(
-            "Current question visible: ${controller.shouldDisplayQuestion(controller.currentQuestionIndex)}");
-        controller.debugNavigationState();
-      }
+      // if (kDebugMode) {
+      //   print("\n=== Form Initialized ===");
+      //   print("Current question index: ${controller.currentQuestionIndex}");
+      //   print("Current group pointer: $_currentGroupPointer");
+      //   print("Total anchors: ${_groupAnchors.length}");
+      //   print(
+      //       "Current question visible: ${controller.shouldDisplayQuestion(controller.currentQuestionIndex)}");
+      //   controller.debugNavigationState();
+      // }
     });
 
     // Listen to form value changes and update question visibility
@@ -395,12 +395,12 @@ class _DynamicFormState extends State<DynamicForm>
       // If this field is already being evaluated, we have a circular dependency
       if (fieldBeingEvaluated != null &&
           evaluationStack.contains(fieldBeingEvaluated)) {
-        if (kDebugMode) {
-          print(
-              "WARNING: Circular dependency detected in showWhen conditions for field: $fieldBeingEvaluated");
-          print(
-              "Dependency chain: ${evaluationStack.join(' → ')} → $fieldBeingEvaluated");
-        }
+        // if (kDebugMode) {
+        //   print(
+        //       "WARNING: Circular dependency detected in showWhen conditions for field: $fieldBeingEvaluated");
+        //   print(
+        //       "Dependency chain: ${evaluationStack.join(' → ')} → $fieldBeingEvaluated");
+        // }
         // Break the circular dependency by treating this condition as true
         return true;
       }
@@ -543,15 +543,15 @@ class _DynamicFormState extends State<DynamicForm>
             currentField['allowDuplicate'] == true;
 
         // For debugging
-        if (kDebugMode) {
-          print("Current question has groupWith: $currentQuestionHasGroupWith");
-          print("Current field: ${currentField['name']}");
-          print("Is referenced by others: $isReferencedByOthers");
-          print("Is parent with children: $isParentWithChildren");
-          if (currentField['allowDuplicate'] == true) {
-            print("AllowDuplicate: ${currentField['allowDuplicate']}");
-          }
-        }
+        // if (kDebugMode) {
+        //   print("Current question has groupWith: $currentQuestionHasGroupWith");
+        //   print("Current field: ${currentField['name']}");
+        //   print("Is referenced by others: $isReferencedByOthers");
+        //   print("Is parent with children: $isParentWithChildren");
+        //   if (currentField['allowDuplicate'] == true) {
+        //     print("AllowDuplicate: ${currentField['allowDuplicate']}");
+        //   }
+        // }
       }
     }
 
@@ -667,22 +667,13 @@ class _DynamicFormState extends State<DynamicForm>
       widgets.addAll(currentGroupFields.map(_buildField).toList());
     }
 
-    // Now collect all duplicates of the current anchor to show below it
-    final List<int> duplicateAnchors = [];
+    // CRITICAL FIX: Group duplicates by timestamp to avoid creating separate cards for each field
+    // Now collect all duplicates by timestamp and create one card per duplicate group
+    final Map<String, List<int>> duplicateGroups = {};
     final timeStampPattern = RegExp(r'_(\d+)$');
 
-    // Extract the base name of the current question (removing any question_X suffix)
-    String baseName = currentAnchorName;
-    final questionPattern = RegExp(r'^question_(\d+)$');
-    if (questionPattern.hasMatch(baseName)) {
-      baseName = baseName.split('_').first;
-    }
-
-    // Find all duplicate anchors that should be shown with this question
+    // Find all duplicate fields that should be shown with this question and group them by timestamp
     for (int i = 0; i < _internalFields.length; i++) {
-      // Skip the current anchor and non-anchor indices
-      if (i == currentAnchor || !_anchorToFieldIndices.containsKey(i)) continue;
-
       final field = _internalFields[i];
       final fieldName = field['name'].toString();
 
@@ -690,6 +681,8 @@ class _DynamicFormState extends State<DynamicForm>
       if (field['isDuplicate'] == true) {
         final match = timeStampPattern.firstMatch(fieldName);
         if (match != null) {
+          final timestamp = match.group(1) ?? '';
+
           // Extract the base name of this duplicate
           String duplicateBaseName = fieldName;
           final lastUnderscore = duplicateBaseName.lastIndexOf('_');
@@ -716,17 +709,20 @@ class _DynamicFormState extends State<DynamicForm>
             }
           }
 
-          if (isRelated) {
-            duplicateAnchors.add(i);
+          if (isRelated && timestamp.isNotEmpty) {
+            // Group duplicates by timestamp
+            duplicateGroups.putIfAbsent(timestamp, () => []).add(i);
           }
         }
       }
     }
 
-    // Build cards for all duplicate anchors
-    for (final anchor in duplicateAnchors) {
-      final indices = _anchorToFieldIndices[anchor] ?? [anchor];
-      final fields = indices.map((i) => _internalFields[i]).toList();
+    // Build one card per duplicate group (timestamp)
+    for (final timestamp in duplicateGroups.keys) {
+      final duplicateIndices = duplicateGroups[timestamp]!;
+
+      // Get all fields for this duplicate group
+      final fields = duplicateIndices.map((i) => _internalFields[i]).toList();
 
       // Add the duplicate card with delete button
       widgets.add(_buildCardForFields(fields, true));
@@ -765,15 +761,27 @@ class _DynamicFormState extends State<DynamicForm>
     // Special handling for duplicate fields
     if (field['isDuplicate'] == true) {
       // Get the current anchor/question
-      final currentAnchor = _groupAnchors.isNotEmpty ? _groupAnchors[_currentGroupPointer] : -1;
-      final String currentAnchorName = currentAnchor >= 0 && currentAnchor < _internalFields.length ?
-                                      _internalFields[currentAnchor]['name'].toString() : "";
-      
+      final currentAnchor =
+          _groupAnchors.isNotEmpty ? _groupAnchors[_currentGroupPointer] : -1;
+      final String currentAnchorName =
+          currentAnchor >= 0 && currentAnchor < _internalFields.length
+              ? _internalFields[currentAnchor]['name'].toString()
+              : "";
+
       // Check if this duplicate belongs to the current question
       if (field['parentQuestionName'] != null) {
         String parentName = field['parentQuestionName'].toString();
-        // Only show if it belongs to the current question
-        if (parentName != currentAnchorName) {
+
+        // Extract base name from current anchor if it's also a duplicate
+        String currentBaseName = currentAnchorName;
+        final timestampPattern = RegExp(r'(.+)_\d+$');
+        final currentMatch = timestampPattern.firstMatch(currentAnchorName);
+        if (currentMatch != null) {
+          currentBaseName = currentMatch.group(1) ?? currentAnchorName;
+        }
+
+        // Only show if it belongs to the current question (compare base names)
+        if (parentName != currentBaseName && parentName != currentAnchorName) {
           // This duplicate belongs to a different question, don't show it here
           return const SizedBox.shrink();
         }
@@ -784,17 +792,17 @@ class _DynamicFormState extends State<DynamicForm>
           return const SizedBox.shrink();
         }
       }
-      
+
       // This duplicate belongs to this page, so show it regardless of other conditions
       return _buildFieldWidget(field);
     }
-    
+
     // If field has persistVisibility flag set to true, always show it regardless of other conditions
     // This ensures duplicate fields remain visible during navigation
     if (field['persistVisibility'] == true) {
       return _buildFieldWidget(field);
     }
-    
+
     if (field['showWhen'] != null) {
       return ReactiveFormConsumer(
         builder: (context, form, child) {
@@ -932,9 +940,9 @@ class _DynamicFormState extends State<DynamicForm>
                     }
 
                     // Debug info
-                    print(
-                        'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
-                    print('Current form value: ${controller.form.value}');
+                    // print(
+                    //     'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
+                    // print('Current form value: ${controller.form.value}');
 
                     state.didChange(value);
                     state.control.markAsTouched();
@@ -977,10 +985,10 @@ class _DynamicFormState extends State<DynamicForm>
 
                   // If any selected value is in disabledOptions, don't show attachments
                   if (isAttachmentDisabled) {
-                    if (kDebugMode) {
-                      print(
-                          "📄 HIDING UPLOAD: At least one selected value is in disableAttachmentsOn list for multiselect");
-                    }
+                    // if (kDebugMode) {
+                    //   print(
+                    //       "📄 HIDING UPLOAD: At least one selected value is in disableAttachmentsOn list for multiselect");
+                    // }
                     return const SizedBox.shrink();
                   }
                   // ELSE: Show file upload (subject to other rules)
@@ -1285,9 +1293,9 @@ class _DynamicFormState extends State<DynamicForm>
                 }
 
                 // Debug info
-                print(
-                    'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
-                print('Current form value: ${controller.form.value}');
+                // print(
+                //     'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
+                // print('Current form value: ${controller.form.value}');
 
                 state.didChange(value);
                 state.control.markAsTouched();
@@ -1326,10 +1334,10 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Handle case where options might be empty
     if (options.isEmpty) {
-      if (kDebugMode) {
-        print(
-            "📄 RADIO: Field '${field['name']}' has empty options - defaulting to Yes/No");
-      }
+      // if (kDebugMode) {
+      //   print(
+      //       "📄 RADIO: Field '${field['name']}' has empty options - defaulting to Yes/No");
+      // }
     }
 
     // Regular implementation for all radio fields
@@ -1369,9 +1377,6 @@ class _DynamicFormState extends State<DynamicForm>
                     // the FileUploadWidget appears or disappears as needed
                     setState(() {
                       // This empty setState will trigger a rebuild
-                      if (kDebugMode) {
-                        print("Forcing UI rebuild for radio button change");
-                      }
                     });
                   }
 
@@ -3604,29 +3609,34 @@ class _DynamicFormState extends State<DynamicForm>
       final field = _internalFields[i];
       final String fieldName = field['name'].toString();
       final String? groupWith = field['groupWith']?.toString();
+      final bool isDuplicate = field['isDuplicate'] == true;
 
       if (groupWith != null && groupWith.isNotEmpty) {
         // This field refers to a parent
         childFieldIndices.add(i); // Mark as a child field
 
-        // Resolve ultimate parent to handle chained relationships
-        String ultimateParent = _resolveUltimateParent(groupWith);
+        // CRITICAL FIX: Only add non-duplicate child fields to the original parent's group
+        // Duplicate child fields should only be grouped with their duplicate parent
+        if (!isDuplicate) {
+          // Resolve ultimate parent to handle chained relationships
+          String ultimateParent = _resolveUltimateParent(groupWith);
 
-        // Check if parent field exists
-        if (fieldNameToIndex.containsKey(ultimateParent)) {
-          int parentIndex = fieldNameToIndex[ultimateParent]!;
+          // Check if parent field exists
+          if (fieldNameToIndex.containsKey(ultimateParent)) {
+            int parentIndex = fieldNameToIndex[ultimateParent]!;
 
-          // Add this field as a child of the ultimate parent
-          anchorToChildIndices.putIfAbsent(ultimateParent, () => []).add(i);
+            // Add this field as a child of the ultimate parent
+            anchorToChildIndices.putIfAbsent(ultimateParent, () => []).add(i);
 
-          // Debug
-          if (kDebugMode && ultimateParent != groupWith) {
+            // Debug
+            if (kDebugMode && ultimateParent != groupWith) {
+              print(
+                  "Chain detected: $fieldName -> $groupWith -> $ultimateParent");
+            }
+          } else if (kDebugMode) {
             print(
-                "Chain detected: $fieldName -> $groupWith -> $ultimateParent");
+                "Warning: Field '$fieldName' references non-existent parent '$ultimateParent'");
           }
-        } else if (kDebugMode) {
-          print(
-              "Warning: Field '$fieldName' references non-existent parent '$ultimateParent'");
         }
       }
     }
@@ -3677,7 +3687,9 @@ class _DynamicFormState extends State<DynamicForm>
       _anchorToFieldIndices[i] = groupIndices;
     }
 
-    // Handle timestamp-based duplicates
+    // CRITICAL FIX: Do NOT add duplicate fields as separate anchors
+    // Instead, store them in _anchorToFieldIndices only for rendering purposes
+    // This ensures duplicates appear as cards on the same page, not as separate pages
     for (final groupKey in timestampGroups.keys) {
       final fieldIndices = timestampGroups[groupKey]!;
       if (fieldIndices.isEmpty) continue;
@@ -3685,12 +3697,8 @@ class _DynamicFormState extends State<DynamicForm>
       // Find the first field as the anchor for this duplicate set
       final firstIndex = fieldIndices.reduce((a, b) => a < b ? a : b);
 
-      // Only add as an anchor if it's not already a child of another field
-      if (!childFieldIndices.contains(firstIndex)) {
-        _groupAnchors.add(firstIndex);
-      }
-
-      // Always store all fields in this timestamp group under this anchor
+      // IMPORTANT: Do NOT add duplicates to _groupAnchors
+      // Only store them in _anchorToFieldIndices for rendering
       _anchorToFieldIndices[firstIndex] = List.from(fieldIndices);
     }
 
@@ -3700,79 +3708,19 @@ class _DynamicFormState extends State<DynamicForm>
     // Map to track base field names to their question numbers
     Map<String, int> baseNameToQuestionNumber = {};
 
-    // First pass: assign question numbers to non-duplicate anchors
+    // Assign question numbers only to non-duplicate anchors
     int questionNumber = 1;
     for (int i = 0; i < _groupAnchors.length; i++) {
       int anchorIndex = _groupAnchors[i];
       String fieldName = _internalFields[anchorIndex]['name'].toString();
-      bool isDuplicate = _internalFields[anchorIndex]['isDuplicate'] == true;
 
-      if (!isDuplicate) {
-        _anchorToQuestionNumber[anchorIndex] = questionNumber;
-        baseNameToQuestionNumber[fieldName] = questionNumber;
-        questionNumber++;
-      }
-    }
-
-    // Second pass: assign question numbers to duplicate anchors
-    for (int i = 0; i < _groupAnchors.length; i++) {
-      int anchorIndex = _groupAnchors[i];
-      String fieldName = _internalFields[anchorIndex]['name'].toString();
-      bool isDuplicate = _internalFields[anchorIndex]['isDuplicate'] == true;
-
-      if (isDuplicate) {
-        // For duplicates, try to find the original field they were duplicated from
-        final match = timestampPattern.firstMatch(fieldName);
-        if (match != null) {
-          // Extract the base name (removing timestamp suffix)
-          String baseName = match.group(1) ?? '';
-
-          if (baseNameToQuestionNumber.containsKey(baseName)) {
-            // Use the same question number as the original field
-            _anchorToQuestionNumber[anchorIndex] =
-                baseNameToQuestionNumber[baseName]!;
-
-            if (kDebugMode) {
-              print(
-                  "Assigned question number ${baseNameToQuestionNumber[baseName]} to duplicate field '$fieldName' from original '$baseName'");
-            }
-          } else {
-            // If original field not found, assign a new number
-            _anchorToQuestionNumber[anchorIndex] = questionNumber++;
-
-            if (kDebugMode) {
-              print(
-                  "Assigned new question number to duplicate field '$fieldName' - original field not found");
-            }
-          }
-        } else {
-          // Not a standard timestamp-based duplicate, assign a new number
-          _anchorToQuestionNumber[anchorIndex] = questionNumber++;
-        }
-      }
+      _anchorToQuestionNumber[anchorIndex] = questionNumber;
+      baseNameToQuestionNumber[fieldName] = questionNumber;
+      questionNumber++;
     }
 
     // Reset the group pointer
     _currentGroupPointer = 0;
-
-    // Debug the group structure if in debug mode
-    if (kDebugMode) {
-      print("\n=== Group Structure After Recomputation ===");
-      print("Total anchors: ${_groupAnchors.length}");
-
-      for (int i = 0; i < _groupAnchors.length; i++) {
-        int anchorIndex = _groupAnchors[i];
-        String anchorName = _internalFields[anchorIndex]['name'].toString();
-        List<int> groupIndices =
-            _anchorToFieldIndices[anchorIndex] ?? [anchorIndex];
-        int qNumber = _anchorToQuestionNumber[anchorIndex] ?? -1;
-
-        print(
-            "Anchor #${i + 1}: '${anchorName}' (index: $anchorIndex, question: $qNumber)");
-        print(
-            "  Group fields: ${groupIndices.map((idx) => _internalFields[idx]['name']).toList()}");
-      }
-    }
 
     // Update controller index after a brief delay to ensure state is consistent
     if (_groupAnchors.isNotEmpty) {
@@ -3806,7 +3754,7 @@ class _DynamicFormState extends State<DynamicForm>
     final List<Map<String, dynamic>> currentGroupFields =
         currentIndices.map((i) => _internalFields[i]).toList();
 
-    // NEW LOGIC: Check if this anchor field is referenced by any other field via groupWith
+    // Check if this anchor field is referenced by any other field via groupWith
     // or if it has children in its group
     bool shouldShowCard = false;
 
@@ -3838,22 +3786,13 @@ class _DynamicFormState extends State<DynamicForm>
       widgets.addAll(currentGroupFields.map(_buildField).toList());
     }
 
-    // Now collect all duplicates of the current anchor to show below it
-    final List<int> duplicateAnchors = [];
+    // CRITICAL FIX: Group duplicates by timestamp to avoid creating separate cards for each field
+    // Now collect all duplicates by timestamp and create one card per duplicate group
+    final Map<String, List<int>> duplicateGroups = {};
     final timeStampPattern = RegExp(r'_(\d+)$');
 
-    // Extract the base name of the current question (removing any question_X suffix)
-    String baseName = currentAnchorName;
-    final questionPattern = RegExp(r'^question_(\d+)$');
-    if (questionPattern.hasMatch(baseName)) {
-      baseName = baseName.split('_').first;
-    }
-
-    // Find all duplicate anchors that should be shown with this question
+    // Find all duplicate fields that should be shown with this question and group them by timestamp
     for (int i = 0; i < _internalFields.length; i++) {
-      // Skip the current anchor and non-anchor indices
-      if (i == currentAnchor || !_anchorToFieldIndices.containsKey(i)) continue;
-
       final field = _internalFields[i];
       final fieldName = field['name'].toString();
 
@@ -3861,6 +3800,8 @@ class _DynamicFormState extends State<DynamicForm>
       if (field['isDuplicate'] == true) {
         final match = timeStampPattern.firstMatch(fieldName);
         if (match != null) {
+          final timestamp = match.group(1) ?? '';
+
           // Extract the base name of this duplicate
           String duplicateBaseName = fieldName;
           final lastUnderscore = duplicateBaseName.lastIndexOf('_');
@@ -3887,17 +3828,20 @@ class _DynamicFormState extends State<DynamicForm>
             }
           }
 
-          if (isRelated) {
-            duplicateAnchors.add(i);
+          if (isRelated && timestamp.isNotEmpty) {
+            // Group duplicates by timestamp
+            duplicateGroups.putIfAbsent(timestamp, () => []).add(i);
           }
         }
       }
     }
 
-    // Build cards for all duplicate anchors
-    for (final anchor in duplicateAnchors) {
-      final indices = _anchorToFieldIndices[anchor] ?? [anchor];
-      final fields = indices.map((i) => _internalFields[i]).toList();
+    // Build one card per duplicate group (timestamp)
+    for (final timestamp in duplicateGroups.keys) {
+      final duplicateIndices = duplicateGroups[timestamp]!;
+
+      // Get all fields for this duplicate group
+      final fields = duplicateIndices.map((i) => _internalFields[i]).toList();
 
       // Add the duplicate card with delete button
       widgets.add(_buildCardForFields(fields, true));
@@ -3933,9 +3877,10 @@ class _DynamicFormState extends State<DynamicForm>
       // Get the current anchor and its field indices
       final anchor = _groupAnchors[_currentGroupPointer];
       final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
-      
+
       // Get the current anchor field's name for reference when creating duplicates
-      final String currentAnchorName = _internalFields[anchor]['name'].toString();
+      final String currentAnchorName =
+          _internalFields[anchor]['name'].toString();
 
       if (indices.isEmpty) {
         if (kDebugMode) {
@@ -3971,17 +3916,17 @@ class _DynamicFormState extends State<DynamicForm>
 
         // Mark as duplicate for delete button visibility
         fieldCopy['isDuplicate'] = true;
-        
+
         // Add a persistent ID to help track duplicates across state changes
         fieldCopy['duplicationId'] = millis.toString();
-        
+
         // Set persistVisibility to true to keep the duplicate visible during navigation
         fieldCopy['persistVisibility'] = true;
-        
+
         // CRITICAL FIX: Store which question anchor this duplicate belongs to
         // This will prevent duplicates from appearing on multiple pages
         fieldCopy['parentQuestionName'] = currentAnchorName;
-        
+
         // Also store the parent question index to help with page association
         fieldCopy['parentQuestionIndex'] = anchor;
 
@@ -4382,7 +4327,7 @@ class _DynamicFormState extends State<DynamicForm>
       print("Current internal fields count: ${_internalFields.length}");
       print("Group anchors: $_groupAnchors");
     }
-    
+
     // Safety check
     if (_groupAnchors.isEmpty || _currentGroupPointer >= _groupAnchors.length) {
       if (kDebugMode) {
@@ -4390,18 +4335,18 @@ class _DynamicFormState extends State<DynamicForm>
       }
       return;
     }
-    
+
     // Store the current question for debugging
     int currentAnchorIndex = _groupAnchors[_currentGroupPointer];
     String currentQuestion = _internalFields[currentAnchorIndex]['name'];
-    
+
     if (kDebugMode) {
       print("Navigating back from question: $currentQuestion");
     }
-    
+
     // Identify the previous visible anchor/question to navigate to
     int prevGroupPointer = _currentGroupPointer - 1;
-    
+
     // If we're already at the first question or no previous anchor exists
     if (prevGroupPointer < 0) {
       if (kDebugMode) {
@@ -4409,43 +4354,74 @@ class _DynamicFormState extends State<DynamicForm>
       }
       return;
     }
-    
+
     int prevAnchorIndex = _groupAnchors[prevGroupPointer];
-    
+
     // Check if the previous question is in the form JSON (for non-duplicated questions)
     String prevAnchorName = _internalFields[prevAnchorIndex]['name'];
     int prevFormIndex = -1;
-    
-    // Try to find the corresponding index in the original form JSON
-    for (int i = 0; i < widget.formJson.length; i++) {
-      if (widget.formJson[i]['name'] == prevAnchorName) {
-        prevFormIndex = i;
-        break;
+
+    // For duplicate questions, we need to find the original question they were duplicated from
+    if (_internalFields[prevAnchorIndex]['isDuplicate'] == true) {
+      // Extract the base name from the duplicate (remove timestamp suffix)
+      final timestampPattern = RegExp(r'(.+)_\d+$');
+      final match = timestampPattern.firstMatch(prevAnchorName);
+      if (match != null) {
+        final baseName = match.group(1) ?? '';
+        // Find the original question in the form JSON
+        for (int i = 0; i < widget.formJson.length; i++) {
+          if (widget.formJson[i]['name'] == baseName) {
+            prevFormIndex = i;
+            break;
+          }
+        }
+      }
+    } else {
+      // For original questions, find them directly in the form JSON
+      for (int i = 0; i < widget.formJson.length; i++) {
+        if (widget.formJson[i]['name'] == prevAnchorName) {
+          prevFormIndex = i;
+          break;
+        }
       }
     }
-    
+
     if (kDebugMode) {
-      print("Previous anchor name: $prevAnchorName, form index: $prevFormIndex");
+      print(
+          "Previous anchor name: $prevAnchorName, form index: $prevFormIndex");
     }
-    
+
     // Update our pointers to the previous question
     setState(() {
       _currentGroupPointer = prevGroupPointer;
-      
-      // If the previous question exists in the form JSON, update controller index
+
+      // Set the controller index to the original question index if found
+      // This ensures proper navigation and form state management
       if (prevFormIndex >= 0) {
         controller.currentQuestionIndex = prevFormIndex;
       } else {
-        // For duplicated questions that might not be in the original form
-        controller.currentQuestionIndex = prevAnchorIndex;
+        // Fallback: if we can't find the original question, use the first visible question
+        int firstVisibleIndex = -1;
+        for (int i = 0; i < widget.formJson.length; i++) {
+          if (controller.shouldDisplayQuestion(i)) {
+            firstVisibleIndex = i;
+            break;
+          }
+        }
+        if (firstVisibleIndex >= 0) {
+          controller.currentQuestionIndex = firstVisibleIndex;
+        } else {
+          controller.currentQuestionIndex = 0; // Ultimate fallback
+        }
       }
-      
+
       if (kDebugMode) {
         print("Updated group pointer to: $_currentGroupPointer");
-        print("Updated controller index to: ${controller.currentQuestionIndex}");
+        print(
+            "Updated controller index to: ${controller.currentQuestionIndex}");
         print("Navigated back to question: $prevAnchorName");
       }
-      
+
       // Ensure the question we're navigating to is visible
       _updateCurrentQuestionBasedOnVisibility();
     });

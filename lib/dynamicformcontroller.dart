@@ -155,9 +155,9 @@ class DynamicFormController extends ChangeNotifier {
 
     if (isRequired) {
       validatorsList.add(Validators.required);
-      if (kDebugMode) {
-        print("Adding required validator for field ${field?['name']}");
-      }
+      // if (kDebugMode) {
+      //   print("Adding required validator for field ${field?['name']}");
+      // }
     }
 
     if (field?['type'] == 'number') {
@@ -802,10 +802,10 @@ class DynamicFormController extends ChangeNotifier {
         final bool isRequired = f['required'] == true;
 
         // Log the field we're adding
-        if (kDebugMode) {
-          print(
-              "Adding control for field: $n, type: ${f['type']}, required: $isRequired, isDuplicate: ${f['isDuplicate'] == true}");
-        }
+        // if (kDebugMode) {
+        //   print(
+        //       "Adding control for field: $n, type: ${f['type']}, required: $isRequired, isDuplicate: ${f['isDuplicate'] == true}");
+        // }
 
         if (f['type'] == 'multiselect') {
           List<String> initialValue = [];
@@ -818,10 +818,10 @@ class DynamicFormController extends ChangeNotifier {
           // Use _getValidators to ensure consistency
           List<Validator> validators = _getValidators(isRequired, f);
 
-          if (kDebugMode) {
-            print(
-                "Adding multiselect field $n with ${validators.length} validators, required=$isRequired");
-          }
+          // if (kDebugMode) {
+          //   print(
+          //       "Adding multiselect field $n with ${validators.length} validators, required=$isRequired");
+          // }
 
           newControls[n] = FormControl<List<String>>(
               value: initialValue, validators: validators);
@@ -837,10 +837,10 @@ class DynamicFormController extends ChangeNotifier {
           // Use _getValidators to ensure consistency
           List<Validator> validators = _getValidators(isRequired, f);
 
-          if (kDebugMode) {
-            print(
-                "Adding file field $n with ${validators.length} validators, required=$isRequired");
-          }
+          // if (kDebugMode) {
+          //   print(
+          //       "Adding file field $n with ${validators.length} validators, required=$isRequired");
+          // }
 
           newControls[n] = FormControl<String>(
             value: '',
@@ -855,10 +855,10 @@ class DynamicFormController extends ChangeNotifier {
           // Use the getValidators helper to ensure consistency
           List<Validator> validators = _getValidators(isRequired, f);
 
-          if (kDebugMode) {
-            print(
-                "Adding number field $n with ${validators.length} validators, required=$isRequired");
-          }
+          // if (kDebugMode) {
+          //   print(
+          //       "Adding number field $n with ${validators.length} validators, required=$isRequired");
+          // }
 
           newControls[n] =
               FormControl<num>(value: null, validators: validators);
@@ -875,10 +875,10 @@ class DynamicFormController extends ChangeNotifier {
           // Use _getValidators to ensure consistency
           List<Validator> validators = _getValidators(isRequired, f);
 
-          if (kDebugMode) {
-            print(
-                "Adding radio field $n with ${validators.length} validators, required=$isRequired");
-          }
+          // if (kDebugMode) {
+          //   print(
+          //       "Adding radio field $n with ${validators.length} validators, required=$isRequired");
+          // }
 
           newControls[n] = FormControl<String>(
             value: f['defaultValue'] ?? '',
@@ -893,10 +893,10 @@ class DynamicFormController extends ChangeNotifier {
           // Default case for text and other field types
           List<Validator> validators = _getValidators(isRequired, f);
 
-          if (kDebugMode) {
-            print(
-                "Adding text field $n with ${validators.length} validators, required=$isRequired");
-          }
+          // if (kDebugMode) {
+          //   print(
+          //       "Adding text field $n with ${validators.length} validators, required=$isRequired");
+          // }
 
           newControls[n] = FormControl<String>(
               value: f['defaultValue'] ?? '', validators: validators);
@@ -914,7 +914,7 @@ class DynamicFormController extends ChangeNotifier {
 
     // Debug log of all controls after adding
     if (kDebugMode) {
-      print("=== Form Controls After Adding ===");
+      // print("=== Form Controls After Adding ===");
       newControls.forEach((key, control) {
         final hasRequiredValidator = control.validators
             .any((validator) => validator.toString().contains('required'));
