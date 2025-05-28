@@ -141,20 +141,11 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Critical: If no questions are visible, make the first question visible as fallback
     if (visibleIndices.isEmpty && widget.formJson.isNotEmpty) {
-      // if (kDebugMode) {
-      //   print(
-      //       "Warning: No visible questions found! Making first question visible as fallback.");
-      // }
       visibleIndices = [0]; // Make the first question visible as fallback
     }
 
     // Check if current question is visible
     if (!visibleIndices.contains(currentQuestionIndex)) {
-      // if (kDebugMode) {
-      //   print(
-      //       "Current question at index $currentQuestionIndex is not visible. Finding next visible question.");
-      // }
-
       // Current question is not visible - find the next visible question
       int nextVisibleIndex = -1;
 
@@ -208,28 +199,11 @@ class _DynamicFormState extends State<DynamicForm>
 
         // Update the current pointer and controller index if an anchor was found
         if (anchorPointer != -1 && anchorPointer != _currentGroupPointer) {
-          if (kDebugMode) {
-            print(
-                "Smart Skip: Question at index $currentQuestionIndex is not visible. Skipping to question at index $nextVisibleIndex (anchor: $anchorPointer)");
-          }
-
           setState(() {
             _currentGroupPointer = anchorPointer;
             controller.currentQuestionIndex =
                 _groupAnchors[_currentGroupPointer];
           });
-        } else if (anchorPointer == -1) {
-          // If we couldn't find a proper anchor but we know a question should be visible,
-          // this is a serious issue - log it
-          // if (kDebugMode) {
-          //   print(
-          //       "ERROR: Could not find anchor for visible question at index $nextVisibleIndex");
-          // }
-        }
-      } else {
-        // This should never happen since we ensure visibleIndices is not empty
-        if (kDebugMode) {
-          print("ERROR: No visible question found to navigate to!");
         }
       }
     }
@@ -280,11 +254,6 @@ class _DynamicFormState extends State<DynamicForm>
     _formValueChangeSubscription =
         controller.form.valueChanges.listen((formValues) {
       if (mounted) {
-        if (kDebugMode) {
-          print(
-              "Form values changed: ${formValues?.keys.join(', ') ?? 'null'}");
-        }
-
         // First, recalculate progress and visibility
         _safeCalculateProgress();
 
@@ -395,12 +364,6 @@ class _DynamicFormState extends State<DynamicForm>
       // If this field is already being evaluated, we have a circular dependency
       if (fieldBeingEvaluated != null &&
           evaluationStack.contains(fieldBeingEvaluated)) {
-        // if (kDebugMode) {
-        //   print(
-        //       "WARNING: Circular dependency detected in showWhen conditions for field: $fieldBeingEvaluated");
-        //   print(
-        //       "Dependency chain: ${evaluationStack.join(' → ')} → $fieldBeingEvaluated");
-        // }
         // Break the circular dependency by treating this condition as true
         return true;
       }
@@ -470,10 +433,6 @@ class _DynamicFormState extends State<DynamicForm>
       // NEW: Skip questions with groupWith - they should only appear as part of their parent question's group
       if (question['groupWith'] != null &&
           question['groupWith'].toString().isNotEmpty) {
-        if (kDebugMode) {
-          print(
-              "Question ${question['name']} has groupWith=${question['groupWith']}, excluding from visible questions list");
-        }
         continue;
       }
 
@@ -486,10 +445,6 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Safety check: If no questions are visible, make the first one visible
     if (visible.isEmpty && widget.formJson.isNotEmpty) {
-      if (kDebugMode) {
-        print(
-            "WARNING: No questions visible! Making first question visible by default.");
-      }
       visible.add(0); // Make the first question visible as fallback
     }
 

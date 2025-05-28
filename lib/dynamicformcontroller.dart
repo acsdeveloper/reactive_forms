@@ -131,20 +131,11 @@ class DynamicFormController extends ChangeNotifier {
 
     form = FormGroup(controls);
 
-    // Debug: Print initial form values
-    if (kDebugMode) {
-      print('Initial form values: ${form.value}');
-    }
-
     // Ensure we start with a visible question
     if (!shouldDisplayQuestion(_currentQuestionIndex)) {
       int nextVisibleIndex = findNextVisibleQuestionIndex();
       if (nextVisibleIndex != -1) {
         _currentQuestionIndex = nextVisibleIndex;
-        if (kDebugMode) {
-          print(
-              'First question not visible, moving to index: $_currentQuestionIndex');
-        }
       }
     }
   }
@@ -155,9 +146,6 @@ class DynamicFormController extends ChangeNotifier {
 
     if (isRequired) {
       validatorsList.add(Validators.required);
-      // if (kDebugMode) {
-      //   print("Adding required validator for field ${field?['name']}");
-      // }
     }
 
     if (field?['type'] == 'number') {
@@ -225,19 +213,11 @@ class DynamicFormController extends ChangeNotifier {
   bool validateAndProceed(BuildContext context) {
     // Ensure we're not out of bounds
     if (_currentQuestionIndex < 0 || _currentQuestionIndex >= formJson.length) {
-      if (kDebugMode) {
-        print(
-            "Error: Current question index out of bounds: $_currentQuestionIndex");
-      }
       return false;
     }
 
     final field = formJson[_currentQuestionIndex];
     final currentFieldName = field['name'];
-
-    if (kDebugMode) {
-      print("Validating field: $currentFieldName");
-    }
 
     final currentControl = form.control(currentFieldName);
 
@@ -324,10 +304,6 @@ class DynamicFormController extends ChangeNotifier {
 
           // If both are empty arrays, require file upload
           if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
-            if (kDebugMode) {
-              print(
-                  "File required for ${field['name']} because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
-            }
             fileRequired = true;
           }
         }
@@ -379,9 +355,6 @@ class DynamicFormController extends ChangeNotifier {
 
         if (targetQuestion == 'end') {
           // This branch leads to the end of the form - show submit button
-          if (kDebugMode) {
-            print("Navigation: Branching to 'end' - form complete");
-          }
           notifyListeners();
           return true;
         } else if (targetQuestion is String) {
@@ -397,25 +370,13 @@ class DynamicFormController extends ChangeNotifier {
           if (targetIndex != -1) {
             if (shouldDisplayQuestion(targetIndex)) {
               _currentQuestionIndex = targetIndex;
-              if (kDebugMode) {
-                print(
-                    "Navigation: Branching to question '$targetQuestion' at index $targetIndex");
-              }
               notifyListeners();
               return true;
             } else {
-              if (kDebugMode) {
-                print(
-                    "Navigation: Branching target '$targetQuestion' is not visible - finding next visible question");
-              }
               // The branching target is not visible, find next visible
               int nextVisibleIndex = findNextVisibleQuestionIndex(targetIndex);
               if (nextVisibleIndex != -1) {
                 _currentQuestionIndex = nextVisibleIndex;
-                if (kDebugMode) {
-                  print(
-                      "Navigation: Found next visible question at index $nextVisibleIndex");
-                }
                 notifyListeners();
                 return true;
               }
@@ -430,15 +391,6 @@ class DynamicFormController extends ChangeNotifier {
 
     if (nextVisibleIndex != -1) {
       _currentQuestionIndex = nextVisibleIndex;
-      if (kDebugMode) {
-        print(
-            "Navigation: Moving to next visible question at index $nextVisibleIndex");
-      }
-    } else {
-      // No more visible questions - we're at the end of the form
-      if (kDebugMode) {
-        print("Navigation: No more visible questions found - form complete");
-      }
     }
 
     notifyListeners();
@@ -447,23 +399,13 @@ class DynamicFormController extends ChangeNotifier {
 
   int findNextVisibleQuestionIndex([int? startFromIndex]) {
     int startIndex = startFromIndex ?? _currentQuestionIndex;
-    if (kDebugMode) {
-      print("Finding next visible question after index $startIndex");
-    }
 
     for (int i = startIndex + 1; i < formJson.length; i++) {
       if (shouldDisplayQuestion(i)) {
-        if (kDebugMode) {
-          print(
-              "Found next visible question at index $i (${formJson[i]['name']})");
-        }
         return i;
       }
     }
 
-    if (kDebugMode) {
-      print("No more visible questions found after index $startIndex");
-    }
     return -1;
   }
 
@@ -478,10 +420,6 @@ class DynamicFormController extends ChangeNotifier {
     // They should only appear as part of their parent question's group
     if (question['groupWith'] != null &&
         question['groupWith'].toString().isNotEmpty) {
-      if (kDebugMode) {
-        print(
-            "Question ${question['name']} has groupWith=${question['groupWith']}, excluding from standalone navigation");
-      }
       return false;
     }
 
@@ -586,10 +524,6 @@ class DynamicFormController extends ChangeNotifier {
 
           // If both are empty arrays, require file upload
           if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
-            if (kDebugMode) {
-              print(
-                  "File required for ${field['name']} because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
-            }
             fileRequired = true;
           }
         }
@@ -697,10 +631,6 @@ class DynamicFormController extends ChangeNotifier {
 
           // If both are empty arrays, require file upload
           if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
-            if (kDebugMode) {
-              print(
-                  "File required for ${field['name']} because hasAttachments=true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays");
-            }
             fileRequired = true;
           }
         }
