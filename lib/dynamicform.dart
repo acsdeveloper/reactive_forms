@@ -2488,7 +2488,7 @@ class _DynamicFormState extends State<DynamicForm>
               control.value.toString().isEmpty ||
               control.value == 'null')) {
         control.markAsTouched();
-        AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
+        AppSnackBar(context).showErrorSnackBar(StringConstants.fillRequiredFields);
         return;
       }
 
@@ -3245,7 +3245,7 @@ class _DynamicFormState extends State<DynamicForm>
         print("⛔ FIELD VALIDATION FAILED - Navigation blocked");
       }
       // Show a snackbar to inform the user that validation failed
-      AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
+      AppSnackBar(context).showErrorSnackBar(StringConstants.fillRequiredFields);
       return;
     }
 
@@ -3407,14 +3407,7 @@ class _DynamicFormState extends State<DynamicForm>
         print("⛔ FIELD VALIDATION FAILED - Navigation blocked");
       }
       // Show a snackbar to inform the user that validation failed
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(StringConstants.fillRequiredFields,
-              style: widget.fontFamily),
-          backgroundColor: Colors.red[700],
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      AppSnackBar(context).showErrorSnackBar(StringConstants.fillRequiredFields);
       return;
     }
 
