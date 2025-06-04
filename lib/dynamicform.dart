@@ -109,6 +109,7 @@ class _DynamicFormState extends State<DynamicForm>
   // Subscription to form value changes - will be used to update visibility
   late StreamSubscription<dynamic> _formValueChangeSubscription;
 
+  bool hasCriticalValidationError = false;
   // Check if the current question should be visible, and if not, skip to the next visible one
   void _updateCurrentQuestionBasedOnVisibility() {
     if (!widget.showOneByOne) return; // Only applicable in step-by-step mode
@@ -2488,7 +2489,8 @@ class _DynamicFormState extends State<DynamicForm>
               control.value.toString().isEmpty ||
               control.value == 'null')) {
         control.markAsTouched();
-        AppSnackBar(context).showErrorSnackBar(StringConstants.fillRequiredFields);
+        AppSnackBar(context)
+            .showErrorSnackBar(StringConstants.fillRequiredFields);
         return;
       }
 
@@ -2636,23 +2638,6 @@ class _DynamicFormState extends State<DynamicForm>
         final anchorField = _internalFields[currentAnchor];
         print(
             "Anchor field: ${anchorField['name']}, isDuplicate: ${anchorField['isDuplicate']}");
-
-        // DIAGNOSTIC: Check question_6 structure
-        if (anchorField['name'] == 'question_6') {
-          print("\n=== QUESTION 6 INSPECTION ===");
-          print("question_6 hasAttachments: ${anchorField['hasAttachments']}");
-          print(
-              "question_6 requireAttachmentsOn: ${anchorField['requireAttachmentsOn']}");
-          print(
-              "question_6 current value: ${controller.form.control(anchorField['name']).value}");
-          print(
-              "uploadedFiles contains question_6? ${controller.uploadedFiles.containsKey('question_6')}");
-          if (controller.uploadedFiles.containsKey('question_6')) {
-            print(
-                "uploadedFiles for question_6: ${controller.uploadedFiles['question_6']}");
-          }
-          print("=== END QUESTION 6 INSPECTION ===\n");
-        }
       }
     }
 
@@ -2695,6 +2680,9 @@ class _DynamicFormState extends State<DynamicForm>
             print("Field $fieldName validation failed: ${control.errors}");
           }
           isValid = false;
+          if (field['type'] != 'text' && field['type'] != 'number') {
+            hasCriticalValidationError = true;
+          }
         }
 
         // Check for required file uploads
@@ -2706,6 +2694,7 @@ class _DynamicFormState extends State<DynamicForm>
               print("Required file upload missing for $fieldName");
             }
             isValid = false;
+            hasCriticalValidationError = true;
           }
         }
 
@@ -2794,6 +2783,9 @@ class _DynamicFormState extends State<DynamicForm>
               "Duplicate field $fieldName validation failed: ${control.errors}");
         }
         isValid = false;
+        if (field['type'] != 'text' && field['type'] != 'number') {
+          hasCriticalValidationError = true;
+        }
       }
 
       // Check for required file uploads for duplicates
@@ -2806,6 +2798,7 @@ class _DynamicFormState extends State<DynamicForm>
                 "Required file upload missing for duplicate field $fieldName");
           }
           isValid = false;
+          hasCriticalValidationError = true;
         }
       }
 
@@ -3240,12 +3233,14 @@ class _DynamicFormState extends State<DynamicForm>
     }
 
     // Then validate the current section including all duplicate cards
-    if (!validateCurrentSection()) {
+    final validationPassed = validateCurrentSection();
+    if (!validationPassed && hasCriticalValidationError) {
       if (kDebugMode) {
         print("⛔ FIELD VALIDATION FAILED - Navigation blocked");
       }
       // Show a snackbar to inform the user that validation failed
-      AppSnackBar(context).showErrorSnackBar(StringConstants.fillRequiredFields);
+      AppSnackBar(context)
+          .showErrorSnackBar(StringConstants.fillRequiredFields);
       return;
     }
 
@@ -3402,12 +3397,14 @@ class _DynamicFormState extends State<DynamicForm>
     // we need to handle navigation at the group level to avoid duplicate issues
 
     // First validate the current section (including all duplicates)
-    if (!validateCurrentSection()) {
+    final validationPassed = validateCurrentSection();
+    if (!validationPassed && hasCriticalValidationError) {
       if (kDebugMode) {
         print("⛔ FIELD VALIDATION FAILED - Navigation blocked");
       }
       // Show a snackbar to inform the user that validation failed
-      AppSnackBar(context).showErrorSnackBar(StringConstants.fillRequiredFields);
+      AppSnackBar(context)
+          .showErrorSnackBar(StringConstants.fillRequiredFields);
       return;
     }
 
