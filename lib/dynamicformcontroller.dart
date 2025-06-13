@@ -8,17 +8,19 @@ import 'package:reactiveform/models/form_field_model.dart';
 class DynamicFormController extends ChangeNotifier {
   final List<Map<String, dynamic>> formJson;
   final void Function(Map<String, dynamic>,
-      Map<String, List<Map<String, dynamic>>> uploadedFiles) onSubmit;
+      Map<String, List<Map<String, dynamic>>>, bool) onSubmit;
 
   late FormGroup form;
   Map<String, List<Map<String, dynamic>>> uploadedFiles = {};
   int _currentQuestionIndex = 0;
   Map<String, dynamic> _values = {};
   final List<FormFieldModel> _fields;
+  final bool isManageToCheckPress;
 
   DynamicFormController({
     required this.formJson,
     required this.onSubmit,
+    required this.isManageToCheckPress,
   }) : _fields =
             formJson.map((json) => FormFieldModel.fromJson(json)).toList() {
     _initializeForm();
@@ -183,7 +185,7 @@ class DynamicFormController extends ChangeNotifier {
 
     if (isValid) {
       final formValue = Map<String, dynamic>.from(form.value);
-      onSubmit(formValue, uploadedFiles);
+      onSubmit(formValue, uploadedFiles, isManageToCheckPress);
     } else {
       form.markAllAsTouched();
       _handleFormErrors(context);

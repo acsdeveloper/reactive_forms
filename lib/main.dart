@@ -26,7 +26,7 @@ void main() async {
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
       home: KitchenInspectionScreen(),
     );
@@ -34,21 +34,26 @@ class MyApp extends StatelessWidget {
 }
 
 class KitchenInspectionScreen extends StatelessWidget {
+  const KitchenInspectionScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Kitchen Inspection')),
+      appBar: AppBar(title: const Text('Kitchen Inspection')),
       body: Padding(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: DynamicForm(
           fontFamily: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           context: context,
           showOneByOne: true,
           primaryColor: Colors.black,
           formJson: formJson, 
-          onSubmit: (formData, attachments) {
-            print(formData);
-            print(attachments);
+          onSubmit: (formData, attachments, bool? isManageToCheckPress) {
+            if (kDebugMode) {
+              print("formData: $formData");
+              print("attachments: $attachments");
+              print("isManageToCheckPress: $isManageToCheckPress");
+            }
           },
         ),
       ),

@@ -113,4 +113,12 @@ class StringConstants {
   static const String delete = 'Delete';
   static const String yes = 'Yes';
   static const String no = 'No';
+   static String clickToUpload = "Click to Upload";
+  static String captureToUpload = 'Capture & Upload';
+  static String camera = 'Camera';
+  static String files = 'Files';
+  static String fileUploadWarning = 'File size must be less than ###MB';
+  static String gallery = 'Gallery';
+  static String managerToCheck = 'Manager to Check';
+  
 }

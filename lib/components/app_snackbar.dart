@@ -58,4 +58,17 @@ class AppSnackBar {
       ),
     );
   }
+  void showSuccessSnackBar(
+    String message, {
+    String? heading,
+    Duration? duration,
+    Color? backgroundColor,
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor ?? Colors.green,
+      ),
+    );
+  }
 }
