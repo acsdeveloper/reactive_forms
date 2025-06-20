@@ -7,8 +7,10 @@ import 'package:reactiveform/models/form_field_model.dart';
 
 class DynamicFormController extends ChangeNotifier {
   final List<Map<String, dynamic>> formJson;
-  final void Function(Map<String, dynamic>,
-      Map<String, List<Map<String, dynamic>>>, bool) onSubmit;
+  final void Function(
+          Map<String, dynamic>, Map<String, List<Map<String, dynamic>>>, bool)
+      onSubmit;
+  final Map<String, dynamic>? initialValues;
 
   late FormGroup form;
   Map<String, List<Map<String, dynamic>>> uploadedFiles = {};
@@ -21,6 +23,7 @@ class DynamicFormController extends ChangeNotifier {
     required this.formJson,
     required this.onSubmit,
     required this.isManageToCheckPress,
+    this.initialValues,
   }) : _fields =
             formJson.map((json) => FormFieldModel.fromJson(json)).toList() {
     _initializeForm();
@@ -32,67 +35,65 @@ class DynamicFormController extends ChangeNotifier {
     void _addControlsForFields(Iterable<Map<String, dynamic>> fieldList) {
       for (var field in fieldList) {
         final fieldName = field['name'];
-
         if (controls.containsKey(fieldName)) {
           continue;
         }
+        final initial =
+            initialValues != null && initialValues!.containsKey(fieldName)
+                ? initialValues![fieldName]
+                : field['defaultValue'];
 
-        if (field['type'] == 'multiselect') {
-          List<String> initialValue = [];
-          if (field['defaultValue'] != null && field['defaultValue'] is List) {
-            initialValue = (field['defaultValue'] as List)
-                .map((item) => item.toString())
-                .toList();
+        // Initialize uploaded files map for fields that support attachments
+        if (field['hasAttachments'] == true) {
+          uploadedFiles[fieldName] = initialValues != null &&
+                  initialValues!.containsKey('${fieldName}_attachments')
+              ? List<Map<String, dynamic>>.from(
+                  initialValues!['${fieldName}_attachments'])
+              : [];
+        }
+
+        if (field['type'] == 'radio') {
+          if (field['options'] == null || (field['options'] as List).isEmpty) {
+            field['options'] = ['Yes', 'No'];
           }
-
-          controls[fieldName] = FormControl<List<String>>(
-            value: initialValue,
-            validators: field['required'] == true ? [Validators.required] : [],
-          );
-
-          if (field['hasComments'] == true) {
-            controls['${fieldName}_comment'] = FormControl<String>(
-              value: '',
-              validators: [Validators.required],
-            );
-          }
-        } else if (field['type'] == 'file') {
-          uploadedFiles[fieldName] = [];
           controls[fieldName] = FormControl<String>(
-            value: '',
-            validators: field['required'] == true ? [Validators.required] : [],
+            value: initial != null ? initial.toString() : '',
+            validators: _getValidators(field['required'] == true, field),
           );
-
           if (field['hasComments'] == true) {
             controls['${fieldName}_comment'] = FormControl<String>(
-              value: '',
+              value: initialValues != null &&
+                      initialValues!.containsKey('${fieldName}_comment')
+                  ? initialValues!['${fieldName}_comment']
+                  : '',
               validators: [Validators.required],
             );
           }
         } else if (field['type'] == 'number') {
           controls[fieldName] = FormControl<num>(
-            value: null,
+            value: initial != null ? num.tryParse(initial.toString()) : null,
             validators: _getValidators(field['required'] == true, field),
           );
-
           if (field['hasComments'] == true) {
             controls['${fieldName}_comment'] = FormControl<String>(
-              value: '',
+              value: initialValues != null &&
+                      initialValues!.containsKey('${fieldName}_comment')
+                  ? initialValues!['${fieldName}_comment']
+                  : '',
               validators: [Validators.required],
             );
           }
-        } else if (field['type'] == 'radio') {
-          if (field['options'] == null || (field['options'] as List).isEmpty) {
-            field['options'] = ['Yes', 'No'];
-          }
+        } else if (field['type'] == 'text') {
           controls[fieldName] = FormControl<String>(
-            value: field['defaultValue'] ?? '',
+            value: initial != null ? initial.toString() : '',
             validators: _getValidators(field['required'] == true, field),
           );
-
           if (field['hasComments'] == true) {
             controls['${fieldName}_comment'] = FormControl<String>(
-              value: '',
+              value: initialValues != null &&
+                      initialValues!.containsKey('${fieldName}_comment')
+                  ? initialValues!['${fieldName}_comment']
+                  : '',
               validators: [Validators.required],
             );
           }
@@ -129,12 +130,10 @@ class DynamicFormController extends ChangeNotifier {
     }
 
     _addControlsForFields(formJson);
-
     form = FormGroup(controls);
-
-    // Debug: Print initial form values
     if (kDebugMode) {
       print('Initial form values: ${form.value}');
+      print('Initial uploaded files: $uploadedFiles');
     }
   }
 
@@ -717,122 +716,92 @@ class DynamicFormController extends ChangeNotifier {
 
   void addFormControls(List<Map<String, dynamic>> newFields) {
     final Map<String, AbstractControl> newControls = {};
-
     if (kDebugMode) {
       print("\n=== Adding Form Controls ===");
     }
-
     void _addControls(Iterable<Map<String, dynamic>> fields) {
       for (var f in fields) {
         final n = f['name'];
         if (form.contains(n)) continue;
-
-        // Make sure we correctly determine if field is required
+        final initial = initialValues != null && initialValues!.containsKey(n)
+            ? initialValues![n]
+            : f['defaultValue'];
         final bool isRequired = f['required'] == true;
-
-        // Log the field we're adding
-        if (kDebugMode) {
-          print(
-              "Adding control for field: $n, type: ${f['type']}, required: $isRequired, isDuplicate: ${f['isDuplicate'] == true}");
-        }
-
         if (f['type'] == 'multiselect') {
           List<String> initialValue = [];
-          if (f['defaultValue'] != null && f['defaultValue'] is List) {
+          if (initial != null && initial is List) {
+            initialValue = initial.map((item) => item.toString()).toList();
+          } else if (f['defaultValue'] != null && f['defaultValue'] is List) {
             initialValue = (f['defaultValue'] as List)
                 .map((item) => item.toString())
                 .toList();
           }
-
-          // Use _getValidators to ensure consistency
           List<Validator> validators = _getValidators(isRequired, f);
-
-          if (kDebugMode) {
-            print(
-                "Adding multiselect field $n with ${validators.length} validators, required=$isRequired");
-          }
-
           newControls[n] = FormControl<List<String>>(
               value: initialValue, validators: validators);
-
           if (f['hasComments'] == true) {
             newControls['${n}_comment'] = FormControl<String>(
-                value: '', validators: [Validators.required]);
+                value: initialValues != null &&
+                        initialValues!.containsKey('${n}_comment')
+                    ? initialValues!['${n}_comment']
+                    : '',
+                validators: [Validators.required]);
           }
         } else if (f['type'] == 'file') {
-          // For file fields, we need to ensure the uploadedFiles entry is initialized
           uploadedFiles[n] = [];
-
-          // Use _getValidators to ensure consistency
           List<Validator> validators = _getValidators(isRequired, f);
-
-          if (kDebugMode) {
-            print(
-                "Adding file field $n with ${validators.length} validators, required=$isRequired");
-          }
-
           newControls[n] = FormControl<String>(
-            value: '',
+            value: initial != null ? initial : '',
             validators: validators,
           );
-
           if (f['hasComments'] == true) {
             newControls['${n}_comment'] = FormControl<String>(
-                value: '', validators: [Validators.required]);
+                value: initialValues != null &&
+                        initialValues!.containsKey('${n}_comment')
+                    ? initialValues!['${n}_comment']
+                    : '',
+                validators: [Validators.required]);
           }
         } else if (f['type'] == 'number') {
-          // Use the getValidators helper to ensure consistency
           List<Validator> validators = _getValidators(isRequired, f);
-
-          if (kDebugMode) {
-            print(
-                "Adding number field $n with ${validators.length} validators, required=$isRequired");
-          }
-
-          newControls[n] =
-              FormControl<num>(value: null, validators: validators);
-
+          newControls[n] = FormControl<num>(
+              value: initial != null ? initial : null, validators: validators);
           if (f['hasComments'] == true) {
             newControls['${n}_comment'] = FormControl<String>(
-                value: '', validators: [Validators.required]);
+                value: initialValues != null &&
+                        initialValues!.containsKey('${n}_comment')
+                    ? initialValues!['${n}_comment']
+                    : '',
+                validators: [Validators.required]);
           }
         } else if (f['type'] == 'radio') {
           if (f['options'] == null || (f['options'] as List).isEmpty) {
             f['options'] = ['Yes', 'No'];
           }
-
-          // Use _getValidators to ensure consistency
           List<Validator> validators = _getValidators(isRequired, f);
-
-          if (kDebugMode) {
-            print(
-                "Adding radio field $n with ${validators.length} validators, required=$isRequired");
-          }
-
           newControls[n] = FormControl<String>(
-            value: f['defaultValue'] ?? '',
+            value: initial != null ? initial : '',
             validators: validators,
           );
-
           if (f['hasComments'] == true) {
             newControls['${n}_comment'] = FormControl<String>(
-                value: '', validators: [Validators.required]);
+                value: initialValues != null &&
+                        initialValues!.containsKey('${n}_comment')
+                    ? initialValues!['${n}_comment']
+                    : '',
+                validators: [Validators.required]);
           }
         } else {
-          // Default case for text and other field types
           List<Validator> validators = _getValidators(isRequired, f);
-
-          if (kDebugMode) {
-            print(
-                "Adding text field $n with ${validators.length} validators, required=$isRequired");
-          }
-
           newControls[n] = FormControl<String>(
-              value: f['defaultValue'] ?? '', validators: validators);
-
+              value: initial != null ? initial : '', validators: validators);
           if (f['hasComments'] == true) {
             newControls['${n}_comment'] = FormControl<String>(
-                value: '', validators: [Validators.required]);
+                value: initialValues != null &&
+                        initialValues!.containsKey('${n}_comment')
+                    ? initialValues!['${n}_comment']
+                    : '',
+                validators: [Validators.required]);
           }
         }
       }
@@ -840,8 +809,6 @@ class DynamicFormController extends ChangeNotifier {
 
     _addControls(newFields);
     form.addAll(newControls);
-
-    // Debug log of all controls after adding
     if (kDebugMode) {
       print("=== Form Controls After Adding ===");
       newControls.forEach((key, control) {
@@ -850,7 +817,6 @@ class DynamicFormController extends ChangeNotifier {
         print("Control: $key, hasRequiredValidator: $hasRequiredValidator");
       });
     }
-
     notifyListeners();
   }
 

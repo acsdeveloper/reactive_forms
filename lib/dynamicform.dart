@@ -43,6 +43,7 @@ class DynamicForm extends StatefulWidget {
   final bool bookingAppModelFileUpload;
   final bool isManageToCheckPress;
   final BottomNavigationType bottomNavigationType;
+  final Map<String, dynamic>? initialValues;
 
   const DynamicForm({
     required this.formJson,
@@ -59,8 +60,9 @@ class DynamicForm extends StatefulWidget {
     this.bookingAppModelFileUpload = true,
     this.isManageToCheckPress = false,
     this.bottomNavigationType = BottomNavigationType.button,
-    Key? key,
-  }) : super(key: key);
+    this.initialValues,
+    super.key,
+  });
 
   @override
   State<DynamicForm> createState() => _DynamicFormState();
@@ -258,6 +260,7 @@ class _DynamicFormState extends State<DynamicForm>
       formJson: widget.formJson,
       onSubmit: widget.onSubmit,
       isManageToCheckPress: widget.isManageToCheckPress,
+      initialValues: widget.initialValues,
     );
 
     _internalFields = List<Map<String, dynamic>>.from(widget.formJson);
@@ -2598,8 +2601,8 @@ class _DynamicFormState extends State<DynamicForm>
                 children: [
                   if (isManageToCheckPress) ...[
                     ElevatedButton(
-                      onPressed: () => _submitForm(context,
-                          isManageToCheckPress: true),
+                      onPressed: () =>
+                          _submitForm(context, isManageToCheckPress: true),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: buttonColor,
                         foregroundColor: widget.buttonTextColor,

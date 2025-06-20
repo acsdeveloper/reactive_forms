@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:reactiveform/bottom_navigation_typr.dart';
 import 'dynamicform.dart';
 import 'package:flutter/foundation.dart';
 
@@ -55,6 +56,8 @@ class KitchenInspectionScreen extends StatelessWidget {
               print("isManageToCheckPress: $isManageToCheckPress");
             }
           },
+          // initialValues: sampleInitialValues,
+          // Pass the initial values from the json data if needed
         ),
       ),
     );
