@@ -57,7 +57,7 @@ class DynamicForm extends StatefulWidget {
     this.fileUploadButtonColor = Colors.black,
     this.fileUploadButtonTextColor = Colors.white,
     this.submitButtonText,
-    this.bookingAppModelFileUpload = true,
+    this.bookingAppModelFileUpload = false,
     this.isManageToCheckPress = false,
     this.bottomNavigationType = BottomNavigationType.button,
     this.initialValues,
@@ -841,11 +841,11 @@ class _DynamicFormState extends State<DynamicForm>
   Widget _buildFieldWidget(Map<String, dynamic> field) {
     // Access the controller instance variable
     final control = controller.form.control(field['name']);
-    return _buildActualField(field, control);
+    return _buildActualField(field, control, widget.initialValues);
   }
 
-  Widget _buildActualField(
-      Map<String, dynamic> field, AbstractControl<dynamic> control) {
+  Widget _buildActualField(Map<String, dynamic> field,
+      AbstractControl<dynamic> control, Map<String, dynamic>? initialValues) {
     switch (field['type']) {
       case 'option':
       case 'radio':
@@ -1059,6 +1059,9 @@ class _DynamicFormState extends State<DynamicForm>
                         isRequired: isRequired,
                         questionNumber: _getQuestionNumberForField(field),
                         hasAttachments: field['hasAttachments'] == true,
+                        initialValues: initialValues,
+                        bookingAppModelFileUpload:
+                            widget.bookingAppModelFileUpload,
                       ),
                     ],
                   );
@@ -1377,6 +1380,8 @@ class _DynamicFormState extends State<DynamicForm>
             isRequired: controller.form.control(field['name']).value == 'Yes',
             questionNumber: _getQuestionNumberForField(field),
             hasAttachments: true,
+            initialValues: widget.initialValues,
+            bookingAppModelFileUpload: widget.bookingAppModelFileUpload,
           ),
 
           // Add comments section if needed
@@ -1628,6 +1633,8 @@ class _DynamicFormState extends State<DynamicForm>
                     isRequired: isRequired,
                     questionNumber: _getQuestionNumberForField(field),
                     hasAttachments: field['hasAttachments'] == true,
+                    initialValues: widget.initialValues,
+                    bookingAppModelFileUpload: widget.bookingAppModelFileUpload,
                   ),
                 ],
               );
@@ -1868,6 +1875,8 @@ class _DynamicFormState extends State<DynamicForm>
                     isRequired: isRequired,
                     questionNumber: _getQuestionNumberForField(field),
                     hasAttachments: field['hasAttachments'] == true,
+                    initialValues: widget.initialValues,
+                    bookingAppModelFileUpload: widget.bookingAppModelFileUpload,
                   ),
                 ],
               );
@@ -2176,6 +2185,8 @@ class _DynamicFormState extends State<DynamicForm>
                 isRequired: isRequired,
                 questionNumber: _getQuestionNumberForField(field),
                 hasAttachments: field['hasAttachments'] == true,
+                initialValues: widget.initialValues,
+                bookingAppModelFileUpload: widget.bookingAppModelFileUpload,
               );
             },
           ),
@@ -2323,6 +2334,8 @@ class _DynamicFormState extends State<DynamicForm>
                   isRequired: isRequired,
                   questionNumber: _getQuestionNumberForField(field),
                   hasAttachments: field['hasAttachments'] == true,
+                  initialValues: widget.initialValues,
+                  bookingAppModelFileUpload: widget.bookingAppModelFileUpload,
                 );
               }),
         ],
@@ -2439,6 +2452,7 @@ class _DynamicFormState extends State<DynamicForm>
                         hasAttachments: field['hasAttachments'] == true,
                         bookingAppModelFileUpload:
                             widget.bookingAppModelFileUpload,
+                        initialValues: widget.initialValues,
                       ),
                       // Show error message if validation error occurs and control is touched
                       if (control.touched && control.hasErrors)
@@ -4580,6 +4594,7 @@ class FileUploadWidget extends StatefulWidget {
   final int? questionNumber;
   final bool hasAttachments; // Add new property
   final bool bookingAppModelFileUpload;
+  final Map<String, dynamic>? initialValues;
 
   const FileUploadWidget({
     Key? key,
@@ -4594,7 +4609,8 @@ class FileUploadWidget extends StatefulWidget {
     this.isRequired = false,
     this.questionNumber,
     this.hasAttachments = false, // Default to false
-    this.bookingAppModelFileUpload = true,
+    this.bookingAppModelFileUpload = false,
+    this.initialValues,
   }) : super(key: key);
 
   @override
@@ -5126,6 +5142,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
   Widget build(BuildContext context) {
     // Check if a file is already uploaded
     final bool hasUploadedFile = widget.uploadedFiles.isNotEmpty;
+    final initialValues = widget.initialValues;
+    print(initialValues?['${widget.fieldName}_attachments']);
 
     // Debug information
     if (kDebugMode) {
@@ -5391,24 +5409,47 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
           Card(
             margin: EdgeInsets.zero,
             elevation: 1,
-            child: ListTile(
-              leading: Icon(_getFileIcon(widget.uploadedFiles[0]['fileType'])),
-              title: Text(
-                widget.uploadedFiles[0]['fileName'],
-                style: widget.fontFamily,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete),
-                onPressed: () =>
-                    widget.onRemoveUploadedFile(widget.uploadedFiles[0]),
-              ),
-              // Add onTap handler to preview the file
-              onTap: () {
-                _previewFile(context, widget.uploadedFiles[0]);
-              },
-            ),
+            child: widget.initialValues != null &&
+                    widget.initialValues!
+                        .containsKey('${widget.fieldName}_attachments') &&
+                    widget.initialValues!['${widget.fieldName}_attachments']
+                        .isNotEmpty &&
+                    widget.initialValues!['${widget.fieldName}_attachments'][0]
+                            ['file_url'] !=
+                        null
+                ? Container(
+                    height: 60,
+                    width: double.infinity / 2,
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                          color: Get.theme.dividerColor.withOpacity(0.5)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Image.network(
+                      widget.initialValues?['${widget.fieldName}_attachments']
+                          [0]['file_url'] as String,
+                      fit: BoxFit.fill,
+                    ),
+                  )
+                : ListTile(
+                    leading:
+                        Icon(_getFileIcon(widget.uploadedFiles[0]['fileType'])),
+                    title: Text(
+                      widget.uploadedFiles[0]['fileName'],
+                      style: widget.fontFamily,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete),
+                      onPressed: () =>
+                          widget.onRemoveUploadedFile(widget.uploadedFiles[0]),
+                    ),
+                    // Add onTap handler to preview the file
+                    onTap: () {
+                      _previewFile(context, widget.uploadedFiles[0]);
+                    },
+                  ),
           ),
           const SizedBox(height: 8),
         ],

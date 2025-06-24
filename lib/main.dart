@@ -6,12 +6,10 @@ import 'package:flutter/foundation.dart';
 
 import 'jsondata.dart';
 
-
-
 void main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Only request permissions if not running on web
   if (!kIsWeb) {
     await Permission.camera.request();
@@ -20,7 +18,7 @@ void main() async {
       await Permission.photos.request();
     }
   }
-  
+
   runApp(MyApp());
 }
 
@@ -44,11 +42,13 @@ class KitchenInspectionScreen extends StatelessWidget {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: DynamicForm(
-          fontFamily: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+          fontFamily:
+              const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           context: context,
           showOneByOne: true,
           primaryColor: Colors.black,
-          formJson: formJson, 
+          formJson: formJson,
+          bookingAppModelFileUpload: true,
           onSubmit: (formData, attachments, bool? isManageToCheckPress) {
             if (kDebugMode) {
               print("formData: $formData");
@@ -56,7 +56,7 @@ class KitchenInspectionScreen extends StatelessWidget {
               print("isManageToCheckPress: $isManageToCheckPress");
             }
           },
-          // initialValues: sampleInitialValues,
+          initialValues: sampleInitialValues,
           // Pass the initial values from the json data if needed
         ),
       ),

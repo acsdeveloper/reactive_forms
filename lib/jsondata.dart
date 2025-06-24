@@ -84,27 +84,27 @@ final Map<String, dynamic> sampleInitialValues = {
   // question_1: radio, hasAttachments
   'question_1': 'A1',
   'question_1_comment': 'This is a comment for question 1',
-  'question_1_attachments': [
-    {
-      'fileName': 'fridge_report.pdf',
-      'fileType': 'pdf',
-      'file': null,
-      'question_name': 'question_1',
-      'question_label': 'Is the fridge operating between 0-5°C?'
-    }
-  ],
+  // 'question_1_attachments': [
+  //   {
+  //     'fileName': 'fridge_report.pdf',
+  //     'fileType': 'pdf',
+  //     'file': null,
+  //     'question_name': 'question_1',
+  //     'question_label': 'Is the fridge operating between 0-5°C?'
+  //   }
+  // ],
 
   // question_2: radio, hasAttachments
   'question_2': 'Yes',
-  'question_2_attachments': [
-    {
-      'fileName': 'freezer_photo.jpg',
-      'fileType': 'image',
-      'file': null,
-      'question_name': 'question_2',
-      'question_label': 'Is the freezer operating below -18°C?'
-    }
-  ],
+  // 'question_2_attachments': [
+  //   {
+  //     'fileName': 'freezer_photo.jpg',
+  //     'fileType': 'image',
+  //     'file': null,
+  //     'question_name': 'question_2',
+  //     'question_label': 'Is the freezer operating below -18°C?'
+  //   }
+  // ],
 
   // question_3: radio, hasAttachments
   'question_3': 8,
@@ -117,25 +117,22 @@ final Map<String, dynamic> sampleInitialValues = {
 
   // question_6: text, hasAttachments
   'question_6': 'Found minor issue with door seal.',
-  'question_6_attachments': [
-    {
-      'fileName': 'issue_photo.png',
-      'fileType': 'image',
-      'file': null,
-      'question_name': 'question_6',
-      'question_label': 'If an issue was found, describe the problem.'
-    }
-  ],
+  // 'question_6_attachments': [
+  //   {
+  //     'fileName': 'issue_photo.png',
+  //     'fileType': 'image',
+  //     'file': null,
+  //     'question_name': 'question_6',
+  //     'question_label': 'If an issue was found, describe the problem.'
+  //   }
+  // ],
 
   // question_7: radio, hasAttachments
   'question_7': 'No',
   'question_7_attachments': [
     {
-      'fileName': 'action_report.pdf',
-      'fileType': 'pdf',
-      'file': null,
-      'question_name': 'question_7',
-      'question_label': 'Were corrective actions taken to resolve the issue?'
+      "file_url":
+          'http://checklist-epic.petcaretechnologies.com/api/calendar/checklist-epic/calendar/aed065e6-76f7-40bd-b696-24ece8c31148.jpg'
     }
   ],
 
