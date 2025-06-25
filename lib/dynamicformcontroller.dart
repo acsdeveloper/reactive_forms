@@ -4,6 +4,7 @@ import 'package:reactive_forms/reactive_forms.dart';
 import 'package:reactiveform/components/app_snackbar.dart';
 import 'package:reactiveform/string_constants.dart';
 import 'package:reactiveform/models/form_field_model.dart';
+import 'package:http/http.dart' as http;
 
 class DynamicFormController extends ChangeNotifier {
   final List<Map<String, dynamic>> formJson;
@@ -27,6 +28,9 @@ class DynamicFormController extends ChangeNotifier {
   }) : _fields =
             formJson.map((json) => FormFieldModel.fromJson(json)).toList() {
     _initializeForm();
+    _processInitialFileAttachmentsSync().then((_) {
+      notifyListeners(); // Notify after processing completes
+    });
   }
 
   void _initializeForm() {
@@ -942,4 +946,85 @@ class DynamicFormController extends ChangeNotifier {
   }
 
   int get currentQuestionIndex => _currentQuestionIndex;
+
+  /// Process initial file attachments by fetching file metadata from URLs
+  Future<void> _processInitialFileAttachmentsSync() async {
+    if (initialValues == null) return;
+
+    for (var field in formJson) {
+      final fieldName = field['name'];
+
+      // Check if this field has attachments and if there are initial values for it
+      if (field['hasAttachments'] == true &&
+          initialValues!.containsKey('${fieldName}_attachments')) {
+        List<Map<String, dynamic>> attachments =
+            List<Map<String, dynamic>>.from(
+                initialValues!['${fieldName}_attachments']);
+
+        List<Map<String, dynamic>> processedAttachments = [];
+
+        for (var attachment in attachments) {
+          if (attachment['file_url'] != null) {
+            // Process file metadata synchronously from URL
+            Map<String, dynamic> fileData = await _processFileDataFromUrl(
+              attachment['file_url'],
+              fieldName,
+              field['label'] ?? fieldName,
+            );
+
+            // Merge with existing attachment data
+            fileData.addAll(attachment);
+            processedAttachments.add(fileData);
+          } else {
+            // If no URL, keep the original attachment
+            processedAttachments.add(attachment);
+          }
+        }
+
+        // Update the uploadedFiles map with processed attachments
+        uploadedFiles[fieldName] = processedAttachments;
+      }
+    }
+
+    if (kDebugMode) {
+      print('Processed initial file attachments: $uploadedFiles');
+    }
+  }
+
+  Future<Map<String, dynamic>> _processFileDataFromUrl(
+    String url,
+    String questionName,
+    String questionLabel,
+  ) async {
+    String fileName = _extractFileNameFromUrl(url, {});
+    String fileType = _determineFileType(fileName, null);
+
+    return {
+      'question_name': questionName,
+      'question_label': questionLabel,
+      'fileName': fileName,
+      'fileType': ['jpg', 'png', 'jpeg'].contains(fileType)
+          ? 'image'
+          : fileType == 'pdf'
+              ? 'pdf'
+              : fileType,
+      'file_url': url,
+      'mimeType': 'application/octet-stream',
+      'file': null,
+    };
+  }
+
+  /// Extract filename from URL or Content-Disposition header
+  String _extractFileNameFromUrl(String url, Map<String, String> headers) {
+    // Try to get filename from Content-Disposition header first
+    String fileName = url.split('/').last;
+
+    return fileName;
+  }
+
+  /// Determine file type from filename extension or content type
+  String _determineFileType(String fileName, String? contentType) {
+    // First try to determine from file extension
+    return fileName.split('.').last;
+  }
 }

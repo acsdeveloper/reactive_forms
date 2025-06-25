@@ -20,6 +20,7 @@ import 'package:flutter/services.dart';
 import 'dart:async'; // Added for Completer
 import 'dynamicformcontroller.dart';
 import 'package:reactiveform/models/form_field_model.dart';
+import 'package:http/http.dart' as http;
 
 // Conditional import for web
 import 'web_utils.dart' if (dart.library.html) 'dart:html' as html;
@@ -5409,47 +5410,24 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
           Card(
             margin: EdgeInsets.zero,
             elevation: 1,
-            child: widget.initialValues != null &&
-                    widget.initialValues!
-                        .containsKey('${widget.fieldName}_attachments') &&
-                    widget.initialValues!['${widget.fieldName}_attachments']
-                        .isNotEmpty &&
-                    widget.initialValues!['${widget.fieldName}_attachments'][0]
-                            ['file_url'] !=
-                        null
-                ? Container(
-                    height: 60,
-                    width: double.infinity / 2,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                          color: Get.theme.dividerColor.withOpacity(0.5)),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Image.network(
-                      widget.initialValues?['${widget.fieldName}_attachments']
-                          [0]['file_url'] as String,
-                      fit: BoxFit.fill,
-                    ),
-                  )
-                : ListTile(
-                    leading:
-                        Icon(_getFileIcon(widget.uploadedFiles[0]['fileType'])),
-                    title: Text(
-                      widget.uploadedFiles[0]['fileName'],
-                      style: widget.fontFamily,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () =>
-                          widget.onRemoveUploadedFile(widget.uploadedFiles[0]),
-                    ),
-                    // Add onTap handler to preview the file
-                    onTap: () {
-                      _previewFile(context, widget.uploadedFiles[0]);
-                    },
-                  ),
+            child: ListTile(
+              leading: Icon(_getFileIcon(widget.uploadedFiles[0]['fileType'])),
+              title: Text(
+                widget.uploadedFiles[0]['fileName'],
+                style: widget.fontFamily,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () =>
+                    widget.onRemoveUploadedFile(widget.uploadedFiles[0]),
+              ),
+              // Add onTap handler to preview the file
+              onTap: () {
+                _previewFile(context, widget.uploadedFiles[0]);
+              },
+            ),
           ),
           const SizedBox(height: 8),
         ],
@@ -5488,6 +5466,49 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
   bool isOpeningInNewTab = false;
   final TransformationController _transformationController =
       TransformationController();
+  @override
+  void initState() {
+    super.initState();
+    if (widget.file['file'] == null) {
+      _loadFileFromUrl();
+    }
+  }
+
+  Future<void> _loadFileFromUrl() async {
+    try {
+      setState(() {
+        isDownloading = true;
+      });
+      await getFileBytes(widget.file['file_url']);
+      if (mounted) {
+        setState(() {
+          isDownloading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          isDownloading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load file: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> getFileBytes(String url) async {
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      if (mounted) {
+        setState(() {
+          widget.file['file'] = response.bodyBytes;
+        });
+      }
+    } else {
+      throw Exception('Failed to download file: ${response.statusCode}');
+    }
+  }
 
   @override
   void dispose() {
@@ -5497,9 +5518,60 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String fileName = widget.file['fileName'];
-    final String fileType = widget.file['fileType'];
-    final Uint8List fileBytes = widget.file['file'];
+    final String fileName = widget.file['fileName'] ?? 'Unknown File';
+    final String fileType = widget.file['fileType'] ?? '';
+    final Uint8List? fileBytes = widget.file['file'];
+
+    // Show loading state if file is null and we're downloading
+    if (fileBytes == null && isDownloading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(
+            fileName,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text("Loading file...", style: TextStyle(fontSize: 16))
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show error state if file is null and not downloading
+    if (fileBytes == null && !isDownloading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(
+            fileName,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              const Text("Failed to load file", style: TextStyle(fontSize: 18)),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () {
+                  _loadFileFromUrl();
+                },
+                child: const Text("Retry"),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     // Immediately download Excel files instead of showing preview screen
     if (fileType == 'spreadsheet' ||
@@ -5511,7 +5583,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
           setState(() {
             isDownloading = true;
           });
-          _downloadFile(context, fileBytes, fileName).then((_) {
+          _downloadFile(context, fileBytes!, fileName).then((_) {
             Navigator.of(context).pop();
           });
         }
@@ -5535,7 +5607,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
                 setState(() {
                   isDownloading = true;
                 });
-                await _downloadFile(context, fileBytes, fileName);
+                await _downloadFile(context, fileBytes!, fileName);
                 if (mounted) {
                   setState(() {
                     isDownloading = false;
@@ -5555,7 +5627,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
                 setState(() {
                   isOpeningInNewTab = true;
                 });
-                await _openPdfInNewTab(context, fileBytes, fileName);
+                await _openPdfInNewTab(context, fileBytes!, fileName);
                 if (mounted) {
                   setState(() {
                     isOpeningInNewTab = false;
@@ -5577,7 +5649,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
             )
         ],
       ),
-      body: _buildBody(context, fileType, fileBytes, fileName),
+      body: _buildBody(context, fileType, fileBytes!, fileName),
     );
   }
 
