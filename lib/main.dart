@@ -52,7 +52,7 @@ class KitchenInspectionScreen extends StatelessWidget {
           onSubmit: (formData, attachments, bool? isManageToCheckPress) {
             
           },
-          // initialValues: sampleInitialValues, 
+          // initialValues: sampleInitialValues,
           // Pass the initial values from the json data if needed
         ),
       ),
