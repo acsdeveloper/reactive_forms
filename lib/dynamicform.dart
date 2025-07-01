@@ -1,16 +1,26 @@
+import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_svg/svg.dart';
+import 'package:get/get.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
+import 'package:reactiveform/bottom_navigation_typr.dart';
 import 'package:reactiveform/components/app_snackbar.dart';
 import 'package:reactiveform/components/app_typographpy.dart';
 import 'package:reactiveform/constants.dart';
+import 'package:reactiveform/constants/app.assests.dart';
 import 'package:reactiveform/string_constants.dart';
 import 'package:flutter/services.dart';
 import 'dart:async'; // Added for Completer
 import 'dynamicformcontroller.dart';
 import 'package:reactiveform/models/form_field_model.dart';
+import 'package:http/http.dart' as http;
 
 // Conditional import for web
 import 'web_utils.dart' if (dart.library.html) 'dart:html' as html;
@@ -19,8 +29,9 @@ import 'widgets/multi_select_form_field.dart';
 
 class DynamicForm extends StatefulWidget {
   final List<Map<String, dynamic>> formJson;
-  final Function(Map<String, dynamic>,
-      Map<String, List<Map<String, dynamic>>> uploadedFiles) onSubmit;
+  final Function(
+          Map<String, dynamic>, Map<String, List<Map<String, dynamic>>>, bool?)
+      onSubmit;
   final Color primaryColor;
   final Color buttonTextColor;
   final double fieldSpacing;
@@ -30,6 +41,10 @@ class DynamicForm extends StatefulWidget {
   final Color fileUploadButtonColor;
   final Color fileUploadButtonTextColor;
   final String? submitButtonText;
+  final bool bookingAppModelFileUpload;
+  final bool isManageToCheckPress;
+  final BottomNavigationType bottomNavigationType;
+  final Map<String, dynamic>? initialValues;
 
   const DynamicForm({
     required this.formJson,
@@ -43,8 +58,12 @@ class DynamicForm extends StatefulWidget {
     this.fileUploadButtonColor = Colors.black,
     this.fileUploadButtonTextColor = Colors.white,
     this.submitButtonText,
-    Key? key,
-  }) : super(key: key);
+    this.bookingAppModelFileUpload = false,
+    this.isManageToCheckPress = false,
+    this.bottomNavigationType = BottomNavigationType.button,
+    this.initialValues,
+    super.key,
+  });
 
   @override
   State<DynamicForm> createState() => _DynamicFormState();
@@ -241,6 +260,8 @@ class _DynamicFormState extends State<DynamicForm>
     controller = DynamicFormController(
       formJson: widget.formJson,
       onSubmit: widget.onSubmit,
+      isManageToCheckPress: widget.isManageToCheckPress,
+      initialValues: widget.initialValues,
     );
 
     _internalFields = List<Map<String, dynamic>>.from(widget.formJson);
@@ -554,7 +575,7 @@ class _DynamicFormState extends State<DynamicForm>
 
               return SingleChildScrollView(
                 key: uniqueKey,
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(10.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -568,18 +589,21 @@ class _DynamicFormState extends State<DynamicForm>
               );
             },
           ),
-          bottomNavigationBar: _buildBottomNavigation(buttonColor),
+          bottomNavigationBar: _buildBottomNavigation(buttonColor,
+              widget.isManageToCheckPress, widget.bottomNavigationType),
         ),
       ),
     );
   }
 
-  Widget _buildBottomNavigation(Color buttonColor) {
+  Widget _buildBottomNavigation(Color buttonColor, bool isManageToCheckPress,
+      BottomNavigationType bottomNavigationType) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.only(bottom: 10),
       child: widget.showOneByOne
-          ? _buildStepNavigation(buttonColor)
-          : _buildSubmitButton(buttonColor),
+          ? _buildStepNavigation(
+              buttonColor, isManageToCheckPress, bottomNavigationType)
+          : _buildSubmitButton(buttonColor, isManageToCheckPress),
     );
   }
 
@@ -818,11 +842,11 @@ class _DynamicFormState extends State<DynamicForm>
   Widget _buildFieldWidget(Map<String, dynamic> field) {
     // Access the controller instance variable
     final control = controller.form.control(field['name']);
-    return _buildActualField(field, control);
+    return _buildActualField(field, control, widget.initialValues);
   }
 
-  Widget _buildActualField(
-      Map<String, dynamic> field, AbstractControl<dynamic> control) {
+  Widget _buildActualField(Map<String, dynamic> field,
+      AbstractControl<dynamic> control, Map<String, dynamic>? initialValues) {
     switch (field['type']) {
       case 'option':
       case 'radio':
@@ -1036,6 +1060,9 @@ class _DynamicFormState extends State<DynamicForm>
                         isRequired: isRequired,
                         questionNumber: _getQuestionNumberForField(field),
                         hasAttachments: field['hasAttachments'] == true,
+                        initialValues: initialValues,
+                        bookingAppModelFileUpload:
+                            widget.bookingAppModelFileUpload,
                       ),
                     ],
                   );
@@ -1354,6 +1381,8 @@ class _DynamicFormState extends State<DynamicForm>
             isRequired: controller.form.control(field['name']).value == 'Yes',
             questionNumber: _getQuestionNumberForField(field),
             hasAttachments: true,
+            initialValues: widget.initialValues,
+            bookingAppModelFileUpload: widget.bookingAppModelFileUpload,
           ),
 
           // Add comments section if needed
@@ -1605,6 +1634,8 @@ class _DynamicFormState extends State<DynamicForm>
                     isRequired: isRequired,
                     questionNumber: _getQuestionNumberForField(field),
                     hasAttachments: field['hasAttachments'] == true,
+                    initialValues: widget.initialValues,
+                    bookingAppModelFileUpload: widget.bookingAppModelFileUpload,
                   ),
                 ],
               );
@@ -1845,6 +1876,8 @@ class _DynamicFormState extends State<DynamicForm>
                     isRequired: isRequired,
                     questionNumber: _getQuestionNumberForField(field),
                     hasAttachments: field['hasAttachments'] == true,
+                    initialValues: widget.initialValues,
+                    bookingAppModelFileUpload: widget.bookingAppModelFileUpload,
                   ),
                 ],
               );
@@ -2153,6 +2186,8 @@ class _DynamicFormState extends State<DynamicForm>
                 isRequired: isRequired,
                 questionNumber: _getQuestionNumberForField(field),
                 hasAttachments: field['hasAttachments'] == true,
+                initialValues: widget.initialValues,
+                bookingAppModelFileUpload: widget.bookingAppModelFileUpload,
               );
             },
           ),
@@ -2300,6 +2335,8 @@ class _DynamicFormState extends State<DynamicForm>
                   isRequired: isRequired,
                   questionNumber: _getQuestionNumberForField(field),
                   hasAttachments: field['hasAttachments'] == true,
+                  initialValues: widget.initialValues,
+                  bookingAppModelFileUpload: widget.bookingAppModelFileUpload,
                 );
               }),
         ],
@@ -2414,6 +2451,9 @@ class _DynamicFormState extends State<DynamicForm>
                         isRequired: field['required'] == true,
                         questionNumber: _getQuestionNumberForField(field),
                         hasAttachments: field['hasAttachments'] == true,
+                        bookingAppModelFileUpload:
+                            widget.bookingAppModelFileUpload,
+                        initialValues: widget.initialValues,
                       ),
                       // Show error message if validation error occurs and control is touched
                       if (control.touched && control.hasErrors)
@@ -2500,7 +2540,43 @@ class _DynamicFormState extends State<DynamicForm>
     );
   }
 
-  Widget _buildStepNavigation(Color buttonColor) {
+  void nextButtonPressed(BuildContext context) {
+    // Log before validation
+    if (kDebugMode) {
+      print("\n=== NEXT Button Pressed ===");
+
+      // Check current state
+      if (_groupAnchors.isNotEmpty &&
+          _currentGroupPointer < _groupAnchors.length) {
+        final currentAnchor = _groupAnchors[_currentGroupPointer];
+        print("Current anchor: $currentAnchor");
+
+        if (currentAnchor < _internalFields.length) {
+          final field = _internalFields[currentAnchor];
+          print(
+              "Field name: ${field['name']}, isDuplicate: ${field['isDuplicate']}");
+
+          // Check if field has values
+          if (controller.form.contains(field['name'])) {
+            final control = controller.form.control(field['name']);
+            print(
+                "Field value: ${control.value}, isRequired: ${field['required'] == true}");
+          }
+        }
+      }
+    }
+
+    _moveToNextStep(context);
+  }
+
+  void previousButtonPressed(BuildContext context) {
+    setState(() {
+      moveToPreviousValidQuestion();
+    });
+  }
+
+  Widget _buildStepNavigation(Color buttonColor, bool isManageToCheckPress,
+      BottomNavigationType bottomNavigationType) {
     return StreamBuilder(
       stream: controller.form.valueChanges,
       builder: (context, snapshot) {
@@ -2513,112 +2589,132 @@ class _DynamicFormState extends State<DynamicForm>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             if (controller.currentQuestionIndex > 0)
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    moveToPreviousValidQuestion();
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                child: Text(
-                  StringConstants.back,
-                  style: widget.fontFamily.copyWith(
-                    color: Colors.white,
-                    fontSize: 16,
-                  ),
-                ),
-              )
-            else
-              const SizedBox(width: 100),
+              bottomNavigationType == BottomNavigationType.button
+                  ? ElevatedButton(
+                      onPressed: () => previousButtonPressed(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                      ),
+                      child: Text(
+                        StringConstants.back,
+                        style: widget.fontFamily.copyWith(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
+                    )
+                  : IconButton(
+                      onPressed: () => previousButtonPressed(context),
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                          color: Colors.black),
+                    ),
             if (shouldShowSubmit)
-              ElevatedButton(
-                onPressed: () => _submitForm(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: buttonColor,
-                  foregroundColor: widget.buttonTextColor,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                ),
-                child: Text(
-                  widget.submitButtonText ?? 'Submit',
-                  style: widget.fontFamily.copyWith(
-                    color: widget.buttonTextColor,
-                    fontSize: 16,
-                  ),
-                ),
+              Row(
+                children: [
+                  if (isManageToCheckPress) ...[
+                    ElevatedButton(
+                      onPressed: () =>
+                          _submitForm(context, isManageToCheckPress: true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: buttonColor,
+                        foregroundColor: widget.buttonTextColor,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 10),
+                      ),
+                      child: Text(
+                        StringConstants.managerToCheck,
+                        style: widget.fontFamily.copyWith(
+                          color: widget.buttonTextColor,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  ElevatedButton(
+                    onPressed: () => _submitForm(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: buttonColor,
+                      foregroundColor: widget.buttonTextColor,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                    ),
+                    child: Text(
+                      widget.submitButtonText ?? 'Submit',
+                      style: widget.fontFamily.copyWith(
+                        color: widget.buttonTextColor,
+                        fontSize: 16,
+                      ),
+                    ),
+                  )
+                ],
               )
-            else
-              ElevatedButton(
-                key: const ValueKey('next_button'), // Add key for testing
-                onPressed: () {
-                  // Log before validation
-                  if (kDebugMode) {
-                    print("\n=== NEXT Button Pressed ===");
-
-                    // Check current state
-                    if (_groupAnchors.isNotEmpty &&
-                        _currentGroupPointer < _groupAnchors.length) {
-                      final currentAnchor = _groupAnchors[_currentGroupPointer];
-                      print("Current anchor: $currentAnchor");
-
-                      if (currentAnchor < _internalFields.length) {
-                        final field = _internalFields[currentAnchor];
-                        print(
-                            "Field name: ${field['name']}, isDuplicate: ${field['isDuplicate']}");
-
-                        // Check if field has values
-                        if (controller.form.contains(field['name'])) {
-                          final control =
-                              controller.form.control(field['name']);
-                          print(
-                              "Field value: ${control.value}, isRequired: ${field['required'] == true}");
-                        }
-                      }
-                    }
-                  }
-
-                  _moveToNextStep(context);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                child: Text(
-                  StringConstants.next,
-                  style: widget.fontFamily.copyWith(
-                    color: Colors.white,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
+            else ...[
+              const SizedBox(width: 1),
+              bottomNavigationType == BottomNavigationType.button
+                  ? ElevatedButton(
+                      key: const ValueKey('next_button'), // Add key for testing
+                      onPressed: () => nextButtonPressed(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                      ),
+                      child: Text(
+                        StringConstants.next,
+                        style: widget.fontFamily.copyWith(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
+                    )
+                  : IconButton(
+                      onPressed: () => nextButtonPressed(context),
+                      icon: const Icon(Icons.arrow_forward_ios_rounded,
+                          color: Colors.black),
+                    ),
+            ],
           ],
         );
       },
     );
   }
 
-  Widget _buildSubmitButton(Color buttonColor) {
-    return ElevatedButton(
-      onPressed: () => _submitForm(context),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: buttonColor,
-        foregroundColor: widget.buttonTextColor,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        minimumSize: const Size(double.infinity, 50),
-      ),
-      child: Text(widget.submitButtonText ?? 'Submit',
-          style: widget.fontFamily.copyWith(color: widget.buttonTextColor)),
-    );
+  Widget _buildSubmitButton(Color buttonColor, bool isManageToCheckPress) {
+    return Row(children: [
+      if (isManageToCheckPress) ...[
+        ElevatedButton(
+          onPressed: () => _submitForm(context),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: buttonColor,
+            foregroundColor: widget.buttonTextColor,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            minimumSize: const Size(double.infinity, 50),
+          ),
+          child: Text(widget.submitButtonText ?? 'Submit',
+              style: widget.fontFamily.copyWith(color: widget.buttonTextColor)),
+        ),
+        const SizedBox(width: 10),
+      ],
+      ElevatedButton(
+        onPressed: () => _submitForm(context),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: buttonColor,
+          foregroundColor: widget.buttonTextColor,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          minimumSize: const Size(double.infinity, 50),
+        ),
+        child: Text(widget.submitButtonText ?? 'Submit',
+            style: widget.fontFamily.copyWith(color: widget.buttonTextColor)),
+      )
+    ]);
   }
 
-  void _submitForm(BuildContext context) {
+  void _submitForm(BuildContext context, {bool isManageToCheckPress = false}) {
     // First validate the current question if in step-by-step mode
     if (widget.showOneByOne &&
         controller.currentQuestionIndex < widget.formJson.length) {
@@ -2681,7 +2777,8 @@ class _DynamicFormState extends State<DynamicForm>
     }
 
     // Submit the cleaned data
-    widget.onSubmit(cleanedFormData, cleanedUploadedFiles);
+    widget.onSubmit(
+        cleanedFormData, cleanedUploadedFiles, isManageToCheckPress);
   }
 
   String _getFileType(String fileName) {
@@ -3371,7 +3468,7 @@ class _DynamicFormState extends State<DynamicForm>
       }
       // Show a snackbar to inform the user that validation failed
       AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
-      
+
       return;
     }
 
@@ -4497,6 +4594,8 @@ class FileUploadWidget extends StatefulWidget {
   final bool isRequired;
   final int? questionNumber;
   final bool hasAttachments; // Add new property
+  final bool bookingAppModelFileUpload;
+  final Map<String, dynamic>? initialValues;
 
   const FileUploadWidget({
     Key? key,
@@ -4511,6 +4610,8 @@ class FileUploadWidget extends StatefulWidget {
     this.isRequired = false,
     this.questionNumber,
     this.hasAttachments = false, // Default to false
+    this.bookingAppModelFileUpload = false,
+    this.initialValues,
   }) : super(key: key);
 
   @override
@@ -4535,6 +4636,150 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
   ///   A loading dialog widget is being returned. It consists of a container with padding,
   /// decoration, and child widgets including a CircularProgressIndicator and a Text widget
   /// displaying a message "Processing file. Please wait."
+  ///
+  ///
+  static Widget? imageTitle(String? imageURL, BuildContext? context) {
+    try {
+      if (imageURL != null) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: SizedBox(
+            height: 300,
+            width: MediaQuery.of(context!).size.width,
+            child: CachedNetworkImage(
+              imageUrl: imageURL,
+            ),
+          ),
+        );
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<File?> cropImage(File imageFile) async {
+    try {
+      final image = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        uiSettings: [
+          AndroidUiSettings(
+            initAspectRatio: CropAspectRatioPreset.original,
+            lockAspectRatio: false,
+          ),
+          IOSUiSettings(),
+          WebUiSettings(
+            context: Get.context!,
+            presentStyle: CropperPresentStyle.dialog,
+          ),
+        ],
+      );
+      return image != null ? File(image.path) : imageFile;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<(List<int> byte, String name)?> pickMedia({
+    required bool isGallery,
+    bool back = true,
+    List<String>? allowedExtensions,
+  }) async {
+    if (back) Get.back();
+    final source = isGallery ? ImageSource.gallery : ImageSource.camera;
+    final pickedFile = await ImagePicker().pickImage(source: source);
+    if (pickedFile == null) return null;
+
+    final file = File(pickedFile.path);
+    final croppedFile = await cropImage(file);
+    return croppedFile != null
+        ? (croppedFile.readAsBytesSync(), croppedFile.path.split('/').last)
+        : (file.readAsBytesSync(), file.path.split('/').last);
+  }
+
+  static Row row(IconData icon, String label, TextStyle? style) => Row(
+        children: [
+          Expanded(child: Icon(icon)),
+          Expanded(
+              flex: 4,
+              child: Text(
+                label,
+                textAlign: TextAlign.start,
+                style: style,
+              )),
+        ],
+      );
+
+  static Future<(List<int> byte, String name)?> pickFile({
+    bool back = true,
+    required List<String>? allowedExtension,
+  }) async {
+    if (back) Get.back();
+
+    final result = allowedExtension != null
+        ? await FilePicker.platform.pickFiles(
+            type: FileType.custom, allowedExtensions: allowedExtension)
+        : await FilePicker.platform.pickFiles();
+    return result != null
+        ? (
+            kIsWeb
+                ? result.files.single.bytes!
+                : File(result.files.single.path!).readAsBytesSync(),
+            result.files.single.name,
+          )
+        : null;
+  }
+
+  Future<(List<int>, String, String)?> showFilePickerOptions({
+    required BuildContext context,
+    required String cameraLabel,
+    required String galleryLabel,
+    required String filesLabel,
+    required String cancelLabel,
+    TextStyle? textStyle,
+    String? image,
+    bool camera = true,
+    bool gallery = true,
+    bool files = true,
+    required List<dynamic>? allowedExtensions,
+  }) async {
+    Completer<(List<int>, String, String)?> completer = Completer();
+    await showCupertinoModalPopup(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: imageTitle(image, context),
+        actions: [
+          camera
+              ? CupertinoActionSheetAction(
+                  onPressed: () => cameraOnTap(),
+                  child: row(CupertinoIcons.camera, cameraLabel, textStyle),
+                )
+              : const SizedBox(),
+          gallery
+              ? CupertinoActionSheetAction(
+                  onPressed: () => galleryOnTap(),
+                  child: row(CupertinoIcons.photo, galleryLabel, textStyle),
+                )
+              : const SizedBox(),
+          files
+              ? CupertinoActionSheetAction(
+                  onPressed: () => fileOnTap(),
+                  child: row(CupertinoIcons.doc, filesLabel, textStyle),
+                )
+              : const SizedBox(),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () {
+            Navigator.pop(context);
+            completer.complete(null); // Handle cancel case
+          },
+          child: Text(cancelLabel),
+        ),
+      ),
+    );
+    return completer.future;
+  }
+
   void _showLoadingDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -4642,6 +4887,125 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     widget.onFilesUploaded([newFile]);
   }
 
+  Future<void> fileOnTap() async {
+    Navigator.pop(context);
+    try {
+      _showLoadingDialog(context);
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: [
+          FileTypes.pdf,
+          FileTypes.jpg,
+          FileTypes.gif,
+          FileTypes.jpeg,
+          FileTypes.png,
+          FileTypes.xlsx,
+          FileTypes.xls,
+          FileTypes.text,
+        ],
+        allowMultiple: false, // Ensure only single file selection
+        withData: true,
+        allowCompression: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (file.bytes != null) {
+          _processFile(bytes: file.bytes!, fileName: file.name);
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error picking file: $e');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            StringConstants.errorSelectingFilePleaseTryAgain,
+            style: widget.fontFamily,
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } finally {
+      _hideLoadingDialog();
+    }
+  }
+
+  Future<void> cameraOnTap() async {
+    Navigator.pop(context);
+    try {
+      _showLoadingDialog(context);
+      final ImagePicker picker = ImagePicker();
+      final XFile? photo = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+      );
+
+      if (photo != null) {
+        final bytes = await photo.readAsBytes();
+        _processFile(
+          bytes: bytes,
+          fileName: photo.name,
+          fileType: 'image',
+          mimeType: 'image/${photo.name.split('.').last}',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error taking photo: $e');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            StringConstants.errorTakingPhotoPleaseTryAgain,
+            style: widget.fontFamily,
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } finally {
+      _hideLoadingDialog();
+    }
+  }
+
+  Future<void> galleryOnTap() async {
+    Navigator.pop(context);
+    try {
+      _showLoadingDialog(context);
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        _processFile(
+          bytes: bytes,
+          fileName: image.name,
+          fileType: 'image',
+          mimeType: 'image/${image.name.split('.').last}',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error picking image from gallery: $e');
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            StringConstants.errorSelectingImagePleaseTryAgain,
+            style: widget.fontFamily,
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } finally {
+      _hideLoadingDialog();
+    }
+  }
+
   /// The `_pickAndUploadFile` function in Dart displays a modal bottom sheet with options to choose a
   /// file from FilePicker, gallery, or take a photo from the camera, handling the selection and
   /// processing of the chosen file accordingly.
@@ -4663,158 +5027,72 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
             children: <Widget>[
               // Choose file from FilePicker.
               ListTile(
-                leading: const Icon(
-                  Icons.description_outlined,
-                  size: _DynamicFormState._iconSize,
-                ),
-                title: Text(
-                  StringConstants.chooseFile,
-                  style: widget.fontFamily,
-                ),
-                onTap: () async {
-                  Navigator.pop(context);
-                  try {
-                    _showLoadingDialog(context);
-                    final result = await FilePicker.platform.pickFiles(
-                      type: FileType.custom,
-                      allowedExtensions: [
-                        FileTypes.pdf,
-                        FileTypes.jpg,
-                        FileTypes.gif,
-                        FileTypes.jpeg,
-                        FileTypes.png,
-                        FileTypes.xlsx,
-                        FileTypes.xls,
-                        FileTypes.text,
-                      ],
-                      allowMultiple: false, // Ensure only single file selection
-                      withData: true,
-                      allowCompression: true,
-                    );
-
-                    if (result != null && result.files.isNotEmpty) {
-                      final file = result.files.first;
-                      if (file.bytes != null) {
-                        _processFile(bytes: file.bytes!, fileName: file.name);
-                      }
-                    }
-                  } catch (e) {
-                    if (kDebugMode) {
-                      print('Error picking file: $e');
-                    }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          StringConstants.errorSelectingFilePleaseTryAgain,
-                          style: widget.fontFamily,
-                        ),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  } finally {
-                    _hideLoadingDialog();
-                  }
-                },
-              ),
-              // Choose file from Gallery.
-              ListTile(
-                leading: const Icon(
-                  Icons.collections_outlined,
-                  size: _DynamicFormState._iconSize,
-                ),
-                title: Text(
-                  StringConstants.chooseFromGallery,
-                  style: widget.fontFamily,
-                ),
-                onTap: () async {
-                  Navigator.pop(context);
-                  try {
-                    _showLoadingDialog(context);
-                    final ImagePicker picker = ImagePicker();
-                    final XFile? image = await picker.pickImage(
-                      source: ImageSource.gallery,
-                      imageQuality: 80,
-                    );
-
-                    if (image != null) {
-                      final bytes = await image.readAsBytes();
-                      _processFile(
-                        bytes: bytes,
-                        fileName: image.name,
-                        fileType: 'image',
-                        mimeType: 'image/${image.name.split('.').last}',
-                      );
-                    }
-                  } catch (e) {
-                    if (kDebugMode) {
-                      print('Error picking image from gallery: $e');
-                    }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          StringConstants.errorSelectingImagePleaseTryAgain,
-                          style: widget.fontFamily,
-                        ),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  } finally {
-                    _hideLoadingDialog();
-                  }
-                },
-              ),
-              // Take photo from Camera.
-              if (!kIsWeb)
-                ListTile(
                   leading: const Icon(
-                    Icons.photo_camera_outlined,
+                    Icons.description_outlined,
                     size: _DynamicFormState._iconSize,
                   ),
                   title: Text(
-                    StringConstants.takePhoto,
+                    StringConstants.chooseFile,
                     style: widget.fontFamily,
                   ),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    try {
-                      _showLoadingDialog(context);
-                      final ImagePicker picker = ImagePicker();
-                      final XFile? photo = await picker.pickImage(
-                        source: ImageSource.camera,
-                        imageQuality: 80,
-                      );
-
-                      if (photo != null) {
-                        final bytes = await photo.readAsBytes();
-                        _processFile(
-                          bytes: bytes,
-                          fileName: photo.name,
-                          fileType: 'image',
-                          mimeType: 'image/${photo.name.split('.').last}',
-                        );
-                      }
-                    } catch (e) {
-                      if (kDebugMode) {
-                        print('Error taking photo: $e');
-                      }
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            StringConstants.errorTakingPhotoPleaseTryAgain,
-                            style: widget.fontFamily,
-                          ),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    } finally {
-                      _hideLoadingDialog();
-                    }
-                  },
-                ),
+                  onTap: () => fileOnTap()),
+              // Choose file from Gallery.
+              ListTile(
+                  leading: const Icon(
+                    Icons.collections_outlined,
+                    size: _DynamicFormState._iconSize,
+                  ),
+                  title: Text(
+                    StringConstants.chooseFromGallery,
+                    style: widget.fontFamily,
+                  ),
+                  onTap: () => galleryOnTap()),
+              // Take photo from Camera.
+              if (!kIsWeb)
+                ListTile(
+                    leading: const Icon(
+                      Icons.photo_camera_outlined,
+                      size: _DynamicFormState._iconSize,
+                    ),
+                    title: Text(
+                      StringConstants.takePhoto,
+                      style: widget.fontFamily,
+                    ),
+                    onTap: () => cameraOnTap()),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget uploadButton(
+      {required String assetName,
+      required String label,
+      required VoidCallback onTap}) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Get.theme.colorScheme.secondary.withOpacity(0.10),
+            ),
+            child: SvgPicture.asset(
+              assetName,
+              colorFilter: ColorFilter.mode(
+                  Get.theme.colorScheme.secondary, BlendMode.srcIn),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: Get.theme.textTheme.labelLarge,
+        ),
+      ],
     );
   }
 
@@ -4865,6 +5143,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
   Widget build(BuildContext context) {
     // Check if a file is already uploaded
     final bool hasUploadedFile = widget.uploadedFiles.isNotEmpty;
+    final initialValues = widget.initialValues;
+    print(initialValues?['${widget.fieldName}_attachments']);
 
     // Debug information
     if (kDebugMode) {
@@ -4952,41 +5232,174 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
 
         // Upload button - Show it when upload UI should be shown
         if (shouldShowUploadUI)
-          SizedBox(
-            width: double.infinity,
-            height: 60,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: widget.primaryColor,
-                foregroundColor: widget.buttonTextColor,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: () => _pickAndUploadFile(context),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.upload_file_rounded,
-                    color: widget.buttonTextColor,
-                    size: 32,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    "Select File",
-                    style: widget.fontFamily.copyWith(
-                      color: widget.buttonTextColor,
-                      fontSize: 18,
+          widget.bookingAppModelFileUpload
+              ? Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 35.0),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return Stack(
+                            alignment: Alignment.topCenter,
+                            children: [
+                              // Main Upload Box
+                              Container(
+                                width: constraints.maxWidth,
+                                margin: const EdgeInsets.only(top: 10),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 29, vertical: 16),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                      color: Get.theme.dividerColor
+                                          .withOpacity(0.5)),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // File Type Description
+                                    Text(
+                                      'Upload Files',
+                                      style: Get.textTheme.labelMedium
+                                          ?.copyWith(
+                                              color: Get.theme.hintColor),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 15),
+
+                                    // Upload Buttons Row
+                                    SizedBox(
+                                      width: 288,
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          uploadButton(
+                                              assetName: MyAppAssets
+                                                  .multipleFileUpload,
+                                              label:
+                                                  StringConstants.clickToUpload,
+                                              onTap: () =>
+                                                  showFilePickerOptions(
+                                                    context: context,
+                                                    allowedExtensions: [
+                                                      FileTypes.jpg,
+                                                      FileTypes.jpeg,
+                                                      FileTypes.png,
+                                                      FileTypes.pdf,
+                                                      FileTypes.doc,
+                                                      FileTypes.docx,
+                                                      FileTypes.xls,
+                                                      FileTypes.xlsx,
+                                                      FileTypes.text
+                                                    ],
+                                                    cameraLabel:
+                                                        StringConstants.camera,
+                                                    galleryLabel:
+                                                        StringConstants.gallery,
+                                                    filesLabel:
+                                                        StringConstants.files,
+                                                    cancelLabel:
+                                                        StringConstants.cancel,
+                                                    camera: false,
+                                                    gallery: true,
+                                                    files: true,
+                                                  )),
+                                          uploadButton(
+                                              assetName: MyAppAssets.camera,
+                                              label: StringConstants
+                                                  .captureToUpload,
+                                              onTap: () =>
+                                                  showFilePickerOptions(
+                                                    context: context,
+                                                    allowedExtensions: [
+                                                      FileTypes.jpg,
+                                                      FileTypes.jpeg,
+                                                      FileTypes.png,
+                                                      FileTypes.pdf,
+                                                      FileTypes.doc,
+                                                      FileTypes.docx,
+                                                      FileTypes.xls,
+                                                      FileTypes.xlsx,
+                                                      FileTypes.text
+                                                    ],
+                                                    cameraLabel:
+                                                        StringConstants.camera,
+                                                    galleryLabel:
+                                                        StringConstants.gallery,
+                                                    filesLabel:
+                                                        StringConstants.files,
+                                                    cancelLabel:
+                                                        StringConstants.cancel,
+                                                    camera: true,
+                                                    gallery: false,
+                                                    files: false,
+                                                  )),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              Positioned(
+                                top: 0,
+                                child: Container(
+                                  color: Get.theme.colorScheme.surface,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10),
+                                  child: Text(
+                                    StringConstants.uploadFiles,
+                                    style: Get.textTheme.labelLarge,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                    // Show uploaded files preview
+                  ],
+                )
+              : SizedBox(
+                  width: double.infinity,
+                  height: 60,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: widget.primaryColor,
+                      foregroundColor: widget.buttonTextColor,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 15),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onPressed: () => _pickAndUploadFile(context),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.upload_file_rounded,
+                          color: widget.buttonTextColor,
+                          size: 32,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          "Select File",
+                          style: widget.fontFamily.copyWith(
+                            color: widget.buttonTextColor,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
+                ),
 
         // Space after button
         if (shouldShowUploadUI) const SizedBox(height: 16),
@@ -5053,6 +5466,49 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
   bool isOpeningInNewTab = false;
   final TransformationController _transformationController =
       TransformationController();
+  @override
+  void initState() {
+    super.initState();
+    if (widget.file['file'] == null) {
+      _loadFileFromUrl();
+    }
+  }
+
+  Future<void> _loadFileFromUrl() async {
+    try {
+      setState(() {
+        isDownloading = true;
+      });
+      await getFileBytes(widget.file['file_url']);
+      if (mounted) {
+        setState(() {
+          isDownloading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          isDownloading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load file: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> getFileBytes(String url) async {
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      if (mounted) {
+        setState(() {
+          widget.file['file'] = response.bodyBytes;
+        });
+      }
+    } else {
+      throw Exception('Failed to download file: ${response.statusCode}');
+    }
+  }
 
   @override
   void dispose() {
@@ -5062,9 +5518,60 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String fileName = widget.file['fileName'];
-    final String fileType = widget.file['fileType'];
-    final Uint8List fileBytes = widget.file['file'];
+    final String fileName = widget.file['fileName'] ?? 'Unknown File';
+    final String fileType = widget.file['fileType'] ?? '';
+    final Uint8List? fileBytes = widget.file['file'];
+
+    // Show loading state if file is null and we're downloading
+    if (fileBytes == null && isDownloading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(
+            fileName,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text("Loading file...", style: TextStyle(fontSize: 16))
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show error state if file is null and not downloading
+    if (fileBytes == null && !isDownloading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(
+            fileName,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              const Text("Failed to load file", style: TextStyle(fontSize: 18)),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () {
+                  _loadFileFromUrl();
+                },
+                child: const Text("Retry"),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     // Immediately download Excel files instead of showing preview screen
     if (fileType == 'spreadsheet' ||
@@ -5076,7 +5583,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
           setState(() {
             isDownloading = true;
           });
-          _downloadFile(context, fileBytes, fileName).then((_) {
+          _downloadFile(context, fileBytes!, fileName).then((_) {
             Navigator.of(context).pop();
           });
         }
@@ -5100,7 +5607,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
                 setState(() {
                   isDownloading = true;
                 });
-                await _downloadFile(context, fileBytes, fileName);
+                await _downloadFile(context, fileBytes!, fileName);
                 if (mounted) {
                   setState(() {
                     isDownloading = false;
@@ -5120,7 +5627,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
                 setState(() {
                   isOpeningInNewTab = true;
                 });
-                await _openPdfInNewTab(context, fileBytes, fileName);
+                await _openPdfInNewTab(context, fileBytes!, fileName);
                 if (mounted) {
                   setState(() {
                     isOpeningInNewTab = false;
@@ -5142,7 +5649,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
             )
         ],
       ),
-      body: _buildBody(context, fileType, fileBytes, fileName),
+      body: _buildBody(context, fileType, fileBytes!, fileName),
     );
   }
 

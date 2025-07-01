@@ -1,0 +1,4 @@
+enum BottomNavigationType {
+  button,
+  arrow,
+}

@@ -8,7 +8,7 @@ final List<Map<String, dynamic>> formJson = [
     "hasAttachments": true,
     "requireAttachmentsOn": ["A1"],
     "disableAttachmentsOn": ["NO"],
-    "hasComments": false,
+    "hasComments": true
   },
   {
     "name": "question_2",
@@ -26,28 +26,19 @@ final List<Map<String, dynamic>> formJson = [
   },
   {
     "name": "question_3",
-    "type": "radio",
+    "type": "number",
     "label": "Was the temperature checked twice today (AM & PM)?",
-    "options": ["Yes", "No"],
     "required": true,
-    "hasAttachments": true,
-    "requireAttachmentsOn": ["YES"],
-    "disableAttachmentsOn": ["NO"],
-    "hasComments": false,
-    "showWhen": {
-      "question_1": ["C1"]
-    }
+    "hasAttachments": false,
+    "max": 240
   },
   {
     "name": "question_4",
-    "type": "radio",
+    "type": "number",
     "label": "Was the jelly pot or thermometer used to check the temperature?",
-    "options": ["Yes", "No"],
     "required": true,
-    "hasAttachments": true,
-    "showWhen": {
-      "question_1": ["B1"]
-    }
+    "hasAttachments": false,
+    "max": 240
   },
   {
     "name": "question_5",
@@ -87,3 +78,62 @@ final List<Map<String, dynamic>> formJson = [
     "max": 240
   }
 ];
+
+/// Sample initial values for autofill demonstration
+final Map<String, dynamic> sampleInitialValues = {
+  // question_1: radio, hasAttachments
+  'question_1': 'A1',
+  'question_1_comment': 'This is a comment for question 1',
+  'question_1_attachments': [
+    {
+      'file_url':
+          'http://checklist-epic.petcaretechnologies.com/api/calendar/checklist-epic/calendar/be114cec-3ac0-440e-bf59-82d34bdaf6dd.jpg',
+      'question_name': 'question_1',
+      'question_label': 'Is the fridge operating between 0-5°C?'
+    }
+  ],
+
+  // question_2: radio, hasAttachments
+  'question_2': 'Yes',
+  'question_2_attachments': [
+    {
+      'file_url':
+          'http://checklist-epic.petcaretechnologies.com/api/calendar/checklist-epic/calendar/a067fcc7-e156-449a-9c7a-3f682cbf262e.pdf',
+      'question_name': 'question_2',
+      'question_label': 'Is the freezer operating below -18°C?'
+    }
+  ],
+
+  // question_3: radio, hasAttachments
+  'question_3': 8,
+
+  // question_4: radio, hasAttachments
+  'question_4': 88,
+
+  // question_5: number
+  'question_5': 12,
+
+  // question_6: text, hasAttachments
+  'question_6': 'Found minor issue with door seal.',
+  'question_6_attachments': [
+    {
+      'file_url': 'http://checklist-epic.petcaretechnologies.com/api/calendar/checklist-epic/calendar/5fa00635-1e6a-4978-9282-cdb6bdca1d98.jpeg',
+      'question_name': 'question_6',
+      'question_label': 'If an issue was found, describe the problem.'
+    }
+  ],
+
+  // question_7: radio, hasAttachments
+  'question_7': 'No',
+  'question_7_attachments': [
+    {
+      'file_url':
+          'http://checklist-epic.petcaretechnologies.com/api/calendar/checklist-epic/calendar/5fa00635-1e6a-4978-9282-cdb6bdca1d98.jpeg',
+      'question_name': 'question_7',
+      'question_label': 'Were corrective actions taken to resolve the issue?'
+    }
+  ],
+
+  // question_8: number
+  'question_8': 88,
+};
