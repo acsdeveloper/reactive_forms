@@ -50,13 +50,9 @@ class KitchenInspectionScreen extends StatelessWidget {
           formJson: formJson,
           bookingAppModelFileUpload: true,
           onSubmit: (formData, attachments, bool? isManageToCheckPress) {
-            if (kDebugMode) {
-              print("formData: $formData");
-              print("attachments: $attachments");
-              print("isManageToCheckPress: $isManageToCheckPress");
-            }
+            
           },
-          initialValues: sampleInitialValues,
+          // initialValues: sampleInitialValues,
           // Pass the initial values from the json data if needed
         ),
       ),
