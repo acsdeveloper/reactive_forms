@@ -34,7 +34,7 @@ class StringConstants {
   static const String comments = 'Comments';
   static const String enterComments = 'Enter your comments here';
   static const String commentsAreRequired =
-      'Comments are required. Please provide your comments.';
+      'Comments are required.';
 
   // Buttons
   static const String submit = 'Submit';

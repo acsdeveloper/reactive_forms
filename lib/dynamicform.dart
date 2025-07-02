@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
+import 'package:reactiveform/components/app_colours.dart';
 import 'package:reactiveform/components/app_snackbar.dart';
 import 'package:reactiveform/components/app_typographpy.dart';
 import 'package:reactiveform/constants.dart';
@@ -1083,29 +1084,7 @@ class _DynamicFormState extends State<DynamicForm>
                   ),
                 ],
               ),
-              ReactiveTextField(
-                formControlName: '${field['name']}_comment',
-                decoration: InputDecoration(
-                  // No labelText to avoid displaying "comments" in the field
-                  hintText: field['commentHint'] ?? '',
-                  labelStyle: widget.fontFamily,
-                  hintStyle: widget.fontFamily,
-                  // Add error style
-                  errorStyle: widget.fontFamily
-                      .copyWith(color: Colors.red[700], fontSize: 12),
-                ),
-                maxLines: 3,
-                validationMessages: {
-                  'required': (_) => StringConstants.commentsAreRequired,
-                },
-                // Add onSubmitted to validate the form when user submits via keyboard
-                onSubmitted: (_) {
-                  if (widget.showOneByOne &&
-                      !isCurrentQuestionEffectivelyLast()) {
-                    validateCurrentSection();
-                  }
-                },
-              ),
+              _buildCommentField(field),
             ],
           ],
         );
@@ -1489,25 +1468,7 @@ class _DynamicFormState extends State<DynamicForm>
               ),
             ],
           ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
-            maxLines: 3,
-            validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
-            },
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
+          _buildCommentField(field),
         ],
       ],
     );
@@ -1726,28 +1687,7 @@ class _DynamicFormState extends State<DynamicForm>
               ),
             ],
           ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
-            maxLines: 3,
-            validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
+          _buildCommentField(field),
         ],
       ],
     );
@@ -1879,28 +1819,7 @@ class _DynamicFormState extends State<DynamicForm>
               ),
             ],
           ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
-            maxLines: 3,
-            validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
+          _buildCommentField(field),
         ],
         if (field['hasAttachments'] == true ||
             field['requireAttachmentsOn'] == true ||
@@ -2179,28 +2098,7 @@ class _DynamicFormState extends State<DynamicForm>
               ),
             ],
           ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
-            maxLines: 3,
-            validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
+          _buildCommentField(field),
         ],
       ],
     );
@@ -2331,28 +2229,7 @@ class _DynamicFormState extends State<DynamicForm>
               ),
             ],
           ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
-            maxLines: 3,
-            validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
+          _buildCommentField(field),
         ],
       ],
     );
@@ -4413,6 +4290,31 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Return all fields in the current question group
     return fieldIndices.map((idx) => _internalFields[idx]).toList();
+  }
+  Widget _buildCommentField(Map<String, dynamic> field) {
+    return ReactiveTextField(
+      formControlName: '${field['name']}_comment',
+      decoration: InputDecoration(
+        // No labelText to avoid displaying "comments" in the field
+        hintText: field['commentHint'] ?? '',
+        labelStyle: widget.fontFamily,
+        hintStyle: widget.fontFamily,
+        // Add error style
+        errorStyle:
+            widget.fontFamily.copyWith(color: Colors.red[700], fontSize: 12),
+        focusedBorder: UnderlineInputBorder(
+          borderSide: BorderSide(color: AppColors.appBlackDark),
+        ),
+      ),
+      validationMessages: {
+        'required': (_) => StringConstants.commentsAreRequired,
+      },
+      onSubmitted: (_) {
+        if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+          validateCurrentSection();
+        }
+      },
+    );
   }
 }
 
