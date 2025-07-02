@@ -254,6 +254,124 @@ class _DynamicFormState extends State<DynamicForm>
     }
   }
 
+  // Check if the current question should be visible when going backwards, and if not, find the previous visible one
+  void _updateCurrentQuestionBasedOnVisibilityForPrevious() {
+    if (!widget.showOneByOne) return; // Only applicable in step-by-step mode
+
+    // If the current question pointer is out of bounds, reset to the beginning
+    if (_currentGroupPointer < 0 ||
+        _currentGroupPointer >= _groupAnchors.length) {
+      _currentGroupPointer = 0;
+      return;
+    }
+
+    // Get the current question anchor and index
+    int currentAnchorIndex = _groupAnchors[_currentGroupPointer];
+    int currentQuestionIndex = -1;
+
+    // Find the form index of the current question
+    for (int i = 0; i < widget.formJson.length; i++) {
+      if (widget.formJson[i]['name'] ==
+          _internalFields[currentAnchorIndex]['name']) {
+        currentQuestionIndex = i;
+        break;
+      }
+    }
+
+    // If current question is not found in the form JSON (shouldn't happen), return
+    if (currentQuestionIndex == -1) return;
+
+    // Get the current list of visible question indices
+    List<int> visibleIndices = _getVisibleQuestionIndices();
+
+    // Critical: If no questions are visible, make the first question visible as fallback
+    if (visibleIndices.isEmpty && widget.formJson.isNotEmpty) {
+      if (kDebugMode) {
+        print(
+            "Warning: No visible questions found! Making first question visible as fallback.");
+      }
+      visibleIndices = [0]; // Make the first question visible as fallback
+    }
+
+    // Check if current question is visible
+    if (!visibleIndices.contains(currentQuestionIndex)) {
+      if (kDebugMode) {
+        print(
+            "Current question at index $currentQuestionIndex is not visible when going backwards. Finding previous visible question.");
+      }
+
+      // Current question is not visible - find the previous visible question
+      int prevVisibleIndex = -1;
+
+      // Find the closest previous visible question
+      for (int visibleIndex in visibleIndices) {
+        if (visibleIndex < currentQuestionIndex &&
+            (prevVisibleIndex == -1 || visibleIndex > prevVisibleIndex)) {
+          prevVisibleIndex = visibleIndex;
+        }
+      }
+
+      // If no previous visible question found, try to find the next visible question
+      if (prevVisibleIndex == -1 && visibleIndices.isNotEmpty) {
+        for (int visibleIndex in visibleIndices) {
+          if (visibleIndex > currentQuestionIndex) {
+            prevVisibleIndex = visibleIndex;
+            break;
+          }
+        }
+      }
+
+      // If still no visible question found, use the first visible question
+      if (prevVisibleIndex == -1 && visibleIndices.isNotEmpty) {
+        prevVisibleIndex = visibleIndices.first;
+      }
+
+      // Navigate to the previous/next visible question if found
+      if (prevVisibleIndex != -1) {
+        // Find the anchor corresponding to this question index
+        int anchorPointer = -1;
+        for (int i = 0; i < _groupAnchors.length; i++) {
+          int anchorIndex = _groupAnchors[i];
+          String anchorName = _internalFields[anchorIndex]['name'].toString();
+
+          // Check if this anchor corresponds to the visible question
+          for (int j = 0; j < widget.formJson.length; j++) {
+            if (j == prevVisibleIndex &&
+                widget.formJson[j]['name'] == anchorName) {
+              anchorPointer = i;
+              break;
+            }
+          }
+
+          if (anchorPointer != -1) break;
+        }
+
+        // Update the current pointer and controller index if an anchor was found
+        if (anchorPointer != -1 && anchorPointer != _currentGroupPointer) {
+          if (kDebugMode) {
+            print(
+                "Backward Skip: Question at index $currentQuestionIndex is not visible. Skipping to question at index $prevVisibleIndex (anchor: $anchorPointer)");
+          }
+
+          _currentGroupPointer = anchorPointer;
+          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+        } else if (anchorPointer == -1) {
+          // If we couldn't find a proper anchor but we know a question should be visible,
+          // this is a serious issue - log it
+          if (kDebugMode) {
+            print(
+                "ERROR: Could not find anchor for visible question at index $prevVisibleIndex");
+          }
+        }
+      } else {
+        // This should never happen since we ensure visibleIndices is not empty
+        if (kDebugMode) {
+          print("ERROR: No visible question found to navigate to!");
+        }
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -4328,10 +4446,26 @@ class _DynamicFormState extends State<DynamicForm>
   // Move to the previous valid question in the form
   void moveToPreviousValidQuestion() {
     if (_currentGroupPointer > 0) {
+      // Store the current pointer before moving
+      int originalPointer = _currentGroupPointer;
+
+      // Move to the previous question
       _currentGroupPointer--;
+
       // Update the controller index to match the new group
       if (_groupAnchors.isNotEmpty) {
         controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+      }
+
+      // Check if the previous question is visible, if not, find the previous visible question
+      _updateCurrentQuestionBasedOnVisibilityForPrevious();
+
+      // If we couldn't find a valid previous question, revert to original position
+      if (_currentGroupPointer >= originalPointer) {
+        _currentGroupPointer = originalPointer;
+        if (_groupAnchors.isNotEmpty) {
+          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+        }
       }
     }
   }
