@@ -2475,14 +2475,8 @@ class _DynamicFormState extends State<DynamicForm>
         final hasFiles =
             controller.uploadedFiles[currentField['name']]?.isNotEmpty ?? false;
         if (!hasFiles) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  '${currentField['label']} ${StringConstants.isRequired}',
-                  style: widget.fontFamily),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.fillRequiredFields);
           return;
         }
       }
@@ -3193,18 +3187,14 @@ class _DynamicFormState extends State<DynamicForm>
       }
       // Show a snackbar to inform the user that files need to be uploaded
       // Use the _lastValidationErrorField to provide more context if available
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _lastValidationErrorField != null
-                ? StringConstants.pleaseFillOutAllRequiredAttachments
-                : StringConstants.uploadRequiredFiles,
-            style: widget.fontFamily,
-          ),
-          backgroundColor: Colors.red[700],
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      String errorMessage = StringConstants.pleaseFillOutAllRequiredAttachments;
+      if (_lastValidationErrorField != null && 
+          _lastValidationErrorField!['hasAttachments'] != true) {
+        errorMessage = StringConstants.pleaseFillOutAllRequiredAttachments;
+      }
+      
+      AppSnackBar(context)
+          .showErrorSnackBar(errorMessage);
       return;
     }
 
@@ -3354,18 +3344,14 @@ class _DynamicFormState extends State<DynamicForm>
       }
       // Show a snackbar to inform the user that files need to be uploaded
       // Use the _lastValidationErrorField to provide more context if available
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _lastValidationErrorField != null
-                ? StringConstants.pleaseFillOutAllRequiredAttachments
-                : StringConstants.uploadRequiredFiles,
-            style: widget.fontFamily,
-          ),
-          backgroundColor: Colors.red[700],
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      String errorMessage = StringConstants.uploadRequiredFiles;
+      if (_lastValidationErrorField != null && 
+          _lastValidationErrorField!['hasAttachments'] != true) {
+        errorMessage = StringConstants.pleaseFillOutAllRequiredAttachments;
+      }
+      
+      AppSnackBar(context)
+          .showErrorSnackBar(errorMessage);
       return;
     }
 
@@ -4315,6 +4301,13 @@ class _DynamicFormState extends State<DynamicForm>
 
   // Build error message for attachment validation errors
   Widget _buildErrorMessage() {
+    // Check if the field that caused the error has hasAttachments=true
+    // If so, don't show the error message
+    if (_lastValidationErrorField != null &&
+        _lastValidationErrorField!['hasAttachments'] == true) {
+      return const SizedBox.shrink(); // Don't show error message
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Text(
@@ -4802,15 +4795,9 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     if (kDebugMode) {
                       print('Error picking file: $e');
                     }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          StringConstants.errorSelectingFilePleaseTryAgain,
-                          style: widget.fontFamily,
-                        ),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
+                    AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.errorSelectingFilePleaseTryAgain);
+                    
                   } finally {
                     _hideLoadingDialog();
                   }
@@ -4849,15 +4836,9 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     if (kDebugMode) {
                       print('Error picking image from gallery: $e');
                     }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          StringConstants.errorSelectingImagePleaseTryAgain,
-                          style: widget.fontFamily,
-                        ),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
+                    AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.errorSelectingImagePleaseTryAgain);
+                    
                   } finally {
                     _hideLoadingDialog();
                   }
@@ -4897,15 +4878,9 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                       if (kDebugMode) {
                         print('Error taking photo: $e');
                       }
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            StringConstants.errorTakingPhotoPleaseTryAgain,
-                            style: widget.fontFamily,
-                          ),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
+                      AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.errorTakingPhotoPleaseTryAgain);
+                      
                     } finally {
                       _hideLoadingDialog();
                     }
@@ -5584,13 +5559,9 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
 
         // Show success message
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('PDF opened in a new tab'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 1),
-            ),
-          );
+          AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.pdfOpenedInNewTab);
+          
         }
 
         // Small delay before returning
@@ -5598,23 +5569,15 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
       } catch (e) {
         // Show error message
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error opening PDF: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.pdfOpenedInNewTab);
         }
         print('Error opening PDF in new tab: $e');
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Opening in new tab is only available on web platforms'),
-          ),
-        );
+        AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.pdfOpenedInNewTab);
       }
     }
   }
@@ -5669,23 +5632,15 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
 
         // Show success message
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Download started'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 1),
-            ),
-          );
+          AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.downloadStarted);
         }
       } else {
         // Mobile platform - show a temporary message
         // In a real app, you'd implement platform-specific download
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('File saved to downloads folder'),
-            ),
-          );
+          AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.fileSavedToDownloadsFolder);
         }
       }
 
@@ -5694,12 +5649,8 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
     } catch (e) {
       // Show error message
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error downloading file: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.errorDownloadingFile);
       }
       print('Error downloading file: $e');
     }

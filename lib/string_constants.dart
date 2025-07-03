@@ -112,5 +112,10 @@ class StringConstants {
   static const String characters = 'characters.';
   static const String delete = 'Delete';
   static const String yes = 'Yes';
-  static const String no = 'No';
+  static const String no = 'No';  
+  static const String pdfOpenedInNewTab = 'PDF opened in a new tab';
+  static const String downloadStarted = 'Download started';
+  static const String errorDownloadingFile = 'Error downloading file';
+  static const String fileSavedToDownloadsFolder =
+      'File saved to downloads folder';
 }
