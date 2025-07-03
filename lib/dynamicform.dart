@@ -3188,13 +3188,12 @@ class _DynamicFormState extends State<DynamicForm>
       // Show a snackbar to inform the user that files need to be uploaded
       // Use the _lastValidationErrorField to provide more context if available
       String errorMessage = StringConstants.pleaseFillOutAllRequiredAttachments;
-      if (_lastValidationErrorField != null && 
+      if (_lastValidationErrorField != null &&
           _lastValidationErrorField!['hasAttachments'] != true) {
         errorMessage = StringConstants.pleaseFillOutAllRequiredAttachments;
       }
-      
-      AppSnackBar(context)
-          .showErrorSnackBar(errorMessage);
+
+      AppSnackBar(context).showErrorSnackBar(errorMessage);
       return;
     }
 
@@ -3345,13 +3344,12 @@ class _DynamicFormState extends State<DynamicForm>
       // Show a snackbar to inform the user that files need to be uploaded
       // Use the _lastValidationErrorField to provide more context if available
       String errorMessage = StringConstants.uploadRequiredFiles;
-      if (_lastValidationErrorField != null && 
+      if (_lastValidationErrorField != null &&
           _lastValidationErrorField!['hasAttachments'] != true) {
         errorMessage = StringConstants.pleaseFillOutAllRequiredAttachments;
       }
-      
-      AppSnackBar(context)
-          .showErrorSnackBar(errorMessage);
+
+      AppSnackBar(context).showErrorSnackBar(errorMessage);
       return;
     }
 
@@ -4795,9 +4793,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     if (kDebugMode) {
                       print('Error picking file: $e');
                     }
-                    AppSnackBar(context)
-              .showErrorSnackBar(StringConstants.errorSelectingFilePleaseTryAgain);
-                    
+                    AppSnackBar(context).showErrorSnackBar(
+                        StringConstants.errorSelectingFilePleaseTryAgain);
                   } finally {
                     _hideLoadingDialog();
                   }
@@ -4836,9 +4833,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                     if (kDebugMode) {
                       print('Error picking image from gallery: $e');
                     }
-                    AppSnackBar(context)
-              .showErrorSnackBar(StringConstants.errorSelectingImagePleaseTryAgain);
-                    
+                    AppSnackBar(context).showErrorSnackBar(
+                        StringConstants.errorSelectingImagePleaseTryAgain);
                   } finally {
                     _hideLoadingDialog();
                   }
@@ -4878,9 +4874,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                       if (kDebugMode) {
                         print('Error taking photo: $e');
                       }
-                      AppSnackBar(context)
-              .showErrorSnackBar(StringConstants.errorTakingPhotoPleaseTryAgain);
-                      
+                      AppSnackBar(context).showErrorSnackBar(
+                          StringConstants.errorTakingPhotoPleaseTryAgain);
                     } finally {
                       _hideLoadingDialog();
                     }
@@ -5561,7 +5556,6 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
         if (mounted) {
           AppSnackBar(context)
               .showErrorSnackBar(StringConstants.pdfOpenedInNewTab);
-          
         }
 
         // Small delay before returning
@@ -5577,7 +5571,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
     } else {
       if (mounted) {
         AppSnackBar(context)
-              .showErrorSnackBar(StringConstants.pdfOpenedInNewTab);
+            .showErrorSnackBar(StringConstants.pdfOpenedInNewTab);
       }
     }
   }
@@ -5650,7 +5644,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
       // Show error message
       if (mounted) {
         AppSnackBar(context)
-              .showErrorSnackBar(StringConstants.errorDownloadingFile);
+            .showErrorSnackBar(StringConstants.errorDownloadingFile);
       }
       print('Error downloading file: $e');
     }
