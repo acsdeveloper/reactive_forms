@@ -110,6 +110,9 @@ class _DynamicFormState extends State<DynamicForm>
   // Subscription to form value changes - will be used to update visibility
   late StreamSubscription<dynamic> _formValueChangeSubscription;
 
+  // Track previous visibility state to detect when questions become hidden
+  Set<String> _previouslyVisibleQuestions = {};
+
   bool hasCriticalValidationError = false;
   // Check if the current question should be visible, and if not, skip to the next visible one
   void _updateCurrentQuestionBasedOnVisibility() {
@@ -256,6 +259,9 @@ class _DynamicFormState extends State<DynamicForm>
     _formValueChangeSubscription =
         controller.form.valueChanges.listen((formValues) {
       if (mounted) {
+        // Clear values for questions that are no longer visible due to showWhen conditions
+        _clearValuesForHiddenQuestions();
+
         // First, recalculate progress and visibility
         _safeCalculateProgress();
 
@@ -264,6 +270,17 @@ class _DynamicFormState extends State<DynamicForm>
 
         // Update UI
         setState(() {});
+      }
+    });
+
+    // Initialize the previously visible questions set
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      List<int> initialVisible = _getVisibleQuestionIndices();
+      for (int index in initialVisible) {
+        if (index < widget.formJson.length) {
+          final questionName = widget.formJson[index]['name'].toString();
+          _previouslyVisibleQuestions.add(questionName);
+        }
       }
     });
   }
@@ -451,6 +468,88 @@ class _DynamicFormState extends State<DynamicForm>
     }
 
     return visible;
+  }
+
+  /// Clears form values for questions that are no longer visible due to showWhen conditions
+  void _clearValuesForHiddenQuestions() {
+    // Get current visible questions
+    List<int> currentlyVisible = _getVisibleQuestionIndices();
+    Set<String> currentlyVisibleNames = {};
+
+    // Build set of currently visible question names
+    for (int index in currentlyVisible) {
+      if (index < widget.formJson.length) {
+        final questionName = widget.formJson[index]['name'].toString();
+        currentlyVisibleNames.add(questionName);
+      }
+    }
+
+    // Check each question in the form
+    for (int i = 0; i < widget.formJson.length; i++) {
+      final question = widget.formJson[i];
+      final questionName = question['name'].toString();
+
+      // Skip questions with groupWith - they are handled as part of their parent
+      if (question['groupWith'] != null &&
+          question['groupWith'].toString().isNotEmpty) {
+        continue;
+      }
+
+      // Check if this question was previously visible but is now hidden
+      bool wasPreviouslyVisible =
+          _previouslyVisibleQuestions.contains(questionName);
+      bool isCurrentlyVisible = currentlyVisibleNames.contains(questionName);
+
+      // If the question was visible before but is now hidden and has a showWhen condition, clear its values
+      if (wasPreviouslyVisible &&
+          !isCurrentlyVisible &&
+          question['showWhen'] != null) {
+        if (controller.form.contains(questionName)) {
+          // Clear the main field value
+          final control = controller.form.control(questionName);
+          if (control is FormControl) {
+            // Reset to appropriate default value based on field type
+            if (question['type'] == 'multiselect') {
+              control.value = <String>[];
+            } else if (question['type'] == 'number') {
+              control.value = null;
+            } else {
+              control.value = '';
+            }
+
+            if (kDebugMode) {
+              print("Cleared value for hidden question: $questionName");
+            }
+          }
+
+          // Clear associated comment field if it exists
+          if (question['hasComments'] == true) {
+            final commentFieldName = '${questionName}_comment';
+            if (controller.form.contains(commentFieldName)) {
+              final commentControl = controller.form.control(commentFieldName);
+              if (commentControl is FormControl) {
+                commentControl.value = '';
+                if (kDebugMode) {
+                  print(
+                      "Cleared comment for hidden question: $commentFieldName");
+                }
+              }
+            }
+          }
+
+          // Clear associated file uploads
+          if (controller.uploadedFiles.containsKey(questionName)) {
+            controller.uploadedFiles.remove(questionName);
+            if (kDebugMode) {
+              print("Cleared file uploads for hidden question: $questionName");
+            }
+          }
+        }
+      }
+    }
+
+    // Update the previously visible questions set
+    _previouslyVisibleQuestions = currentlyVisibleNames;
   }
 
   @override
@@ -3098,7 +3197,7 @@ class _DynamicFormState extends State<DynamicForm>
         SnackBar(
           content: Text(
             _lastValidationErrorField != null
-                ? 'Please upload the required files for "${_lastValidationErrorField!['label']}"'
+                ? StringConstants.pleaseFillOutAllRequiredAttachments
                 : StringConstants.uploadRequiredFiles,
             style: widget.fontFamily,
           ),
@@ -3259,7 +3358,7 @@ class _DynamicFormState extends State<DynamicForm>
         SnackBar(
           content: Text(
             _lastValidationErrorField != null
-                ? 'Please upload the required files for "${_lastValidationErrorField!['label']}"'
+                ? StringConstants.pleaseFillOutAllRequiredAttachments
                 : StringConstants.uploadRequiredFiles,
             style: widget.fontFamily,
           ),
@@ -4291,6 +4390,7 @@ class _DynamicFormState extends State<DynamicForm>
     // Return all fields in the current question group
     return fieldIndices.map((idx) => _internalFields[idx]).toList();
   }
+
   Widget _buildCommentField(Map<String, dynamic> field) {
     return ReactiveTextField(
       formControlName: '${field['name']}_comment',
