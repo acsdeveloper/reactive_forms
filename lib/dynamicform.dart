@@ -423,6 +423,7 @@ class _DynamicFormState extends State<DynamicForm>
         setState(() {});
       }
     });
+    
 
     // Initialize the previously visible questions set
     WidgetsBinding.instance.addPostFrameCallback((_) {

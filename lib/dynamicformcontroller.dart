@@ -1086,7 +1086,39 @@ class DynamicFormController extends ChangeNotifier {
       'file': null,
     };
   }
-
+int calculateVisualQuestionNumber(int questionIndex) {
+    // Start with the first question being #1
+    int visualNumber = 1;
+ 
+    // Get all visible question indices first to ensure proper sequence
+    List<int> visibleIndices = [];
+    for (int i = 0; i < formJson.length; i++) {
+      if (shouldDisplayQuestion(i)) {
+        visibleIndices.add(i);
+      }
+    }
+ 
+    // Find the position of the current question in the visible questions list
+    int position = visibleIndices.indexOf(questionIndex);
+ 
+    // If we found the question in our visible list, its number is position + 1
+    // Otherwise, default to 1
+    if (position != -1) {
+      visualNumber = position + 1;
+      if (kDebugMode) {
+        print(
+            "Visual question number for index $questionIndex (${formJson[questionIndex]['name']}): $visualNumber");
+        print("Total visible questions: ${visibleIndices.length}");
+      }
+    } else {
+      if (kDebugMode) {
+        print(
+            "Warning: Question at index $questionIndex is not in visible questions list!");
+      }
+    }
+ 
+    return visualNumber;
+  }
   /// Extract filename from URL or Content-Disposition header
   String _extractFileNameFromUrl(String url, Map<String, String> headers) {
     // Try to get filename from Content-Disposition header first

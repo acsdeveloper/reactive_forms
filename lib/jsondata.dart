@@ -2,17 +2,6 @@ final List<Map<String, dynamic>> formJson = [
   {
     "name": "question_1",
     "type": "radio",
-    "label": "Is the fridge operating between 0-5°C?",
-    "options": ["A1", "B1", "C1", "D1"],
-    "required": true,
-    "hasAttachments": true,
-    "requireAttachmentsOn": ["A1"],
-    "disableAttachmentsOn": ["NO"],
-    "hasComments": true
-  },
-  {
-    "name": "question_2",
-    "type": "radio",
     "label": "Is the freezer operating below -18°C?",
     "options": ["Yes", "No"],
     "required": true,
@@ -23,6 +12,17 @@ final List<Map<String, dynamic>> formJson = [
     "showWhen": {
       "question_1": ["A1", "B1"]
     }
+  },
+  {
+    "name": "question_2",
+    "type": "multiselect",
+    "label": "Is the fridge operating between 0-5°C?",
+    "options": ["A1", "B1", "C1", "D1"],
+    "required": true,
+    "hasAttachments": true,
+    "requireAttachmentsOn": ["A1"],
+    "disableAttachmentsOn": ["NO"],
+    "hasComments": true
   },
   {
     "name": "question_3",
