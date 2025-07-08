@@ -704,18 +704,26 @@ class DynamicFormController extends ChangeNotifier {
 
   bool shouldShowSubmitButton() {
     if (_currentQuestionIndex >= formJson.length) return false;
-
+ 
     final currentField = formJson[_currentQuestionIndex];
-    if (currentField['branching'] == null) return false;
-
-    var branchTo = currentField['branching'];
-    if (branchTo is Map<String, dynamic>) {
-      String? targetQuestion =
-          branchTo[form.control(currentField['name']).value?.toString()];
-      return targetQuestion == 'end';
+ 
+    // Case 1: Current question has explicit branching to "end"
+    if (currentField['branching'] != null) {
+      var branchTo = currentField['branching'];
+      if (branchTo is Map<String, dynamic>) {
+        String? targetQuestion =
+            branchTo[form.control(currentField['name']).value?.toString()];
+        if (targetQuestion == 'end') return true;
+      }
     }
-
-    return false;
+ 
+    // Case 2: Check if there are no more visible questions after this one
+    bool noMoreVisibleQuestions = findNextVisibleQuestionIndex() == -1;
+ 
+    // Case 3: We've reached the last question in the form
+    bool isLastQuestion = _currentQuestionIndex == formJson.length - 1;
+ 
+    return noMoreVisibleQuestions || isLastQuestion;
   }
 
   void addFormControls(List<Map<String, dynamic>> newFields) {
