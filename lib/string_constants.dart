@@ -33,8 +33,7 @@ class StringConstants {
   static const String max = 'max';
   static const String comments = 'Comments';
   static const String enterComments = 'Enter your comments here';
-  static const String commentsAreRequired =
-      'Comments are required. Please provide your comments.';
+  static const String commentsAreRequired = 'Comments are required.';
 
   // Buttons
   static const String submit = 'Submit';
@@ -113,12 +112,17 @@ class StringConstants {
   static const String delete = 'Delete';
   static const String yes = 'Yes';
   static const String no = 'No';
-   static String clickToUpload = "Click to Upload";
+  static String clickToUpload = "Click to Upload";
   static String captureToUpload = 'Capture & Upload';
   static String camera = 'Camera';
   static String files = 'Files';
   static String fileUploadWarning = 'File size must be less than ###MB';
   static String gallery = 'Gallery';
   static String managerToCheck = 'Manager to Check';
-  
+
+  static const String pdfOpenedInNewTab = 'PDF opened in a new tab';
+  static const String downloadStarted = 'Download started';
+  static const String errorDownloadingFile = 'Error downloading file';
+  static const String fileSavedToDownloadsFolder =
+      'File saved to downloads folder';
 }

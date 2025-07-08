@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
+import 'package:reactiveform/components/app_colours.dart';
 import 'package:reactiveform/bottom_navigation_typr.dart';
 import 'package:reactiveform/components/app_snackbar.dart';
 import 'package:reactiveform/components/app_typographpy.dart';
@@ -128,6 +129,10 @@ class _DynamicFormState extends State<DynamicForm>
   // Subscription to form value changes - will be used to update visibility
   late StreamSubscription<dynamic> _formValueChangeSubscription;
 
+  // Track previous visibility state to detect when questions become hidden
+  Set<String> _previouslyVisibleQuestions = {};
+
+  bool hasCriticalValidationError = false;
   // Check if the current question should be visible, and if not, skip to the next visible one
   void _updateCurrentQuestionBasedOnVisibility() {
     if (!widget.showOneByOne) return; // Only applicable in step-by-step mode
@@ -160,20 +165,11 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Critical: If no questions are visible, make the first question visible as fallback
     if (visibleIndices.isEmpty && widget.formJson.isNotEmpty) {
-      if (kDebugMode) {
-        print(
-            "Warning: No visible questions found! Making first question visible as fallback.");
-      }
       visibleIndices = [0]; // Make the first question visible as fallback
     }
 
     // Check if current question is visible
     if (!visibleIndices.contains(currentQuestionIndex)) {
-      if (kDebugMode) {
-        print(
-            "Current question at index $currentQuestionIndex is not visible. Finding next visible question.");
-      }
-
       // Current question is not visible - find the next visible question
       int nextVisibleIndex = -1;
 
@@ -227,11 +223,6 @@ class _DynamicFormState extends State<DynamicForm>
 
         // Update the current pointer and controller index if an anchor was found
         if (anchorPointer != -1 && anchorPointer != _currentGroupPointer) {
-          if (kDebugMode) {
-            print(
-                "Smart Skip: Question at index $currentQuestionIndex is not visible. Skipping to question at index $nextVisibleIndex (anchor: $anchorPointer)");
-          }
-
           setState(() {
             _currentGroupPointer = anchorPointer;
             controller.currentQuestionIndex =
@@ -393,20 +384,34 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Calculate initial progress
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Recompute group structure
+      _recomputeGroupStructure();
+
+      // Make sure we start with a visible question
+      _updateCurrentQuestionBasedOnVisibility();
+
+      // Update progress
       _safeCalculateProgress();
       _pageControllerReady = true;
-    });
 
-    _recomputeGroupStructure();
+      // Debug current state
+      // if (kDebugMode) {
+      //   print("\n=== Form Initialized ===");
+      //   print("Current question index: ${controller.currentQuestionIndex}");
+      //   print("Current group pointer: $_currentGroupPointer");
+      //   print("Total anchors: ${_groupAnchors.length}");
+      //   print(
+      //       "Current question visible: ${controller.shouldDisplayQuestion(controller.currentQuestionIndex)}");
+      //   controller.debugNavigationState();
+      // }
+    });
 
     // Listen to form value changes and update question visibility
     _formValueChangeSubscription =
         controller.form.valueChanges.listen((formValues) {
       if (mounted) {
-        if (kDebugMode) {
-          print(
-              "Form values changed: ${formValues?.keys.join(', ') ?? 'null'}");
-        }
+        // Clear values for questions that are no longer visible due to showWhen conditions
+        _clearValuesForHiddenQuestions();
 
         // First, recalculate progress and visibility
         _safeCalculateProgress();
@@ -416,6 +421,17 @@ class _DynamicFormState extends State<DynamicForm>
 
         // Update UI
         setState(() {});
+      }
+    });
+
+    // Initialize the previously visible questions set
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      List<int> initialVisible = _getVisibleQuestionIndices();
+      for (int index in initialVisible) {
+        if (index < widget.formJson.length) {
+          final questionName = widget.formJson[index]['name'].toString();
+          _previouslyVisibleQuestions.add(questionName);
+        }
       }
     });
   }
@@ -518,12 +534,6 @@ class _DynamicFormState extends State<DynamicForm>
       // If this field is already being evaluated, we have a circular dependency
       if (fieldBeingEvaluated != null &&
           evaluationStack.contains(fieldBeingEvaluated)) {
-        if (kDebugMode) {
-          print(
-              "WARNING: Circular dependency detected in showWhen conditions for field: $fieldBeingEvaluated");
-          print(
-              "Dependency chain: ${evaluationStack.join(' → ')} → $fieldBeingEvaluated");
-        }
         // Break the circular dependency by treating this condition as true
         return true;
       }
@@ -590,6 +600,12 @@ class _DynamicFormState extends State<DynamicForm>
     for (int i = 0; i < widget.formJson.length; i++) {
       final question = widget.formJson[i];
 
+      // NEW: Skip questions with groupWith - they should only appear as part of their parent question's group
+      if (question['groupWith'] != null &&
+          question['groupWith'].toString().isNotEmpty) {
+        continue;
+      }
+
       // Evaluate visibility using the helper function
       if (evaluateShowWhen(question,
           fieldBeingEvaluated: question['name']?.toString())) {
@@ -599,14 +615,92 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Safety check: If no questions are visible, make the first one visible
     if (visible.isEmpty && widget.formJson.isNotEmpty) {
-      if (kDebugMode) {
-        print(
-            "WARNING: No questions visible! Making first question visible by default.");
-      }
       visible.add(0); // Make the first question visible as fallback
     }
 
     return visible;
+  }
+
+  /// Clears form values for questions that are no longer visible due to showWhen conditions
+  void _clearValuesForHiddenQuestions() {
+    // Get current visible questions
+    List<int> currentlyVisible = _getVisibleQuestionIndices();
+    Set<String> currentlyVisibleNames = {};
+
+    // Build set of currently visible question names
+    for (int index in currentlyVisible) {
+      if (index < widget.formJson.length) {
+        final questionName = widget.formJson[index]['name'].toString();
+        currentlyVisibleNames.add(questionName);
+      }
+    }
+
+    // Check each question in the form
+    for (int i = 0; i < widget.formJson.length; i++) {
+      final question = widget.formJson[i];
+      final questionName = question['name'].toString();
+
+      // Skip questions with groupWith - they are handled as part of their parent
+      if (question['groupWith'] != null &&
+          question['groupWith'].toString().isNotEmpty) {
+        continue;
+      }
+
+      // Check if this question was previously visible but is now hidden
+      bool wasPreviouslyVisible =
+          _previouslyVisibleQuestions.contains(questionName);
+      bool isCurrentlyVisible = currentlyVisibleNames.contains(questionName);
+
+      // If the question was visible before but is now hidden and has a showWhen condition, clear its values
+      if (wasPreviouslyVisible &&
+          !isCurrentlyVisible &&
+          question['showWhen'] != null) {
+        if (controller.form.contains(questionName)) {
+          // Clear the main field value
+          final control = controller.form.control(questionName);
+          if (control is FormControl) {
+            // Reset to appropriate default value based on field type
+            if (question['type'] == 'multiselect') {
+              control.value = <String>[];
+            } else if (question['type'] == 'number') {
+              control.value = null;
+            } else {
+              control.value = '';
+            }
+
+            if (kDebugMode) {
+              print("Cleared value for hidden question: $questionName");
+            }
+          }
+
+          // Clear associated comment field if it exists
+          if (question['hasComments'] == true) {
+            final commentFieldName = '${questionName}_comment';
+            if (controller.form.contains(commentFieldName)) {
+              final commentControl = controller.form.control(commentFieldName);
+              if (commentControl is FormControl) {
+                commentControl.value = '';
+                if (kDebugMode) {
+                  print(
+                      "Cleared comment for hidden question: $commentFieldName");
+                }
+              }
+            }
+          }
+
+          // Clear associated file uploads
+          if (controller.uploadedFiles.containsKey(questionName)) {
+            controller.uploadedFiles.remove(questionName);
+            if (kDebugMode) {
+              print("Cleared file uploads for hidden question: $questionName");
+            }
+          }
+        }
+      }
+    }
+
+    // Update the previously visible questions set
+    _previouslyVisibleQuestions = currentlyVisibleNames;
   }
 
   @override
@@ -656,15 +750,15 @@ class _DynamicFormState extends State<DynamicForm>
             currentField['allowDuplicate'] == true;
 
         // For debugging
-        if (kDebugMode) {
-          print("Current question has groupWith: $currentQuestionHasGroupWith");
-          print("Current field: ${currentField['name']}");
-          print("Is referenced by others: $isReferencedByOthers");
-          print("Is parent with children: $isParentWithChildren");
-          if (currentField['allowDuplicate'] == true) {
-            print("AllowDuplicate: ${currentField['allowDuplicate']}");
-          }
-        }
+        // if (kDebugMode) {
+        //   print("Current question has groupWith: $currentQuestionHasGroupWith");
+        //   print("Current field: ${currentField['name']}");
+        //   print("Is referenced by others: $isReferencedByOthers");
+        //   print("Is parent with children: $isParentWithChildren");
+        //   if (currentField['allowDuplicate'] == true) {
+        //     print("AllowDuplicate: ${currentField['allowDuplicate']}");
+        //   }
+        // }
       }
     }
 
@@ -783,22 +877,13 @@ class _DynamicFormState extends State<DynamicForm>
       widgets.addAll(currentGroupFields.map(_buildField).toList());
     }
 
-    // Now collect all duplicates of the current anchor to show below it
-    final List<int> duplicateAnchors = [];
+    // CRITICAL FIX: Group duplicates by timestamp to avoid creating separate cards for each field
+    // Now collect all duplicates by timestamp and create one card per duplicate group
+    final Map<String, List<int>> duplicateGroups = {};
     final timeStampPattern = RegExp(r'_(\d+)$');
 
-    // Extract the base name of the current question (removing any question_X suffix)
-    String baseName = currentAnchorName;
-    final questionPattern = RegExp(r'^question_(\d+)$');
-    if (questionPattern.hasMatch(baseName)) {
-      baseName = baseName.split('_').first;
-    }
-
-    // Find all duplicate anchors that should be shown with this question
+    // Find all duplicate fields that should be shown with this question and group them by timestamp
     for (int i = 0; i < _internalFields.length; i++) {
-      // Skip the current anchor and non-anchor indices
-      if (i == currentAnchor || !_anchorToFieldIndices.containsKey(i)) continue;
-
       final field = _internalFields[i];
       final fieldName = field['name'].toString();
 
@@ -806,6 +891,8 @@ class _DynamicFormState extends State<DynamicForm>
       if (field['isDuplicate'] == true) {
         final match = timeStampPattern.firstMatch(fieldName);
         if (match != null) {
+          final timestamp = match.group(1) ?? '';
+
           // Extract the base name of this duplicate
           String duplicateBaseName = fieldName;
           final lastUnderscore = duplicateBaseName.lastIndexOf('_');
@@ -832,17 +919,20 @@ class _DynamicFormState extends State<DynamicForm>
             }
           }
 
-          if (isRelated) {
-            duplicateAnchors.add(i);
+          if (isRelated && timestamp.isNotEmpty) {
+            // Group duplicates by timestamp
+            duplicateGroups.putIfAbsent(timestamp, () => []).add(i);
           }
         }
       }
     }
 
-    // Build cards for all duplicate anchors
-    for (final anchor in duplicateAnchors) {
-      final indices = _anchorToFieldIndices[anchor] ?? [anchor];
-      final fields = indices.map((i) => _internalFields[i]).toList();
+    // Build one card per duplicate group (timestamp)
+    for (final timestamp in duplicateGroups.keys) {
+      final duplicateIndices = duplicateGroups[timestamp]!;
+
+      // Get all fields for this duplicate group
+      final fields = duplicateIndices.map((i) => _internalFields[i]).toList();
 
       // Add the duplicate card with delete button
       widgets.add(_buildCardForFields(fields, true));
@@ -878,6 +968,51 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   Widget _buildField(Map<String, dynamic> field) {
+    // Special handling for duplicate fields
+    if (field['isDuplicate'] == true) {
+      // Get the current anchor/question
+      final currentAnchor =
+          _groupAnchors.isNotEmpty ? _groupAnchors[_currentGroupPointer] : -1;
+      final String currentAnchorName =
+          currentAnchor >= 0 && currentAnchor < _internalFields.length
+              ? _internalFields[currentAnchor]['name'].toString()
+              : "";
+
+      // Check if this duplicate belongs to the current question
+      if (field['parentQuestionName'] != null) {
+        String parentName = field['parentQuestionName'].toString();
+
+        // Extract base name from current anchor if it's also a duplicate
+        String currentBaseName = currentAnchorName;
+        final timestampPattern = RegExp(r'(.+)_\d+$');
+        final currentMatch = timestampPattern.firstMatch(currentAnchorName);
+        if (currentMatch != null) {
+          currentBaseName = currentMatch.group(1) ?? currentAnchorName;
+        }
+
+        // Only show if it belongs to the current question (compare base names)
+        if (parentName != currentBaseName && parentName != currentAnchorName) {
+          // This duplicate belongs to a different question, don't show it here
+          return const SizedBox.shrink();
+        }
+      } else if (field['parentQuestionIndex'] != null) {
+        int parentIdx = field['parentQuestionIndex'] as int;
+        if (parentIdx != currentAnchor) {
+          // This duplicate belongs to a different question, don't show it here
+          return const SizedBox.shrink();
+        }
+      }
+
+      // This duplicate belongs to this page, so show it regardless of other conditions
+      return _buildFieldWidget(field);
+    }
+
+    // If field has persistVisibility flag set to true, always show it regardless of other conditions
+    // This ensures duplicate fields remain visible during navigation
+    if (field['persistVisibility'] == true) {
+      return _buildFieldWidget(field);
+    }
+
     if (field['showWhen'] != null) {
       return ReactiveFormConsumer(
         builder: (context, form, child) {
@@ -1015,9 +1150,9 @@ class _DynamicFormState extends State<DynamicForm>
                     }
 
                     // Debug info
-                    print(
-                        'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
-                    print('Current form value: ${controller.form.value}');
+                    // print(
+                    //     'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
+                    // print('Current form value: ${controller.form.value}');
 
                     state.didChange(value);
                     state.control.markAsTouched();
@@ -1060,10 +1195,10 @@ class _DynamicFormState extends State<DynamicForm>
 
                   // If any selected value is in disabledOptions, don't show attachments
                   if (isAttachmentDisabled) {
-                    if (kDebugMode) {
-                      print(
-                          "📄 HIDING UPLOAD: At least one selected value is in disableAttachmentsOn list for multiselect");
-                    }
+                    // if (kDebugMode) {
+                    //   print(
+                    //       "📄 HIDING UPLOAD: At least one selected value is in disableAttachmentsOn list for multiselect");
+                    // }
                     return const SizedBox.shrink();
                   }
                   // ELSE: Show file upload (subject to other rules)
@@ -1205,29 +1340,7 @@ class _DynamicFormState extends State<DynamicForm>
                   ),
                 ],
               ),
-              ReactiveTextField(
-                formControlName: '${field['name']}_comment',
-                decoration: InputDecoration(
-                  // No labelText to avoid displaying "comments" in the field
-                  hintText: field['commentHint'] ?? '',
-                  labelStyle: widget.fontFamily,
-                  hintStyle: widget.fontFamily,
-                  // Add error style
-                  errorStyle: widget.fontFamily
-                      .copyWith(color: Colors.red[700], fontSize: 12),
-                ),
-                maxLines: 3,
-                validationMessages: {
-                  'required': (_) => StringConstants.commentsAreRequired,
-                },
-                // Add onSubmitted to validate the form when user submits via keyboard
-                onSubmitted: (_) {
-                  if (widget.showOneByOne &&
-                      !isCurrentQuestionEffectivelyLast()) {
-                    validateCurrentSection();
-                  }
-                },
-              ),
+              _buildCommentField(field),
             ],
           ],
         );
@@ -1236,7 +1349,7 @@ class _DynamicFormState extends State<DynamicForm>
     }
   }
 
-  Widget _buildLabelRow(Map<String, dynamic> field) {
+  Widget _buildLabelRow(Map<String, dynamic> field, [int? index]) {
     if (field['label'] == null) return const SizedBox.shrink();
 
     // Find the anchor index for this field
@@ -1250,9 +1363,8 @@ class _DynamicFormState extends State<DynamicForm>
       }
     }
 
-    // Get question number if available
-    int? questionNumber =
-        anchorIndex != null ? _anchorToQuestionNumber[anchorIndex] : null;
+    // Use the controller's visual numbering logic instead of _anchorToQuestionNumber
+    int? questionNumber = _getQuestionNumberForField(field);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
@@ -1269,28 +1381,39 @@ class _DynamicFormState extends State<DynamicForm>
                 fontFamily: widget.fontFamily?.fontFamily,
               ),
             ),
-          if (questionNumber != null) const SizedBox(height: 4.0),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  field['label'],
+          const SizedBox(height: 8),
+          Text.rich(
+            TextSpan(
+              children: [
+                if (index != null)
+                  TextSpan(
+                    text: '${index + 1}: ', // numbered prefix if index provided
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16.0,
+                      fontFamily: widget.fontFamily?.fontFamily,
+                    ),
+                  ),
+                TextSpan(
+                  text: field['label'],
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16.0,
                     fontFamily: widget.fontFamily?.fontFamily,
                   ),
                 ),
-              ),
-              if (field['required'] == true)
-                Text(' *',
+                if (field['required'] == true)
+                  TextSpan(
+                    text: ' *',
                     style: TextStyle(
                       color: Colors.red,
                       fontWeight: FontWeight.bold,
                       fontSize: 16.0,
                       fontFamily: widget.fontFamily?.fontFamily,
-                    )),
-            ],
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1361,9 +1484,9 @@ class _DynamicFormState extends State<DynamicForm>
                 }
 
                 // Debug info
-                print(
-                    'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
-                print('Current form value: ${controller.form.value}');
+                // print(
+                //     'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
+                // print('Current form value: ${controller.form.value}');
 
                 state.didChange(value);
                 state.control.markAsTouched();
@@ -1395,20 +1518,20 @@ class _DynamicFormState extends State<DynamicForm>
   /// on the input field parameters. The returned widgets include RadioListTile widgets for options,
   /// FileUploadWidget for attachments if specified, and a TextField for comments if specified.
   Widget _buildRadioField(Map<String, dynamic> field) {
-    // Ensure we always use ["Yes", "No"] for empty options
-    final List<dynamic> rawOptions = (field['options'] as List<dynamic>?) ?? [];
+    final List<dynamic> rawOptions = field['options'] ?? [];
+    // Convert options to List<String> to ensure type safety
     final List<String> options =
-        rawOptions.isEmpty ? ['Yes', 'No'] : rawOptions.cast<String>();
+        rawOptions.map((option) => option.toString()).toList();
 
-    if (kDebugMode && rawOptions.isEmpty) {
-      print(
-          "📄 RADIO: Field '${field['name']}' has empty options - defaulting to Yes/No");
+    // Handle case where options might be empty
+    if (options.isEmpty) {
+      // if (kDebugMode) {
+      //   print(
+      //       "📄 RADIO: Field '${field['name']}' has empty options - defaulting to Yes/No");
+      // }
     }
 
-    // SPECIAL HANDLING for question_6 to guarantee the file upload UI appears
-    
-
-    // Regular implementation for other radio fields
+    // Regular implementation for all radio fields
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1445,9 +1568,6 @@ class _DynamicFormState extends State<DynamicForm>
                     // the FileUploadWidget appears or disappears as needed
                     setState(() {
                       // This empty setState will trigger a rebuild
-                      if (kDebugMode) {
-                        print("Forcing UI rebuild for radio button change");
-                      }
                     });
                   }
 
@@ -1469,17 +1589,12 @@ class _DynamicFormState extends State<DynamicForm>
             )
             .toList(),
 
-        // Directly copied from the working dropdown implementation
-        if (field['hasAttachments'] == true)
+        // Add the file upload widget if hasAttachments is true
+        if (field['hasAttachments'] == true) ...[
+          const SizedBox(height: 16),
           ReactiveValueListenableBuilder(
             formControlName: field['name'],
             builder: (context, control, child) {
-              if (kDebugMode) {
-                print(
-                    "\n📄 RADIO UPLOAD: Building file upload UI for ${field['name']}");
-                print("📄 RADIO UPLOAD: Current value=${control.value}");
-              }
-
               // Get the disabledOptions list if it exists
               List<dynamic> disabledOptions =
                   field['disableAttachmentsOn'] is List
@@ -1488,98 +1603,76 @@ class _DynamicFormState extends State<DynamicForm>
                           ? [field['disableAttachmentsOn']]
                           : [];
 
-              // Implementing exact logic as specified:
-              // IF disableAttachmentsOn is NOT empty AND selectedAnswer is in disableAttachmentsOn
-              if (disabledOptions.isNotEmpty &&
-                  disabledOptions.contains(control.value)) {
-                // THEN: Do NOT show file upload
+              // Check if the selected value is in disabledOptions
+              final selectedValue = control.value;
+              final bool isAttachmentDisabled = disabledOptions.isNotEmpty &&
+                  disabledOptions.contains(selectedValue);
+
+              // If the value is in disabledOptions, don't show attachments
+              if (isAttachmentDisabled) {
                 if (kDebugMode) {
                   print(
-                      "📄 HIDING UPLOAD: '${control.value}' is in disableAttachmentsOn list for dropdown");
+                      "📄 RADIO UPLOAD: Hiding upload for ${field['name']} because value $selectedValue is in disabledOptions");
                 }
                 return const SizedBox.shrink();
               }
-              // ELSE: Show file upload (subject to other rules like requireAttachmentsOn or required)
 
-              // Check if the value is in requireAttachmentsOn or enableAttachmentsOn
               bool shouldShowAttachments = false;
               bool isRequired = false;
 
-              // NEW RULE: If hasAttachments is true, disableAttachmentsOn is not empty,
-              // and selected answer is NOT in disableAttachmentsOn, show and require upload
+              // If hasAttachments is true and disabledOptions is not empty and value not in disabledOptions,
+              // show and require upload
               if (field['hasAttachments'] == true &&
                   disabledOptions.isNotEmpty &&
-                  !disabledOptions.contains(control.value)) {
+                  !isAttachmentDisabled) {
                 if (kDebugMode) {
                   print(
-                      "📄 SHOWING UPLOAD: hasAttachments=true and value '${control.value}' is NOT in disableAttachmentsOn for dropdown");
+                      "📄 RADIO UPLOAD: Showing uploads for ${field['name']} because hasAttachments=true and value not in disabledOptions");
                 }
                 shouldShowAttachments = true;
                 isRequired = true;
-              }
-              // Continue with existing conditions if the new rule didn't apply
-              else {
+              } else {
                 // Check requireAttachmentsOn
                 if (field['requireAttachmentsOn'] != null) {
-                  List<dynamic> requiredOptions =
+                  final List<dynamic> requiredOptions =
                       field['requireAttachmentsOn'] is List
                           ? field['requireAttachmentsOn']
                           : [field['requireAttachmentsOn']];
 
-                  if (requiredOptions.contains(control.value)) {
+                  if (requiredOptions.contains(selectedValue)) {
                     shouldShowAttachments = true;
                     isRequired = true;
                   }
                 }
 
-                // Check for legacy attachmentsRequired property
-                if (!shouldShowAttachments &&
-                    field['enableAttachmentsOn'] != null) {
-                  List<dynamic> enabledOptions =
-                      field['enableAttachmentsOn'] is List
-                          ? field['enableAttachmentsOn']
-                          : [field['enableAttachmentsOn']];
+                // If the value is not in requireAttachmentsOn, check if hasAttachments is true
+                if (!shouldShowAttachments && field['hasAttachments'] == true) {
+                  // Check if requireAttachmentsOn is empty or null
+                  bool isRequireAttachmentsOnEmpty =
+                      field['requireAttachmentsOn'] == null ||
+                          (field['requireAttachmentsOn'] is List &&
+                              (field['requireAttachmentsOn'] as List).isEmpty);
 
-                  if (enabledOptions.contains(control.value)) {
+                  // If requireAttachmentsOn is empty or null, show file uploads
+                  if (isRequireAttachmentsOnEmpty) {
                     shouldShowAttachments = true;
                     isRequired = true;
-                  }
-                }
-
-                // If the value is not in requireAttachmentsOn or enableAttachmentsOn, don't show upload
-                if (!shouldShowAttachments) {
-                  // Original fallback check: If hasAttachments is true and none of the above conditions applied
-                  if (field['hasAttachments'] == true) {
-                    // Check if requireAttachmentsOn is empty or null
-                    bool isRequireAttachmentsOnEmpty =
-                        field['requireAttachmentsOn'] == null ||
-                            (field['requireAttachmentsOn'] is List &&
-                                (field['requireAttachmentsOn'] as List)
-                                    .isEmpty);
-
-                    // Check if enableAttachmentsOn is empty or null
-                    bool isEnableAttachmentsOnEmpty =
-                        field['enableAttachmentsOn'] == null ||
-                            (field['enableAttachmentsOn'] is List &&
-                                (field['enableAttachmentsOn'] as List).isEmpty);
-
-                    // If both are empty or null, show file uploads and make them required
-                    if (isRequireAttachmentsOnEmpty &&
-                        isEnableAttachmentsOnEmpty) {
-                      shouldShowAttachments = true;
-                      isRequired = true;
-                    } else {
-                      return const SizedBox.shrink();
-                    }
-                  } else {
-                    return const SizedBox.shrink();
                   }
                 }
               }
 
-              // Ensure uploadedFiles is initialized when needed
-              if (shouldShowAttachments &&
-                  !controller.uploadedFiles.containsKey(field['name'])) {
+              if (!shouldShowAttachments) {
+                return const SizedBox.shrink();
+              }
+
+              if (kDebugMode) {
+                print(
+                    "📄 RADIO UPLOAD: Building file upload UI for ${field['name']}");
+                print("📄 RADIO UPLOAD: Current value=$selectedValue");
+              }
+
+              // Initialize the uploadedFiles for this field if it doesn't exist
+              if (!controller.uploadedFiles.containsKey(field['name'])) {
                 controller.uploadedFiles[field['name']] = [];
                 if (kDebugMode) {
                   print(
@@ -1620,6 +1713,9 @@ class _DynamicFormState extends State<DynamicForm>
               );
             },
           ),
+        ],
+
+        // Add comments section if needed
         if (field['hasComments'] == true) ...[
           const SizedBox(height: 16),
           Row(
@@ -1638,28 +1734,7 @@ class _DynamicFormState extends State<DynamicForm>
               ),
             ],
           ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
-            maxLines: 3,
-            validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
+          _buildCommentField(field),
         ],
       ],
     );
@@ -1880,28 +1955,7 @@ class _DynamicFormState extends State<DynamicForm>
               ),
             ],
           ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
-            maxLines: 3,
-            validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
+          _buildCommentField(field),
         ],
       ],
     );
@@ -2033,28 +2087,7 @@ class _DynamicFormState extends State<DynamicForm>
               ),
             ],
           ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
-            maxLines: 3,
-            validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
+          _buildCommentField(field),
         ],
         if (field['hasAttachments'] == true ||
             field['requireAttachmentsOn'] == true ||
@@ -2337,28 +2370,7 @@ class _DynamicFormState extends State<DynamicForm>
               ),
             ],
           ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
-            maxLines: 3,
-            validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
+          _buildCommentField(field),
         ],
       ],
     );
@@ -2492,28 +2504,7 @@ class _DynamicFormState extends State<DynamicForm>
               ),
             ],
           ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
-            maxLines: 3,
-            validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
+          _buildCommentField(field),
         ],
       ],
     );
@@ -2706,7 +2697,8 @@ class _DynamicFormState extends State<DynamicForm>
               control.value.toString().isEmpty ||
               control.value == 'null')) {
         control.markAsTouched();
-        AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
+        AppSnackBar(context)
+            .showErrorSnackBar(StringConstants.fillRequiredFields);
         return;
       }
 
@@ -2715,14 +2707,8 @@ class _DynamicFormState extends State<DynamicForm>
         final hasFiles =
             controller.uploadedFiles[currentField['name']]?.isNotEmpty ?? false;
         if (!hasFiles) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  '${currentField['label']} ${StringConstants.isRequired}',
-                  style: widget.fontFamily),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.fillRequiredFields);
           return;
         }
       }
@@ -2782,8 +2768,25 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   String getCurrentQuestionNumber() {
-    if (_groupAnchors.isEmpty) return "0/0";
-    return '${_currentGroupPointer + 1}/${_groupAnchors.length}';
+    // Count how many questions are visible
+    List<int> visibleIndices = [];
+    for (int i = 0; i < widget.formJson.length; i++) {
+      if (controller.shouldDisplayQuestion(i)) {
+        visibleIndices.add(i);
+      }
+    }
+
+    if (visibleIndices.isEmpty) return "0/0";
+
+    // Find the current question's position in the visible questions
+    int currentPosition =
+        visibleIndices.indexOf(controller.currentQuestionIndex);
+    if (currentPosition == -1) {
+      // Current question is not visible - unusual state
+      return "${controller.calculateVisualQuestionNumber(controller.currentQuestionIndex)}/${visibleIndices.length}";
+    }
+
+    return "${currentPosition + 1}/${visibleIndices.length}";
   }
 
   int getTotalQuestions() {
@@ -2838,23 +2841,6 @@ class _DynamicFormState extends State<DynamicForm>
         final anchorField = _internalFields[currentAnchor];
         print(
             "Anchor field: ${anchorField['name']}, isDuplicate: ${anchorField['isDuplicate']}");
-
-        // DIAGNOSTIC: Check question_6 structure
-        if (anchorField['name'] == 'question_6') {
-          print("\n=== QUESTION 6 INSPECTION ===");
-          print("question_6 hasAttachments: ${anchorField['hasAttachments']}");
-          print(
-              "question_6 requireAttachmentsOn: ${anchorField['requireAttachmentsOn']}");
-          print(
-              "question_6 current value: ${controller.form.control(anchorField['name']).value}");
-          print(
-              "uploadedFiles contains question_6? ${controller.uploadedFiles.containsKey('question_6')}");
-          if (controller.uploadedFiles.containsKey('question_6')) {
-            print(
-                "uploadedFiles for question_6: ${controller.uploadedFiles['question_6']}");
-          }
-          print("=== END QUESTION 6 INSPECTION ===\n");
-        }
       }
     }
 
@@ -2897,6 +2883,9 @@ class _DynamicFormState extends State<DynamicForm>
             print("Field $fieldName validation failed: ${control.errors}");
           }
           isValid = false;
+          if (field['type'] != 'text' && field['type'] != 'number') {
+            hasCriticalValidationError = true;
+          }
         }
 
         // Check for required file uploads
@@ -2908,6 +2897,7 @@ class _DynamicFormState extends State<DynamicForm>
               print("Required file upload missing for $fieldName");
             }
             isValid = false;
+            hasCriticalValidationError = true;
           }
         }
 
@@ -2996,6 +2986,9 @@ class _DynamicFormState extends State<DynamicForm>
               "Duplicate field $fieldName validation failed: ${control.errors}");
         }
         isValid = false;
+        if (field['type'] != 'text' && field['type'] != 'number') {
+          hasCriticalValidationError = true;
+        }
       }
 
       // Check for required file uploads for duplicates
@@ -3008,6 +3001,7 @@ class _DynamicFormState extends State<DynamicForm>
                 "Required file upload missing for duplicate field $fieldName");
           }
           isValid = false;
+          hasCriticalValidationError = true;
         }
       }
 
@@ -3350,6 +3344,7 @@ class _DynamicFormState extends State<DynamicForm>
     if (kDebugMode) {
       print("\n=== _moveToNextStep - Starting Form Navigation ===");
       print("Current pointer: $_currentGroupPointer");
+      print("Current controller index: ${controller.currentQuestionIndex}");
     }
 
     // FIRST check file upload requirements - do this before other validation
@@ -3359,23 +3354,19 @@ class _DynamicFormState extends State<DynamicForm>
       }
       // Show a snackbar to inform the user that files need to be uploaded
       // Use the _lastValidationErrorField to provide more context if available
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _lastValidationErrorField != null
-                ? 'Please upload the required files for "${_lastValidationErrorField!['label']}"'
-                : StringConstants.uploadRequiredFiles,
-            style: widget.fontFamily,
-          ),
-          backgroundColor: Colors.red[700],
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      String errorMessage = StringConstants.pleaseFillOutAllRequiredAttachments;
+      if (_lastValidationErrorField != null &&
+          _lastValidationErrorField!['hasAttachments'] != true) {
+        errorMessage = StringConstants.pleaseFillOutAllRequiredAttachments;
+      }
+
+      AppSnackBar(context).showErrorSnackBar(errorMessage);
       return;
     }
 
     // Then validate the current section including all duplicate cards
-    if (!validateCurrentSection()) {
+    final validationPassed = validateCurrentSection();
+    if (!validationPassed && hasCriticalValidationError) {
       if (kDebugMode) {
         print("⛔ FIELD VALIDATION FAILED - Navigation blocked");
       }
@@ -3389,35 +3380,118 @@ class _DynamicFormState extends State<DynamicForm>
       print("✅ All validations passed - Proceeding with navigation");
     }
 
-    // Check if current question is visible, skip to next visible if not
-    _updateCurrentQuestionBasedOnVisibility();
+    // Get the current anchor and find the corresponding original question
+    if (_currentGroupPointer >= _groupAnchors.length) {
+      if (kDebugMode) {
+        print("Current group pointer out of bounds");
+      }
+      return;
+    }
 
-    // Proceed with moving to the next step
-    if (_currentGroupPointer < _groupAnchors.length - 1) {
+    final currentAnchor = _groupAnchors[_currentGroupPointer];
+    final currentAnchorField = _internalFields[currentAnchor];
+    final currentAnchorName = currentAnchorField['name'].toString();
+
+    // Find the original question index in formJson that corresponds to this anchor
+    int originalQuestionIndex = -1;
+    for (int i = 0; i < widget.formJson.length; i++) {
+      final question = widget.formJson[i];
+      final questionName = question['name'].toString();
+
+      // Check if this is the same question (handle both original and duplicate names)
+      if (questionName == currentAnchorName) {
+        originalQuestionIndex = i;
+        break;
+      }
+
+      // For duplicates, check if the base name matches
+      final timestampPattern = RegExp(r'(.+)_\d+$');
+      final match = timestampPattern.firstMatch(currentAnchorName);
+      if (match != null) {
+        final baseName = match.group(1) ?? '';
+        if (questionName == baseName) {
+          originalQuestionIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (originalQuestionIndex == -1) {
+      if (kDebugMode) {
+        print(
+            "Could not find original question for anchor: $currentAnchorName");
+      }
+      return;
+    }
+
+    if (kDebugMode) {
+      print("Found original question at index: $originalQuestionIndex");
+    }
+
+    // Update the controller to point to this question
+    controller.currentQuestionIndex = originalQuestionIndex;
+
+    // Use the controller's logic to determine the next question
+    // This will handle all the branching logic and navigation history
+    bool proceeded = controller.validateAndProceed(context);
+
+    if (proceeded) {
       setState(() {
-        _currentGroupPointer++;
+        // Find the anchor that corresponds to the controller's NEW current index
+        int matchingAnchorPointer = -1;
+        for (int i = 0; i < _groupAnchors.length; i++) {
+          final anchorIndex = _groupAnchors[i];
+          final anchorField = _internalFields[anchorIndex];
+          final anchorName = anchorField['name'].toString();
 
-        // Update the controller index to match the new group
-        if (_groupAnchors.isNotEmpty) {
-          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+          // Check if this anchor corresponds to the controller's current question
+          if (controller.currentQuestionIndex < widget.formJson.length) {
+            final controllerQuestionName = widget
+                .formJson[controller.currentQuestionIndex]['name']
+                .toString();
 
-          // Check if we need to skip this next question too
-          _updateCurrentQuestionBasedOnVisibility();
+            // Direct match
+            if (anchorName == controllerQuestionName) {
+              matchingAnchorPointer = i;
+              break;
+            }
 
+            // For duplicates, check base name
+            final timestampPattern = RegExp(r'(.+)_\d+$');
+            final match = timestampPattern.firstMatch(anchorName);
+            if (match != null) {
+              final baseName = match.group(1) ?? '';
+              if (baseName == controllerQuestionName) {
+                matchingAnchorPointer = i;
+                break;
+              }
+            }
+          }
+        }
+
+        if (matchingAnchorPointer != -1) {
+          _currentGroupPointer = matchingAnchorPointer;
           if (kDebugMode) {
             print(
-                "➡️ Navigated to next question: ${_internalFields[_groupAnchors[_currentGroupPointer]]['name']}");
+                "Updated group pointer to $_currentGroupPointer to match controller index ${controller.currentQuestionIndex}");
+            print(
+                "➡️ Navigated to question: ${_internalFields[_groupAnchors[_currentGroupPointer]]['name']}");
           }
+        } else {
+          if (kDebugMode) {
+            print(
+                "Warning: Could not find anchor for controller index ${controller.currentQuestionIndex}");
+          }
+
+          // If we can't find a matching anchor, check if current question is visible
+          _updateCurrentQuestionBasedOnVisibility();
         }
       });
     } else {
-      // We're at the last question, show submit button
-      setState(() {
-        // This will trigger the UI to show the submit button
-        if (kDebugMode) {
-          print("🏁 Reached final question - Submit button will be shown");
-        }
-      });
+      if (kDebugMode) {
+        print(
+            "⚠️ Controller validateAndProceed returned false - Navigation blocked");
+      }
     }
   }
 
@@ -3425,6 +3499,8 @@ class _DynamicFormState extends State<DynamicForm>
   void moveToNextQuestion(BuildContext context) {
     if (kDebugMode) {
       print("\n=== moveToNextQuestion - Starting Form Navigation ===");
+      print("Current group pointer: $_currentGroupPointer");
+      print("Current controller index: ${controller.currentQuestionIndex}");
     }
 
     // FIRST check file upload requirements - do this before other validation
@@ -3434,49 +3510,142 @@ class _DynamicFormState extends State<DynamicForm>
       }
       // Show a snackbar to inform the user that files need to be uploaded
       // Use the _lastValidationErrorField to provide more context if available
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _lastValidationErrorField != null
-                ? 'Please upload the required files for "${_lastValidationErrorField!['label']}"'
-                : StringConstants.uploadRequiredFiles,
-            style: widget.fontFamily,
-          ),
-          backgroundColor: Colors.red[700],
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      String errorMessage = StringConstants.uploadRequiredFiles;
+      if (_lastValidationErrorField != null &&
+          _lastValidationErrorField!['hasAttachments'] != true) {
+        errorMessage = StringConstants.pleaseFillOutAllRequiredAttachments;
+      }
+
+      AppSnackBar(context).showErrorSnackBar(errorMessage);
       return;
     }
 
-    // Check if current question is visible, skip to next visible if not
-    _updateCurrentQuestionBasedOnVisibility();
+    // NEW LOGIC: Instead of using controller.validateAndProceed directly,
+    // we need to handle navigation at the group level to avoid duplicate issues
 
-    // Now proceed with normal navigation
-    if (_currentGroupPointer < _groupAnchors.length - 1) {
+    // First validate the current section (including all duplicates)
+    final validationPassed = validateCurrentSection();
+    if (!validationPassed && hasCriticalValidationError) {
+      if (kDebugMode) {
+        print("⛔ FIELD VALIDATION FAILED - Navigation blocked");
+      }
+      // Show a snackbar to inform the user that validation failed
+      AppSnackBar(context)
+          .showErrorSnackBar(StringConstants.fillRequiredFields);
+      return;
+    }
+
+    // Get the current anchor and find the corresponding original question
+    if (_groupAnchors.isEmpty || _currentGroupPointer >= _groupAnchors.length) {
+      if (kDebugMode) {
+        print("No valid anchors available for navigation");
+      }
+      return;
+    }
+
+    final currentAnchor = _groupAnchors[_currentGroupPointer];
+    final currentAnchorField = _internalFields[currentAnchor];
+    final currentAnchorName = currentAnchorField['name'].toString();
+
+    // Find the original question index in formJson that corresponds to this anchor
+    int originalQuestionIndex = -1;
+    for (int i = 0; i < widget.formJson.length; i++) {
+      final question = widget.formJson[i];
+      final questionName = question['name'].toString();
+
+      // Check if this is the same question (handle both original and duplicate names)
+      if (questionName == currentAnchorName) {
+        originalQuestionIndex = i;
+        break;
+      }
+
+      // For duplicates, check if the base name matches
+      final timestampPattern = RegExp(r'(.+)_\d+$');
+      final match = timestampPattern.firstMatch(currentAnchorName);
+      if (match != null) {
+        final baseName = match.group(1) ?? '';
+        if (questionName == baseName) {
+          originalQuestionIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (originalQuestionIndex == -1) {
+      if (kDebugMode) {
+        print(
+            "Could not find original question for anchor: $currentAnchorName");
+      }
+      return;
+    }
+
+    if (kDebugMode) {
+      print("Found original question at index: $originalQuestionIndex");
+    }
+
+    // Update the controller to point to this question and validate it
+    controller.currentQuestionIndex = originalQuestionIndex;
+
+    // Use the controller's validateAndProceed method to handle navigation
+    bool proceeded = controller.validateAndProceed(context);
+
+    if (proceeded) {
       setState(() {
-        _currentGroupPointer++;
-        // Update the controller index to match the new group
-        if (_groupAnchors.isNotEmpty) {
-          controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+        // Find the anchor that corresponds to the controller's NEW current index
+        int matchingAnchorPointer = -1;
+        for (int i = 0; i < _groupAnchors.length; i++) {
+          final anchorIndex = _groupAnchors[i];
+          final anchorField = _internalFields[anchorIndex];
+          final anchorName = anchorField['name'].toString();
 
-          // Check if we need to skip this question too
-          _updateCurrentQuestionBasedOnVisibility();
+          // Check if this anchor corresponds to the controller's current question
+          if (controller.currentQuestionIndex < widget.formJson.length) {
+            final controllerQuestionName = widget
+                .formJson[controller.currentQuestionIndex]['name']
+                .toString();
 
+            // Direct match
+            if (anchorName == controllerQuestionName) {
+              matchingAnchorPointer = i;
+              break;
+            }
+
+            // For duplicates, check base name
+            final timestampPattern = RegExp(r'(.+)_\d+$');
+            final match = timestampPattern.firstMatch(anchorName);
+            if (match != null) {
+              final baseName = match.group(1) ?? '';
+              if (baseName == controllerQuestionName) {
+                matchingAnchorPointer = i;
+                break;
+              }
+            }
+          }
+        }
+
+        if (matchingAnchorPointer != -1) {
+          _currentGroupPointer = matchingAnchorPointer;
           if (kDebugMode) {
             print(
-                "➡️ Navigated to next question: ${_internalFields[_groupAnchors[_currentGroupPointer]]['name']}");
+                "Updated group pointer to $_currentGroupPointer to match controller index ${controller.currentQuestionIndex}");
+            print(
+                "➡️ Navigated to question: ${_internalFields[_groupAnchors[_currentGroupPointer]]['name']}");
           }
+        } else {
+          if (kDebugMode) {
+            print(
+                "Warning: Could not find anchor for controller index ${controller.currentQuestionIndex}");
+          }
+
+          // If we can't find a matching anchor, check if current question is visible
+          _updateCurrentQuestionBasedOnVisibility();
         }
       });
     } else {
-      // We're at the last question, show submit button
-      setState(() {
-        // This will trigger the UI to show the submit button
-        if (kDebugMode) {
-          print("🏁 Reached final question - Submit button will be shown");
-        }
-      });
+      if (kDebugMode) {
+        print(
+            "⚠️ Controller validateAndProceed returned false - Navigation blocked");
+      }
     }
   }
 
@@ -3512,29 +3681,34 @@ class _DynamicFormState extends State<DynamicForm>
       final field = _internalFields[i];
       final String fieldName = field['name'].toString();
       final String? groupWith = field['groupWith']?.toString();
+      final bool isDuplicate = field['isDuplicate'] == true;
 
       if (groupWith != null && groupWith.isNotEmpty) {
         // This field refers to a parent
         childFieldIndices.add(i); // Mark as a child field
 
-        // Resolve ultimate parent to handle chained relationships
-        String ultimateParent = _resolveUltimateParent(groupWith);
+        // CRITICAL FIX: Only add non-duplicate child fields to the original parent's group
+        // Duplicate child fields should only be grouped with their duplicate parent
+        if (!isDuplicate) {
+          // Resolve ultimate parent to handle chained relationships
+          String ultimateParent = _resolveUltimateParent(groupWith);
 
-        // Check if parent field exists
-        if (fieldNameToIndex.containsKey(ultimateParent)) {
-          int parentIndex = fieldNameToIndex[ultimateParent]!;
+          // Check if parent field exists
+          if (fieldNameToIndex.containsKey(ultimateParent)) {
+            int parentIndex = fieldNameToIndex[ultimateParent]!;
 
-          // Add this field as a child of the ultimate parent
-          anchorToChildIndices.putIfAbsent(ultimateParent, () => []).add(i);
+            // Add this field as a child of the ultimate parent
+            anchorToChildIndices.putIfAbsent(ultimateParent, () => []).add(i);
 
-          // Debug
-          if (kDebugMode && ultimateParent != groupWith) {
+            // Debug
+            if (kDebugMode && ultimateParent != groupWith) {
+              print(
+                  "Chain detected: $fieldName -> $groupWith -> $ultimateParent");
+            }
+          } else if (kDebugMode) {
             print(
-                "Chain detected: $fieldName -> $groupWith -> $ultimateParent");
+                "Warning: Field '$fieldName' references non-existent parent '$ultimateParent'");
           }
-        } else if (kDebugMode) {
-          print(
-              "Warning: Field '$fieldName' references non-existent parent '$ultimateParent'");
         }
       }
     }
@@ -3585,7 +3759,9 @@ class _DynamicFormState extends State<DynamicForm>
       _anchorToFieldIndices[i] = groupIndices;
     }
 
-    // Handle timestamp-based duplicates
+    // CRITICAL FIX: Do NOT add duplicate fields as separate anchors
+    // Instead, store them in _anchorToFieldIndices only for rendering purposes
+    // This ensures duplicates appear as cards on the same page, not as separate pages
     for (final groupKey in timestampGroups.keys) {
       final fieldIndices = timestampGroups[groupKey]!;
       if (fieldIndices.isEmpty) continue;
@@ -3593,12 +3769,8 @@ class _DynamicFormState extends State<DynamicForm>
       // Find the first field as the anchor for this duplicate set
       final firstIndex = fieldIndices.reduce((a, b) => a < b ? a : b);
 
-      // Only add as an anchor if it's not already a child of another field
-      if (!childFieldIndices.contains(firstIndex)) {
-        _groupAnchors.add(firstIndex);
-      }
-
-      // Always store all fields in this timestamp group under this anchor
+      // IMPORTANT: Do NOT add duplicates to _groupAnchors
+      // Only store them in _anchorToFieldIndices for rendering
       _anchorToFieldIndices[firstIndex] = List.from(fieldIndices);
     }
 
@@ -3608,79 +3780,19 @@ class _DynamicFormState extends State<DynamicForm>
     // Map to track base field names to their question numbers
     Map<String, int> baseNameToQuestionNumber = {};
 
-    // First pass: assign question numbers to non-duplicate anchors
+    // Assign question numbers only to non-duplicate anchors
     int questionNumber = 1;
     for (int i = 0; i < _groupAnchors.length; i++) {
       int anchorIndex = _groupAnchors[i];
       String fieldName = _internalFields[anchorIndex]['name'].toString();
-      bool isDuplicate = _internalFields[anchorIndex]['isDuplicate'] == true;
 
-      if (!isDuplicate) {
-        _anchorToQuestionNumber[anchorIndex] = questionNumber;
-        baseNameToQuestionNumber[fieldName] = questionNumber;
-        questionNumber++;
-      }
-    }
-
-    // Second pass: assign question numbers to duplicate anchors
-    for (int i = 0; i < _groupAnchors.length; i++) {
-      int anchorIndex = _groupAnchors[i];
-      String fieldName = _internalFields[anchorIndex]['name'].toString();
-      bool isDuplicate = _internalFields[anchorIndex]['isDuplicate'] == true;
-
-      if (isDuplicate) {
-        // For duplicates, try to find the original field they were duplicated from
-        final match = timestampPattern.firstMatch(fieldName);
-        if (match != null) {
-          // Extract the base name (removing timestamp suffix)
-          String baseName = match.group(1) ?? '';
-
-          if (baseNameToQuestionNumber.containsKey(baseName)) {
-            // Use the same question number as the original field
-            _anchorToQuestionNumber[anchorIndex] =
-                baseNameToQuestionNumber[baseName]!;
-
-            if (kDebugMode) {
-              print(
-                  "Assigned question number ${baseNameToQuestionNumber[baseName]} to duplicate field '$fieldName' from original '$baseName'");
-            }
-          } else {
-            // If original field not found, assign a new number
-            _anchorToQuestionNumber[anchorIndex] = questionNumber++;
-
-            if (kDebugMode) {
-              print(
-                  "Assigned new question number to duplicate field '$fieldName' - original field not found");
-            }
-          }
-        } else {
-          // Not a standard timestamp-based duplicate, assign a new number
-          _anchorToQuestionNumber[anchorIndex] = questionNumber++;
-        }
-      }
+      _anchorToQuestionNumber[anchorIndex] = questionNumber;
+      baseNameToQuestionNumber[fieldName] = questionNumber;
+      questionNumber++;
     }
 
     // Reset the group pointer
     _currentGroupPointer = 0;
-
-    // Debug the group structure if in debug mode
-    if (kDebugMode) {
-      print("\n=== Group Structure After Recomputation ===");
-      print("Total anchors: ${_groupAnchors.length}");
-
-      for (int i = 0; i < _groupAnchors.length; i++) {
-        int anchorIndex = _groupAnchors[i];
-        String anchorName = _internalFields[anchorIndex]['name'].toString();
-        List<int> groupIndices =
-            _anchorToFieldIndices[anchorIndex] ?? [anchorIndex];
-        int qNumber = _anchorToQuestionNumber[anchorIndex] ?? -1;
-
-        print(
-            "Anchor #${i + 1}: '${anchorName}' (index: $anchorIndex, question: $qNumber)");
-        print(
-            "  Group fields: ${groupIndices.map((idx) => _internalFields[idx]['name']).toList()}");
-      }
-    }
 
     // Update controller index after a brief delay to ensure state is consistent
     if (_groupAnchors.isNotEmpty) {
@@ -3714,7 +3826,7 @@ class _DynamicFormState extends State<DynamicForm>
     final List<Map<String, dynamic>> currentGroupFields =
         currentIndices.map((i) => _internalFields[i]).toList();
 
-    // NEW LOGIC: Check if this anchor field is referenced by any other field via groupWith
+    // Check if this anchor field is referenced by any other field via groupWith
     // or if it has children in its group
     bool shouldShowCard = false;
 
@@ -3746,22 +3858,13 @@ class _DynamicFormState extends State<DynamicForm>
       widgets.addAll(currentGroupFields.map(_buildField).toList());
     }
 
-    // Now collect all duplicates of the current anchor to show below it
-    final List<int> duplicateAnchors = [];
+    // CRITICAL FIX: Group duplicates by timestamp to avoid creating separate cards for each field
+    // Now collect all duplicates by timestamp and create one card per duplicate group
+    final Map<String, List<int>> duplicateGroups = {};
     final timeStampPattern = RegExp(r'_(\d+)$');
 
-    // Extract the base name of the current question (removing any question_X suffix)
-    String baseName = currentAnchorName;
-    final questionPattern = RegExp(r'^question_(\d+)$');
-    if (questionPattern.hasMatch(baseName)) {
-      baseName = baseName.split('_').first;
-    }
-
-    // Find all duplicate anchors that should be shown with this question
+    // Find all duplicate fields that should be shown with this question and group them by timestamp
     for (int i = 0; i < _internalFields.length; i++) {
-      // Skip the current anchor and non-anchor indices
-      if (i == currentAnchor || !_anchorToFieldIndices.containsKey(i)) continue;
-
       final field = _internalFields[i];
       final fieldName = field['name'].toString();
 
@@ -3769,6 +3872,8 @@ class _DynamicFormState extends State<DynamicForm>
       if (field['isDuplicate'] == true) {
         final match = timeStampPattern.firstMatch(fieldName);
         if (match != null) {
+          final timestamp = match.group(1) ?? '';
+
           // Extract the base name of this duplicate
           String duplicateBaseName = fieldName;
           final lastUnderscore = duplicateBaseName.lastIndexOf('_');
@@ -3795,17 +3900,20 @@ class _DynamicFormState extends State<DynamicForm>
             }
           }
 
-          if (isRelated) {
-            duplicateAnchors.add(i);
+          if (isRelated && timestamp.isNotEmpty) {
+            // Group duplicates by timestamp
+            duplicateGroups.putIfAbsent(timestamp, () => []).add(i);
           }
         }
       }
     }
 
-    // Build cards for all duplicate anchors
-    for (final anchor in duplicateAnchors) {
-      final indices = _anchorToFieldIndices[anchor] ?? [anchor];
-      final fields = indices.map((i) => _internalFields[i]).toList();
+    // Build one card per duplicate group (timestamp)
+    for (final timestamp in duplicateGroups.keys) {
+      final duplicateIndices = duplicateGroups[timestamp]!;
+
+      // Get all fields for this duplicate group
+      final fields = duplicateIndices.map((i) => _internalFields[i]).toList();
 
       // Add the duplicate card with delete button
       widgets.add(_buildCardForFields(fields, true));
@@ -3842,6 +3950,10 @@ class _DynamicFormState extends State<DynamicForm>
       final anchor = _groupAnchors[_currentGroupPointer];
       final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
 
+      // Get the current anchor field's name for reference when creating duplicates
+      final String currentAnchorName =
+          _internalFields[anchor]['name'].toString();
+
       if (indices.isEmpty) {
         if (kDebugMode) {
           print('No fields to duplicate');
@@ -3876,6 +3988,19 @@ class _DynamicFormState extends State<DynamicForm>
 
         // Mark as duplicate for delete button visibility
         fieldCopy['isDuplicate'] = true;
+
+        // Add a persistent ID to help track duplicates across state changes
+        fieldCopy['duplicationId'] = millis.toString();
+
+        // Set persistVisibility to true to keep the duplicate visible during navigation
+        fieldCopy['persistVisibility'] = true;
+
+        // CRITICAL FIX: Store which question anchor this duplicate belongs to
+        // This will prevent duplicates from appearing on multiple pages
+        fieldCopy['parentQuestionName'] = currentAnchorName;
+
+        // Also store the parent question index to help with page association
+        fieldCopy['parentQuestionIndex'] = anchor;
 
         // IMPORTANT: Make sure we preserve the 'required' status
         if (originalField['required'] == true) {
@@ -4088,20 +4213,48 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   int? _getQuestionNumberForField(Map<String, dynamic> field) {
-    // Find the anchor index for this field
-    int? anchorIndex;
-    for (var entry in _anchorToFieldIndices.entries) {
-      if (entry.value.any((idx) =>
-          idx < _internalFields.length &&
-          _internalFields[idx]['name'] == field['name'])) {
-        anchorIndex = entry.key;
+    // First find the index of this field in the formJson array to use the controller's visual numbering
+    int formIndex = -1;
+    for (int i = 0; i < widget.formJson.length; i++) {
+      if (widget.formJson[i]['name'] == field['name']) {
+        formIndex = i;
         break;
       }
     }
 
-    // Get question number if available
-    return anchorIndex != null ? _anchorToQuestionNumber[anchorIndex] : null;
+    // If we found the field in the formJson, use the controller's visual numbering
+    if (formIndex != -1) {
+      return controller.calculateVisualQuestionNumber(formIndex);
+    }
+
+    // Fallback: For fields not directly in formJson (like duplicates or children),
+    // find associated original field index and use its numbering
+    String originalFieldName = field['name'].toString();
+
+    // If this is a duplicate field with timestamp suffix, extract the base name
+    final timestampPattern = RegExp(r'(.+)_\d+$');
+    final match = timestampPattern.firstMatch(originalFieldName);
+    if (match != null) {
+      originalFieldName = match.group(1) ?? originalFieldName;
+    }
+
+    // Find the original field in formJson
+    for (int i = 0; i < widget.formJson.length; i++) {
+      if (widget.formJson[i]['name'] == originalFieldName) {
+        return controller.calculateVisualQuestionNumber(i);
+      }
+    }
+
+    // Last resort fallback: return null if we can't determine the question number
+    if (kDebugMode) {
+      print(
+          "Warning: Could not determine question number for field: ${field['name']}");
+    }
+    return null;
   }
+
+  // The _recomputeGroupStructure method is already implemented earlier in the code at line 3547.
+  // This was a duplicate declaration that has been removed to fix the lint error.
 
   // Ensure form controls have the correct validation rules
   void _ensureFormControlsHaveCorrectValidation() {
@@ -4267,6 +4420,13 @@ class _DynamicFormState extends State<DynamicForm>
 
   // Build error message for attachment validation errors
   Widget _buildErrorMessage() {
+    // Check if the field that caused the error has hasAttachments=true
+    // If so, don't show the error message
+    if (_lastValidationErrorField != null &&
+        _lastValidationErrorField!['hasAttachments'] == true) {
+      return const SizedBox.shrink(); // Don't show error message
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Text(
@@ -4341,6 +4501,32 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Return all fields in the current question group
     return fieldIndices.map((idx) => _internalFields[idx]).toList();
+  }
+
+  Widget _buildCommentField(Map<String, dynamic> field) {
+    return ReactiveTextField(
+      formControlName: '${field['name']}_comment',
+      decoration: InputDecoration(
+        // No labelText to avoid displaying "comments" in the field
+        hintText: field['commentHint'] ?? '',
+        labelStyle: widget.fontFamily,
+        hintStyle: widget.fontFamily,
+        // Add error style
+        errorStyle:
+            widget.fontFamily.copyWith(color: Colors.red[700], fontSize: 12),
+        focusedBorder: UnderlineInputBorder(
+          borderSide: BorderSide(color: AppColors.appBlackDark),
+        ),
+      ),
+      validationMessages: {
+        'required': (_) => StringConstants.commentsAreRequired,
+      },
+      onSubmitted: (_) {
+        if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+          validateCurrentSection();
+        }
+      },
+    );
   }
 }
 
@@ -5095,7 +5281,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Question number if provided and not just an attachment field
-        if (widget.questionNumber != null && (!widget.hasAttachments))
+        if (widget.questionNumber != null && !widget.hasAttachments)
           Text(
             'Question ${widget.questionNumber}',
             style: TextStyle(
@@ -5109,27 +5295,27 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
 
         // Field label if this is a standalone field (not just an attachment widget)
         if (!widget.hasAttachments)
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  widget.fieldLabel,
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: widget.fieldLabel,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16.0,
                     fontFamily: widget.fontFamily?.fontFamily,
                   ),
                 ),
-              ),
-              if (widget.isRequired)
-                Text(
-                  '*',
-                  style: widget.fontFamily.copyWith(
-                    color: const Color.fromARGB(255, 222, 75, 64),
-                    fontSize: 16,
+                if (widget.isRequired)
+                  TextSpan(
+                    text: ' *',
+                    style: TextStyle(
+                      color: const Color.fromARGB(255, 222, 75, 64),
+                      fontSize: 16,
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
 
         // Clear vertical spacing
@@ -5923,13 +6109,8 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
 
         // Show success message
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('PDF opened in a new tab'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 1),
-            ),
-          );
+          AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.pdfOpenedInNewTab);
         }
 
         // Small delay before returning
@@ -5937,23 +6118,15 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
       } catch (e) {
         // Show error message
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error opening PDF: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.pdfOpenedInNewTab);
         }
         print('Error opening PDF in new tab: $e');
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Opening in new tab is only available on web platforms'),
-          ),
-        );
+        AppSnackBar(context)
+            .showErrorSnackBar(StringConstants.pdfOpenedInNewTab);
       }
     }
   }
@@ -6008,23 +6181,15 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
 
         // Show success message
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Download started'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 1),
-            ),
-          );
+          AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.downloadStarted);
         }
       } else {
         // Mobile platform - show a temporary message
         // In a real app, you'd implement platform-specific download
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('File saved to downloads folder'),
-            ),
-          );
+          AppSnackBar(context)
+              .showErrorSnackBar(StringConstants.fileSavedToDownloadsFolder);
         }
       }
 
@@ -6033,12 +6198,8 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
     } catch (e) {
       // Show error message
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error downloading file: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        AppSnackBar(context)
+            .showErrorSnackBar(StringConstants.errorDownloadingFile);
       }
       print('Error downloading file: $e');
     }

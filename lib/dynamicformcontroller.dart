@@ -16,6 +16,7 @@ class DynamicFormController extends ChangeNotifier {
   late FormGroup form;
   Map<String, List<Map<String, dynamic>>> uploadedFiles = {};
   int _currentQuestionIndex = 0;
+  List<int> _navigationHistory = [];
   Map<String, dynamic> _values = {};
   final List<FormFieldModel> _fields;
   final bool isManageToCheckPress;
@@ -139,6 +140,18 @@ class DynamicFormController extends ChangeNotifier {
       print('Initial form values: ${form.value}');
       print('Initial uploaded files: $uploadedFiles');
     }
+
+    // Ensure we start with a visible question
+    if (!shouldDisplayQuestion(_currentQuestionIndex)) {
+      int nextVisibleIndex = findNextVisibleQuestionIndex();
+      if (nextVisibleIndex != -1) {
+        _currentQuestionIndex = nextVisibleIndex;
+        if (kDebugMode) {
+          print(
+              'First question not visible, moving to index: $_currentQuestionIndex');
+        }
+      }
+    }
   }
 
   List<Validator<dynamic>> _getValidators(
@@ -147,9 +160,9 @@ class DynamicFormController extends ChangeNotifier {
 
     if (isRequired) {
       validatorsList.add(Validators.required);
-      if (kDebugMode) {
-        print("Adding required validator for field ${field?['name']}");
-      }
+      // if (kDebugMode) {
+      //   print("Adding required validator for field ${field?['name']}");
+      // }
     }
 
     if (field?['type'] == 'number') {
@@ -215,8 +228,22 @@ class DynamicFormController extends ChangeNotifier {
   }
 
   bool validateAndProceed(BuildContext context) {
+    // Ensure we're not out of bounds
+    if (_currentQuestionIndex < 0 || _currentQuestionIndex >= formJson.length) {
+      if (kDebugMode) {
+        print(
+            "Error: Current question index out of bounds: $_currentQuestionIndex");
+      }
+      return false;
+    }
+
     final field = formJson[_currentQuestionIndex];
     final currentFieldName = field['name'];
+
+    if (kDebugMode) {
+      print("Validating field: $currentFieldName");
+    }
+
     final currentControl = form.control(currentFieldName);
 
     currentControl.markAsTouched();
@@ -230,6 +257,7 @@ class DynamicFormController extends ChangeNotifier {
       return false;
     }
 
+    // Validate comments if required
     if (field['hasComments'] == true) {
       final commentControlName = '${currentFieldName}_comment';
       if (form.contains(commentControlName)) {
@@ -246,6 +274,7 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
+    // Validate file uploads if required
     if (field['hasAttachments'] != false) {
       final selectedValue = currentControl.value;
 
@@ -285,7 +314,7 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
+        // Check: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
         // require file upload
         if (!fileRequired && field['hasAttachments'] == true) {
           // Check if requireAttachmentsOn is an empty array
@@ -312,12 +341,6 @@ class DynamicFormController extends ChangeNotifier {
           fileRequired = true;
         }
 
-        if (!fileRequired && field['attachmentsRequired'] == true) {
-          print(
-              "Legacy property 'attachmentsRequired' detected - treating as requireAttachmentsOn");
-          fileRequired = true;
-        }
-
         if (fileRequired &&
             (uploadedFiles[currentFieldName]?.isEmpty ?? true)) {
           AppSnackBar(context)
@@ -328,6 +351,7 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
+    // Validate multiselect fields
     if (field['type'] == 'multiselect' && field['required'] == true) {
       if (currentControl.value == null) {
         AppSnackBar(context)
@@ -346,75 +370,105 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    int nextQuestionIndex = findNextVisibleQuestionIndex();
+    // Field validation passed, add current question to navigation history before moving
+    _navigationHistory.add(_currentQuestionIndex);
 
-    if (nextQuestionIndex != -1) {
-      _currentQuestionIndex = nextQuestionIndex;
-      print("Navigation: Moving to question at index $nextQuestionIndex");
-    } else if (_currentQuestionIndex < formJson.length - 1) {
-      _currentQuestionIndex++;
-      print(
-          "Navigation: No conditional question found, moving to next question ${_currentQuestionIndex}");
+    // Check for branching rules first - they take precedence
+    if (field['branching'] != null &&
+        field['branching'] is Map<String, dynamic>) {
+      final Map<String, dynamic> branchingRules = field['branching'];
+      final String? selectedValue = currentControl.value?.toString();
+
+      if (selectedValue != null && branchingRules.containsKey(selectedValue)) {
+        final dynamic targetQuestion = branchingRules[selectedValue];
+
+        if (targetQuestion == 'end') {
+          // This branch leads to the end of the form - show submit button
+          if (kDebugMode) {
+            print("Navigation: Branching to 'end' - form complete");
+          }
+          notifyListeners();
+          return true;
+        } else if (targetQuestion is String) {
+          // Find the index of the target question
+          int targetIndex = -1;
+          for (int i = 0; i < formJson.length; i++) {
+            if (formJson[i]['name'] == targetQuestion) {
+              targetIndex = i;
+              break;
+            }
+          }
+
+          if (targetIndex != -1) {
+            if (shouldDisplayQuestion(targetIndex)) {
+              _currentQuestionIndex = targetIndex;
+              if (kDebugMode) {
+                print(
+                    "Navigation: Branching to question '$targetQuestion' at index $targetIndex");
+              }
+              notifyListeners();
+              return true;
+            } else {
+              if (kDebugMode) {
+                print(
+                    "Navigation: Branching target '$targetQuestion' is not visible - finding next visible question");
+              }
+              // The branching target is not visible, find next visible
+              int nextVisibleIndex = findNextVisibleQuestionIndex(targetIndex);
+              if (nextVisibleIndex != -1) {
+                _currentQuestionIndex = nextVisibleIndex;
+                if (kDebugMode) {
+                  print(
+                      "Navigation: Found next visible question at index $nextVisibleIndex");
+                }
+                notifyListeners();
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // No branching or branching target not found/valid, find next visible question
+    int nextVisibleIndex = findNextVisibleQuestionIndex();
+
+    if (nextVisibleIndex != -1) {
+      _currentQuestionIndex = nextVisibleIndex;
+      if (kDebugMode) {
+        print(
+            "Navigation: Moving to next visible question at index $nextVisibleIndex");
+      }
+    } else {
+      // No more visible questions - we're at the end of the form
+      if (kDebugMode) {
+        print("Navigation: No more visible questions found - form complete");
+      }
     }
 
     notifyListeners();
     return true;
   }
 
-  int findNextVisibleQuestionIndex() {
-    print("Finding next visible question after ${_currentQuestionIndex}");
+  int findNextVisibleQuestionIndex([int? startFromIndex]) {
+    int startIndex = startFromIndex ?? _currentQuestionIndex;
+    if (kDebugMode) {
+      print("Finding next visible question after index $startIndex");
+    }
 
-    for (int i = _currentQuestionIndex + 1; i < formJson.length; i++) {
-      final question = formJson[i];
-      final questionName = question['name'];
-
-      if (question['showWhen'] == null) {
-        print("Question $questionName has no conditions - will be shown");
-        return i;
-      }
-
-      final Map<String, dynamic> conditions = question['showWhen'];
-      bool shouldShow = true;
-
-      conditions.forEach((dependentField, expectedValues) {
-        if (!form.contains(dependentField)) {
-          print("Field $dependentField not found in form");
-          shouldShow = false;
-          return;
+    for (int i = startIndex + 1; i < formJson.length; i++) {
+      if (shouldDisplayQuestion(i)) {
+        if (kDebugMode) {
+          print(
+              "Found next visible question at index $i (${formJson[i]['name']})");
         }
-
-        final fieldValue = form.control(dependentField).value;
-        bool fieldMatches = false;
-
-        if (fieldValue is List && expectedValues is List) {
-          fieldMatches = fieldValue.any((v) => expectedValues.contains(v));
-          print(
-              "Checking if list $fieldValue intersects with $expectedValues: $fieldMatches");
-        } else if (fieldValue is List) {
-          fieldMatches = fieldValue.contains(expectedValues);
-          print(
-              "Checking if list $fieldValue contains $expectedValues: $fieldMatches");
-        } else if (expectedValues is List) {
-          fieldMatches = expectedValues.contains(fieldValue);
-          print(
-              "Checking if $fieldValue is in list $expectedValues: $fieldMatches");
-        } else {
-          fieldMatches = (fieldValue == expectedValues);
-          print(
-              "Checking if $fieldValue equals $expectedValues: $fieldMatches");
-        }
-
-        shouldShow = shouldShow && fieldMatches;
-      });
-
-      if (shouldShow) {
-        print("All conditions met for $questionName, it will be shown");
         return i;
-      } else {
-        print("Conditions not met for $questionName, checking next question");
       }
     }
 
+    if (kDebugMode) {
+      print("No more visible questions found after index $startIndex");
+    }
     return -1;
   }
 
@@ -424,6 +478,17 @@ class DynamicFormController extends ChangeNotifier {
     }
 
     final question = formJson[questionIndex];
+
+    // NEW: Questions with groupWith should not appear as standalone questions
+    // They should only appear as part of their parent question's group
+    if (question['groupWith'] != null &&
+        question['groupWith'].toString().isNotEmpty) {
+      if (kDebugMode) {
+        print(
+            "Question ${question['name']} has groupWith=${question['groupWith']}, excluding from standalone navigation");
+      }
+      return false;
+    }
 
     if (question['showWhen'] == null) {
       return true;
@@ -822,7 +887,7 @@ class DynamicFormController extends ChangeNotifier {
     _addControls(newFields);
     form.addAll(newControls);
     if (kDebugMode) {
-      print("=== Form Controls After Adding ===");
+      // print("=== Form Controls After Adding ===");
       newControls.forEach((key, control) {
         final hasRequiredValidator = control.validators
             .any((validator) => validator.toString().contains('required'));
