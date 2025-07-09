@@ -43,6 +43,18 @@ class DynamicFormController extends ChangeNotifier {
         if (controls.containsKey(fieldName)) {
           continue;
         }
+        final initial =
+            initialValues != null && initialValues!.containsKey(fieldName)
+                ? initialValues![fieldName]
+                : field['defaultValue'];
+
+        if (field['hasAttachments'] == true) {
+          uploadedFiles[fieldName] = initialValues != null &&
+                  initialValues!.containsKey('${fieldName}_attachments')
+              ? List<Map<String, dynamic>>.from(
+                  initialValues!['${fieldName}_attachments'])
+              : [];
+        }
 
         if (field['type'] == 'multiselect') {
           List<String> initialValue = [];
@@ -59,32 +71,46 @@ class DynamicFormController extends ChangeNotifier {
 
           if (field['hasComments'] == true) {
             controls['${fieldName}_comment'] = FormControl<String>(
-              value: '',
+              value: initialValues != null &&
+                      initialValues!.containsKey('${fieldName}_comment')
+                  ? initialValues!['${fieldName}_comment']
+                  : '',
               validators: [Validators.required],
             );
           }
         } else if (field['type'] == 'file') {
           uploadedFiles[fieldName] = [];
           controls[fieldName] = FormControl<String>(
-            value: '',
+            value: initial != null ? initial.toString() : '',
             validators: field['required'] == true ? [Validators.required] : [],
           );
 
           if (field['hasComments'] == true) {
             controls['${fieldName}_comment'] = FormControl<String>(
-              value: '',
+              value: initialValues != null &&
+                      initialValues!.containsKey('${fieldName}_comment')
+                  ? initialValues!['${fieldName}_comment']
+                  : '',
               validators: [Validators.required],
             );
           }
+        } else if (field['type'] == 'text') {
+          controls[fieldName] = FormControl<String>(
+            value: initial != null ? initial.toString() : '',
+            validators: _getValidators(field['required'] == true, field),
+          );
         } else if (field['type'] == 'number') {
           controls[fieldName] = FormControl<num>(
-            value: null,
+            value: initial != null ? num.tryParse(initial.toString()) : null,
             validators: _getValidators(field['required'] == true, field),
           );
 
           if (field['hasComments'] == true) {
             controls['${fieldName}_comment'] = FormControl<String>(
-              value: '',
+              value: initialValues != null &&
+                      initialValues!.containsKey('${fieldName}_comment')
+                  ? initialValues!['${fieldName}_comment']
+                  : '',
               validators: [Validators.required],
             );
           }
@@ -93,13 +119,32 @@ class DynamicFormController extends ChangeNotifier {
             field['options'] = ['Yes', 'No'];
           }
           controls[fieldName] = FormControl<String>(
-            value: field['defaultValue'] ?? '',
+            value: initial != null ? initial.toString() : '',
             validators: _getValidators(field['required'] == true, field),
           );
 
           if (field['hasComments'] == true) {
             controls['${fieldName}_comment'] = FormControl<String>(
-              value: '',
+              value: initialValues != null &&
+                      initialValues!.containsKey('${fieldName}_comment')
+                  ? initialValues!['${fieldName}_comment']
+                  : '',
+              validators: [Validators.required],
+            );
+          }
+        } else if (field['type'] == 'dropdown') {
+          controls[fieldName] = FormControl<String>(
+            value: (initial != null && field['options'].contains(initial))
+                ? initial.toString()
+                : '',
+            validators: _getValidators(field['required'] == true, field),
+          );
+          if (field['hasComments'] == true) {
+            controls['${fieldName}_comment'] = FormControl<String>(
+              value: initialValues != null &&
+                      initialValues!.containsKey('${fieldName}_comment')
+                  ? initialValues!['${fieldName}_comment']
+                  : '',
               validators: [Validators.required],
             );
           }
@@ -111,7 +156,10 @@ class DynamicFormController extends ChangeNotifier {
 
           if (field['hasComments'] == true) {
             controls['${fieldName}_comment'] = FormControl<String>(
-              value: '',
+              value: initialValues != null &&
+                      initialValues!.containsKey('${fieldName}_comment')
+                  ? initialValues!['${fieldName}_comment']
+                  : '',
               validators: [Validators.required],
             );
           }
@@ -706,9 +754,9 @@ class DynamicFormController extends ChangeNotifier {
 
   bool shouldShowSubmitButton() {
     if (_currentQuestionIndex >= formJson.length) return false;
- 
+
     final currentField = formJson[_currentQuestionIndex];
- 
+
     // Case 1: Current question has explicit branching to "end"
     if (currentField['branching'] != null) {
       var branchTo = currentField['branching'];
@@ -718,13 +766,13 @@ class DynamicFormController extends ChangeNotifier {
         if (targetQuestion == 'end') return true;
       }
     }
- 
+
     // Case 2: Check if there are no more visible questions after this one
     bool noMoreVisibleQuestions = findNextVisibleQuestionIndex() == -1;
- 
+
     // Case 3: We've reached the last question in the form
     bool isLastQuestion = _currentQuestionIndex == formJson.length - 1;
- 
+
     return noMoreVisibleQuestions || isLastQuestion;
   }
 
