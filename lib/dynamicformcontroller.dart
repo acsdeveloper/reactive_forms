@@ -39,65 +39,67 @@ class DynamicFormController extends ChangeNotifier {
     void _addControlsForFields(Iterable<Map<String, dynamic>> fieldList) {
       for (var field in fieldList) {
         final fieldName = field['name'];
+
         if (controls.containsKey(fieldName)) {
           continue;
         }
-        final initial =
-            initialValues != null && initialValues!.containsKey(fieldName)
-                ? initialValues![fieldName]
-                : field['defaultValue'];
 
-        // Initialize uploaded files map for fields that support attachments
-        if (field['hasAttachments'] == true) {
-          uploadedFiles[fieldName] = initialValues != null &&
-                  initialValues!.containsKey('${fieldName}_attachments')
-              ? List<Map<String, dynamic>>.from(
-                  initialValues!['${fieldName}_attachments'])
-              : [];
-        }
-
-        if (field['type'] == 'radio') {
-          if (field['options'] == null || (field['options'] as List).isEmpty) {
-            field['options'] = ['Yes', 'No'];
+        if (field['type'] == 'multiselect') {
+          List<String> initialValue = [];
+          if (field['defaultValue'] != null && field['defaultValue'] is List) {
+            initialValue = (field['defaultValue'] as List)
+                .map((item) => item.toString())
+                .toList();
           }
-          controls[fieldName] = FormControl<String>(
-            value: initial != null ? initial.toString() : '',
-            validators: _getValidators(field['required'] == true, field),
+
+          controls[fieldName] = FormControl<List<String>>(
+            value: initialValue,
+            validators: field['required'] == true ? [Validators.required] : [],
           );
+
           if (field['hasComments'] == true) {
             controls['${fieldName}_comment'] = FormControl<String>(
-              value: initialValues != null &&
-                      initialValues!.containsKey('${fieldName}_comment')
-                  ? initialValues!['${fieldName}_comment']
-                  : '',
+              value: '',
+              validators: [Validators.required],
+            );
+          }
+        } else if (field['type'] == 'file') {
+          uploadedFiles[fieldName] = [];
+          controls[fieldName] = FormControl<String>(
+            value: '',
+            validators: field['required'] == true ? [Validators.required] : [],
+          );
+
+          if (field['hasComments'] == true) {
+            controls['${fieldName}_comment'] = FormControl<String>(
+              value: '',
               validators: [Validators.required],
             );
           }
         } else if (field['type'] == 'number') {
           controls[fieldName] = FormControl<num>(
-            value: initial != null ? num.tryParse(initial.toString()) : null,
+            value: null,
             validators: _getValidators(field['required'] == true, field),
           );
+
           if (field['hasComments'] == true) {
             controls['${fieldName}_comment'] = FormControl<String>(
-              value: initialValues != null &&
-                      initialValues!.containsKey('${fieldName}_comment')
-                  ? initialValues!['${fieldName}_comment']
-                  : '',
+              value: '',
               validators: [Validators.required],
             );
           }
-        } else if (field['type'] == 'text') {
+        } else if (field['type'] == 'radio') {
+          if (field['options'] == null || (field['options'] as List).isEmpty) {
+            field['options'] = ['Yes', 'No'];
+          }
           controls[fieldName] = FormControl<String>(
-            value: initial != null ? initial.toString() : '',
+            value: field['defaultValue'] ?? '',
             validators: _getValidators(field['required'] == true, field),
           );
+
           if (field['hasComments'] == true) {
             controls['${fieldName}_comment'] = FormControl<String>(
-              value: initialValues != null &&
-                      initialValues!.containsKey('${fieldName}_comment')
-                  ? initialValues!['${fieldName}_comment']
-                  : '',
+              value: '',
               validators: [Validators.required],
             );
           }
