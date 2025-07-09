@@ -58,8 +58,8 @@ class DynamicFormController extends ChangeNotifier {
 
         if (field['type'] == 'multiselect') {
           List<String> initialValue = [];
-          if (field['defaultValue'] != null && field['defaultValue'] is List) {
-            initialValue = (field['defaultValue'] as List)
+          if ((initial as List<String>).isNotEmpty) {
+            initialValue = initial
                 .map((item) => item.toString())
                 .toList();
           }
