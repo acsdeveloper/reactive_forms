@@ -99,6 +99,15 @@ class DynamicFormController extends ChangeNotifier {
             value: initial != null ? initial.toString() : '',
             validators: _getValidators(field['required'] == true, field),
           );
+          if (field['hasComments'] == true) {
+            controls['${fieldName}_comment'] = FormControl<String>(
+              value: initialValues != null &&
+                      initialValues!.containsKey('${fieldName}_comment')
+                  ? initialValues!['${fieldName}_comment']
+                  : '',
+              validators: [Validators.required],
+            );
+          }
         } else if (field['type'] == 'number') {
           controls[fieldName] = FormControl<num>(
             value: initial != null ? num.tryParse(initial.toString()) : null,
