@@ -60,7 +60,10 @@ class DynamicFormController extends ChangeNotifier {
           List<String> initialValue = [];
           if (initial != null && initial.runtimeType == List<String>) {
             if ((initial as List<String>).isNotEmpty) {
-              initialValue = initial.map((item) => item.toString()).toList();
+              initialValue = initial
+                  .map((item) =>
+                      field['options'].contains(item) ? item.toString() : '')
+                  .toList();
             }
           }
 
