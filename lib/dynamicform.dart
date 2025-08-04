@@ -1180,7 +1180,7 @@ class _DynamicFormState extends State<DynamicForm>
                         hasAttachments: field['hasAttachments'] == true,
                         initialValues: initialValues,
                         bookingAppModelFileUpload:
-                            widget.bookingAppModelFileUpload,
+                            true,
                       ),
                     ],
                   );
@@ -1620,47 +1620,121 @@ class _DynamicFormState extends State<DynamicForm>
               );
             },
           ),
-        if (field['hasComments'] == true) ...[
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Text(
-                field['commentLabel'] ?? StringConstants.comments,
-                style: widget.fontFamily,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '*',
-                style: widget.fontFamily.copyWith(
-                  color: const Color.fromARGB(255, 222, 75, 64),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
-            maxLines: 3,
-            validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
+          
+        if (field['hasComments'] == true)
+          ReactiveValueListenableBuilder(
+            formControlName: field['name'],
+            builder: (context, control, child) {
+              List<dynamic> disabledOptions = field['disableCommentsOn'] is List
+                  ? field['disableCommentsOn']
+                  : field['disableCommentsOn'] != null
+                      ? [field['disableCommentsOn']]
+                      : [];
+              if (disabledOptions.isNotEmpty &&
+                  disabledOptions.contains(control.value)) {
+                return const SizedBox.shrink();
               }
+              bool shouldShowComments = false;
+
+              if (field['hasComments'] == true &&
+                  disabledOptions.isNotEmpty &&
+                  !disabledOptions.contains(control.value)) {
+                shouldShowComments = true;
+              } else {
+                // Check requireCommentsOn
+                if (field['requireCommentsOn'] != null) {
+                  List<dynamic> requiredOptions =
+                      field['requireCommentsOn'] is List
+                          ? field['requireCommentsOn']
+                          : [field['requireCommentsOn']];
+
+                  if (requiredOptions.contains(control.value)) {
+                    shouldShowComments = true;
+                  }
+                }
+
+                // Check for legacy Comments Required property
+                if (!shouldShowComments && field['enableCommentsOn'] != null) {
+                  List<dynamic> enabledOptions =
+                      field['enableCommentsOn'] is List
+                          ? field['enableCommentsOn']
+                          : [field['enableCommentsOn']];
+
+                  if (enabledOptions.contains(control.value)) {
+                    shouldShowComments = true;
+                  }
+                }
+
+                // If the value is not in requireCommentsOn or enableCommmentsOn, don't show upload
+                if (!shouldShowComments) {
+                  // Original fallback check: If hascomments is true and none of the above conditions applied
+                  if (field['hasComments'] == true) {
+                    // Check if requireCommentsOn is empty or null
+                    bool isRequireCommentsOnEmpty =
+                        field['requireCommentsOn'] == null ||
+                            (field['requireCommentsOn'] is List &&
+                                (field['requireCommentsOn'] as List).isEmpty);
+
+                    // Check if enableAttachmentsOn is empty or null
+                    bool isEnableCommentsOnEmpty =
+                        field['enableCommentsOn'] == null ||
+                            (field['enableCommentsOn'] is List &&
+                                (field['enableCommentsOn'] as List).isEmpty);
+
+                    // If both are empty or null, show comments and make them required
+                    if (isRequireCommentsOnEmpty && isEnableCommentsOnEmpty) {
+                      shouldShowComments = true;
+                    } else {
+                      return const SizedBox.shrink();
+                    }
+                  } else {
+                    return const SizedBox.shrink();
+                  }
+                }
+              }
+              return Column(
+                children: [
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text(
+                        field['commentLabel'] ?? StringConstants.comments,
+                        style: widget.fontFamily,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '*',
+                        style: widget.fontFamily.copyWith(
+                          color: const Color.fromARGB(255, 222, 75, 64),
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                  ReactiveTextField(
+                    formControlName: '${field['name']}_comment',
+                    decoration: InputDecoration(
+                      hintText: field['commentHint'] ?? '',
+                      labelStyle: widget.fontFamily,
+                      hintStyle: widget.fontFamily,
+                      errorStyle: widget.fontFamily
+                          .copyWith(color: Colors.red[700], fontSize: 12),
+                    ),
+                    maxLines: 3,
+                    validationMessages: {
+                      'required': (_) => StringConstants.commentsAreRequired,
+                    },
+                    onSubmitted: (_) {
+                      if (widget.showOneByOne &&
+                          !isCurrentQuestionEffectivelyLast()) {
+                        validateCurrentSection();
+                      }
+                    },
+                  ),
+                ],
+              );
             },
           ),
-        ],
       ],
     );
   }
@@ -2911,21 +2985,104 @@ class _DynamicFormState extends State<DynamicForm>
           }
         }
 
-        // Check for required comments
         if (field['hasComments'] == true) {
           final commentControlName = '${fieldName}_comment';
-          if (controller.form.contains(commentControlName)) {
+          final fieldControlName = field['name'];
+          if (controller.form.contains(commentControlName) &&
+              controller.form.contains(fieldControlName)) {
             final commentControl = controller.form.control(commentControlName);
-            commentControl.markAsTouched();
+            final fieldControl = controller.form.control(fieldControlName);
+            commentControl
+                .markAsTouched(); // Mark the control as touched for validation
 
-            if (!commentControl.valid) {
-              if (kDebugMode) {
-                print("Comment for $fieldName validation failed");
+            // List of disabled options
+            List<dynamic> disabledOptions = field['disableCommentsOn'] is List
+                ? field['disableCommentsOn']
+                : field['disableCommentsOn'] != null
+                    ? [field['disableCommentsOn']]
+                    : [];
+
+            // If control value is in disabled options, skip validation
+            if (disabledOptions.isNotEmpty &&
+                disabledOptions.contains(fieldControl.value)) {
+              isValid = true;
+            }
+
+            bool showComments = false;
+
+            if (field['hasComments'] == true &&
+                disabledOptions.isNotEmpty &&
+                !disabledOptions.contains(fieldControl.value)) {
+              commentControl.markAsTouched();
+
+              if (!commentControl.valid) {
+                if (kDebugMode) {
+                  print("Comment for $fieldName validation failed");
+                }
+                isValid = false;
               }
+            } else {
+              // Check requireCommentsOn
+              if (field['requireCommentsOn'] != null) {
+                List<dynamic> requiredOptions =
+                    field['requireCommentsOn'] is List
+                        ? field['requireCommentsOn']
+                        : [field['requireCommentsOn']];
+
+                if (requiredOptions.contains(commentControl.value)) {
+                  showComments = true;
+                  isValid = false;
+                }
+              }
+
+              // Check for legacy Comments Required property
+              if (!showComments && field['enableCommentsOn'] != null) {
+                List<dynamic> enabledOptions = field['enableCommentsOn'] is List
+                    ? field['enableCommentsOn']
+                    : [field['enableCommentsOn']];
+
+                if (enabledOptions.contains(commentControl.value)) {
+                  showComments = true;
+                  isValid = false;
+                }
+              }
+
+              if (!showComments) {
+                if (field['hasComments'] == true) {
+                  bool isRequireCommentsOnEmpty =
+                      field['requireCommentsOn'] == null ||
+                          (field['requireCommentsOn'] is List &&
+                              (field['requireCommentsOn'] as List).isEmpty);
+
+                  bool isEnableCommentsOnEmpty =
+                      field['enableCommentsOn'] == null ||
+                          (field['enableCommentsOn'] is List &&
+                              (field['enableCommentsOn'] as List).isEmpty);
+
+                  if (isRequireCommentsOnEmpty && isEnableCommentsOnEmpty) {
+                    showComments = true;
+                    commentControl.markAsTouched();
+
+                    if (!commentControl.valid) {
+                      if (kDebugMode) {
+                        print("Comment for $fieldName validation failed");
+                      }
+                      isValid = false;
+                    }
+                  }
+                } else {
+                  isValid = true;
+                }
+              }
+            }
+
+            // Check the required condition and update isValid accordingly
+            if (fieldControl.value == null || fieldControl.value.isEmpty) {
               isValid = false;
             }
           }
         }
+
       }
     }
 
