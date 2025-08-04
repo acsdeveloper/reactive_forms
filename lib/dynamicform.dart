@@ -1180,7 +1180,7 @@ class _DynamicFormState extends State<DynamicForm>
                         hasAttachments: field['hasAttachments'] == true,
                         initialValues: initialValues,
                         bookingAppModelFileUpload:
-                            true,
+                            widget.bookingAppModelFileUpload,
                       ),
                     ],
                   );
@@ -1620,7 +1620,7 @@ class _DynamicFormState extends State<DynamicForm>
               );
             },
           ),
-          
+
         if (field['hasComments'] == true)
           ReactiveValueListenableBuilder(
             formControlName: field['name'],
