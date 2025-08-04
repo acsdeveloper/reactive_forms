@@ -3029,9 +3029,8 @@ class _DynamicFormState extends State<DynamicForm>
                         ? field['requireCommentsOn']
                         : [field['requireCommentsOn']];
 
-                if (requiredOptions.contains(commentControl.value)) {
+                if (requiredOptions.contains(fieldControl.value)) {
                   showComments = true;
-                  isValid = false;
                 }
               }
 
@@ -3041,7 +3040,7 @@ class _DynamicFormState extends State<DynamicForm>
                     ? field['enableCommentsOn']
                     : [field['enableCommentsOn']];
 
-                if (enabledOptions.contains(commentControl.value)) {
+                if (enabledOptions.contains(fieldControl.value)) {
                   showComments = true;
                   isValid = false;
                 }
@@ -3070,8 +3069,6 @@ class _DynamicFormState extends State<DynamicForm>
                       isValid = false;
                     }
                   }
-                } else {
-                  isValid = false;
                 }
               }
             }
