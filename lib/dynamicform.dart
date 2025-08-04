@@ -3071,7 +3071,7 @@ class _DynamicFormState extends State<DynamicForm>
                     }
                   }
                 } else {
-                  isValid = true;
+                  isValid = false;
                 }
               }
             }
