@@ -1620,47 +1620,64 @@ class _DynamicFormState extends State<DynamicForm>
               );
             },
           ),
-        if (field['hasComments'] == true) ...[
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Text(
-                field['commentLabel'] ?? StringConstants.comments,
-                style: widget.fontFamily,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '*',
-                style: widget.fontFamily.copyWith(
-                  color: const Color.fromARGB(255, 222, 75, 64),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
-            maxLines: 3,
-            validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
+
+        if (field['hasComments'] == true)
+          ReactiveValueListenableBuilder(
+            formControlName: field['name'],
+            builder: (context, control, child) {
+              bool shouldShowComments = controller
+                  .shouldShowCommentsBasedOnFieldValue(field, control.value);
+
+              if (!shouldShowComments) {
+                return const SizedBox
+                    .shrink(); // Don't render the comment field if not required
               }
+
+              return Column(
+                children: [
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text(
+                        field['commentLabel'] ?? StringConstants.comments,
+                        style: widget.fontFamily,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '*',
+                        style: widget.fontFamily.copyWith(
+                          color: const Color.fromARGB(255, 222, 75, 64),
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                  ReactiveTextField(
+                    formControlName: '${field['name']}_comment',
+                    decoration: InputDecoration(
+                      hintText: field['commentHint'] ?? '',
+                      labelStyle: widget.fontFamily,
+                      hintStyle: widget.fontFamily,
+                      errorStyle: widget.fontFamily
+                          .copyWith(color: Colors.red[700], fontSize: 12),
+                    ),
+                    maxLines: 3,
+                    validationMessages: {
+                      'required': (_) => StringConstants.commentsAreRequired,
+                    },
+                    onSubmitted: (_) {
+                      if (widget.showOneByOne &&
+                          !isCurrentQuestionEffectivelyLast()) {
+                        validateCurrentSection();
+                      }
+                    },
+                  ),
+                ],
+              );
             },
-          ),
-        ],
+          )
+
+
       ],
     );
   }
@@ -2911,21 +2928,40 @@ class _DynamicFormState extends State<DynamicForm>
           }
         }
 
-        // Check for required comments
         if (field['hasComments'] == true) {
           final commentControlName = '${fieldName}_comment';
-          if (controller.form.contains(commentControlName)) {
-            final commentControl = controller.form.control(commentControlName);
-            commentControl.markAsTouched();
+          final fieldControlName = field['name'];
 
-            if (!commentControl.valid) {
+          if (controller.form.contains(commentControlName) &&
+              controller.form.contains(fieldControlName)) {
+            final commentControl = controller.form.control(commentControlName);
+            final fieldControl = controller.form.control(fieldControlName);
+            commentControl
+                .markAsTouched(); // Mark the control as touched for validation
+
+            // Determine if comments should be shown/required based on the main field value
+            bool showComments = controller.shouldShowCommentsBasedOnFieldValue(
+                field, fieldControl.value);
+
+            // Validation logic based on the showComments flag
+            if (showComments && !commentControl.valid) {
               if (kDebugMode) {
                 print("Comment for $fieldName validation failed");
               }
               isValid = false;
+            } else {
+              isValid = true; // Comment is valid or not required
+            }
+
+            // Check the main field validation, if necessary
+            if (fieldControl.value == null || fieldControl.value.isEmpty) {
+              isValid =
+                  false; // Mark as invalid if the main field value is empty
             }
           }
         }
+
+
       }
     }
 
