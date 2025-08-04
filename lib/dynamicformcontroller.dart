@@ -420,6 +420,80 @@ class DynamicFormController extends ChangeNotifier {
     return true;
   }
 
+  /// Given a field and its control value, determine if comments should be shown.
+  ///
+  /// 1. If the control value is in the disabled options, don't show comments.
+  /// 2. If the field has comments and the value is not in disabled options, show comments.
+  /// 3. If the field has requireCommentsOn property, check if the control value is in the required options.
+  /// 4. If the field has legacy Comments Required property, check if the control value is in the enabled options.
+  /// 5. If none of the above conditions apply, and hasComments is true, show comments if both requireCommentsOn and enableCommentsOn are empty or null.
+  ///
+  bool shouldShowCommentsBasedOnFieldValue(
+      dynamic field, dynamic controlValue) {
+    // List of disabled options
+    List<dynamic> disabledOptions = field['disableCommentsOn'] is List
+        ? field['disableCommentsOn']
+        : field['disableCommentsOn'] != null
+            ? [field['disableCommentsOn']]
+            : [];
+
+    // If control value is in disabled options, don't show comments
+    if (disabledOptions.isNotEmpty && disabledOptions.contains(controlValue)) {
+      return false;
+    }
+
+    bool shouldShowComments = false;
+
+    // Check if field has comments and if the value is not in disabled options
+    if (field['hasComments'] == true &&
+        disabledOptions.isNotEmpty &&
+        !disabledOptions.contains(controlValue)) {
+      shouldShowComments = true;
+    } else {
+      // Check requireCommentsOn
+      if (field['requireCommentsOn'] != null) {
+        List<dynamic> requiredOptions = field['requireCommentsOn'] is List
+            ? field['requireCommentsOn']
+            : [field['requireCommentsOn']];
+
+        if (requiredOptions.contains(controlValue)) {
+          shouldShowComments = true;
+        }
+      }
+
+      // Check for legacy Comments Required property
+      if (!shouldShowComments && field['enableCommentsOn'] != null) {
+        List<dynamic> enabledOptions = field['enableCommentsOn'] is List
+            ? field['enableCommentsOn']
+            : [field['enableCommentsOn']];
+
+        if (enabledOptions.contains(controlValue)) {
+          shouldShowComments = true;
+        }
+      }
+
+      // Fallback: If hasComments is true and none of the above conditions applied
+      if (!shouldShowComments && field['hasComments'] == true) {
+        bool isRequireCommentsOnEmpty = field['requireCommentsOn'] == null ||
+            (field['requireCommentsOn'] is List &&
+                (field['requireCommentsOn'] as List).isEmpty);
+
+        bool isEnableCommentsOnEmpty = field['enableCommentsOn'] == null ||
+            (field['enableCommentsOn'] is List &&
+                (field['enableCommentsOn'] as List).isEmpty);
+
+        // If both requireCommentsOn and enableCommentsOn are empty or null, show comments
+        if (isRequireCommentsOnEmpty && isEnableCommentsOnEmpty) {
+          shouldShowComments = true;
+        }
+      }
+    }
+
+    return shouldShowComments;
+  }
+
+
+
   int findNextVisibleQuestionIndex() {
     print("Finding next visible question after ${_currentQuestionIndex}");
 
