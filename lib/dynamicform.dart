@@ -383,7 +383,7 @@ class _DynamicFormState extends State<DynamicForm>
     ever(widget.pressedFabBtn, (value) {
       // If pressedFabBtn becomes true, trigger form submission
       if (value) {
-        _submitForm(context);
+        _submitForm(context, isDraft: true);
       }
     });
   
