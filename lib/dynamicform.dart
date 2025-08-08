@@ -43,10 +43,12 @@ class DynamicForm extends StatefulWidget {
   final String? submitButtonText;
   final bool bookingAppModelFileUpload;
   final bool isManageToCheckPress;
+  final bool draftMode;
+  final RxBool pressedFabBtn;
   final BottomNavigationType bottomNavigationType;
   final Map<String, dynamic>? initialValues;
 
-  const DynamicForm({
+  DynamicForm({
     required this.formJson,
     required this.onSubmit,
     required this.context,
@@ -62,8 +64,10 @@ class DynamicForm extends StatefulWidget {
     this.isManageToCheckPress = false,
     this.bottomNavigationType = BottomNavigationType.button,
     this.initialValues,
+    this.draftMode = false,
+    RxBool? pressedFabBtn,
     super.key,
-  });
+  }) : pressedFabBtn = pressedFabBtn ?? false.obs; 
 
   @override
   State<DynamicForm> createState() => _DynamicFormState();
@@ -375,6 +379,14 @@ class _DynamicFormState extends State<DynamicForm>
   @override
   void initState() {
     super.initState();
+    // / Listen to pressedFabBtn value
+    ever(widget.pressedFabBtn, (value) {
+      // If pressedFabBtn becomes true, trigger form submission
+      if (value) {
+        _submitForm(context);
+      }
+    });
+  
     controller = DynamicFormController(
       formJson: widget.formJson,
       onSubmit: widget.onSubmit,
@@ -1406,7 +1418,6 @@ class _DynamicFormState extends State<DynamicForm>
     }
 
     // SPECIAL HANDLING for question_6 to guarantee the file upload UI appears
-    
 
     // Regular implementation for other radio fields
     return Column(
@@ -1676,8 +1687,6 @@ class _DynamicFormState extends State<DynamicForm>
               );
             },
           )
-
-
       ],
     );
   }
@@ -2607,6 +2616,22 @@ class _DynamicFormState extends State<DynamicForm>
                       icon: const Icon(Icons.arrow_back_ios_new_rounded,
                           color: Colors.black),
                     ),
+            // ElevatedButton(
+            //   onPressed: () => _submitForm(context, isDraft: true),
+            //   style: ElevatedButton.styleFrom(
+            //     backgroundColor: buttonColor,
+            //     foregroundColor: widget.buttonTextColor,
+            //     padding:
+            //         const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            //   ),
+            //   child: Text(
+            //     widget.submitButtonText ?? 'Save as draft',
+            //     style: widget.fontFamily.copyWith(
+            //       color: widget.buttonTextColor,
+            //       fontSize: 16,
+            //     ),
+            //   ),
+            // ),
             if (shouldShowSubmit)
               Row(
                 children: [
@@ -2710,10 +2735,12 @@ class _DynamicFormState extends State<DynamicForm>
     ]);
   }
 
-  void _submitForm(BuildContext context, {bool isManageToCheckPress = false}) {
+  void _submitForm(BuildContext context,
+      {bool isManageToCheckPress = false, bool isDraft = false}) {
     // First validate the current question if in step-by-step mode
     if (widget.showOneByOne &&
-        controller.currentQuestionIndex < widget.formJson.length) {
+        controller.currentQuestionIndex < widget.formJson.length &&
+        !isDraft) {
       final currentField = widget.formJson[controller.currentQuestionIndex];
       final control = controller.form.control(currentField['name']);
 
@@ -2960,8 +2987,6 @@ class _DynamicFormState extends State<DynamicForm>
             }
           }
         }
-
-
       }
     }
 
