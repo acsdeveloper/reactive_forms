@@ -387,25 +387,42 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Find first required question that is unanswered in initial values
     int targetFormIndex = -1;
+    int visibleQuestionCount = 0; 
     for (int i = 0; i < widget.formJson.length; i++) {
       final field = widget.formJson[i];
-      if (widget.formJson.length == (i + 1)) {
-        targetFormIndex = i;
-        break;
+      bool isVisible = true;
+      if (field['showWhen'] != null) {
+        final showWhenConditions = field['showWhen'] as Map<String, dynamic>;
+        final conditionKey = showWhenConditions.keys.first;
+        final conditionValue = showWhenConditions[conditionKey];
+
+        // Check if the related question is answered correctly
+        if (widget.initialValues![conditionKey] != conditionValue) {
+          isVisible = false; // Hide the question if condition fails
+        }
       }
-      if (field['required'] == true) {
-        final value = widget.initialValues![field['name']];
+
+      if (!isVisible) continue; // Skip if not visible
+      visibleQuestionCount++;
+      final value = widget.initialValues![field['name']];
         final bool isEmpty = value == null ||
             (value is String && value.trim().isEmpty) ||
             (value is List && value.isEmpty);
         if (isEmpty) {
           targetFormIndex = i;
-          break;
-        }
+        break;
       }
     }
 
-    if (targetFormIndex == -1) return; // All required answered
+    if (targetFormIndex == -1 && visibleQuestionCount > 0) {
+      setState(() {
+        _currentGroupPointer =
+            visibleQuestionCount - 1; // Set to last visible index
+      });
+      return; // No unanswered required questions found
+    }
+
+    if (targetFormIndex == -1) return;
 
     final String targetName =
         widget.formJson[targetFormIndex]['name'].toString();
