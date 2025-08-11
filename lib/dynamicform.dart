@@ -131,6 +131,7 @@ class _DynamicFormState extends State<DynamicForm>
 
   // Subscription to form value changes - will be used to update visibility
   late StreamSubscription<dynamic> _formValueChangeSubscription;
+  bool hasCalledSkip = false;
 
   // Check if the current question should be visible, and if not, skip to the next visible one
   void _updateCurrentQuestionBasedOnVisibility() {
@@ -376,6 +377,77 @@ class _DynamicFormState extends State<DynamicForm>
     }
   }
 
+  void skipToFirstUnansweredQuestion() {
+    if (!widget.showOneByOne ||
+        !widget.draftMode ||
+        widget.initialValues == null ||
+        (widget.initialValues?.isNotEmpty != true)) {
+      return;
+    }
+
+    // Find first required question that is unanswered in initial values
+    int targetFormIndex = -1;
+    for (int i = 0; i < widget.formJson.length; i++) {
+      final field = widget.formJson[i];
+      if (widget.formJson.length == (i + 1)) {
+        targetFormIndex = i;
+        break;
+      }
+      if (field['required'] == true) {
+        final value = widget.initialValues![field['name']];
+        final bool isEmpty = value == null ||
+            (value is String && value.trim().isEmpty) ||
+            (value is List && value.isEmpty);
+        if (isEmpty) {
+          targetFormIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (targetFormIndex == -1) return; // All required answered
+
+    final String targetName =
+        widget.formJson[targetFormIndex]['name'].toString();
+
+    // Locate this field in internal list
+    final int internalIndex =
+        _internalFields.indexWhere((f) => f['name'] == targetName);
+    if (internalIndex == -1) return;
+
+    // Find the anchor pointer that contains this field (accounting for grouped fields)
+    int pointer = -1;
+    for (int p = 0; p < _groupAnchors.length; p++) {
+      final int anchorIndex = _groupAnchors[p];
+      final List<int> groupIndices =
+          _anchorToFieldIndices[anchorIndex] ?? [anchorIndex];
+      if (groupIndices.contains(internalIndex)) {
+        pointer = p;
+        break;
+      }
+    }
+
+    // Fallback: try direct anchor name match
+    if (pointer == -1) {
+      pointer = _groupAnchors.indexWhere((anchorIdx) =>
+          _internalFields[anchorIdx]['name'].toString() == targetName);
+    }
+
+    if (pointer != -1) {
+      setState(() {
+        hasCalledSkip = true;
+        _currentGroupPointer = pointer;
+      });
+
+      // Align controller page index with the chosen anchor after the frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _groupAnchors.isEmpty) return;
+        controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+        _safeCalculateProgress();
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -410,6 +482,9 @@ class _DynamicFormState extends State<DynamicForm>
     });
 
     _recomputeGroupStructure();
+
+    // Jump to first unanswered required question in draft + one-by-one mode
+    skipToFirstUnansweredQuestion();
 
     // Listen to form value changes and update question visibility
     _formValueChangeSubscription =
