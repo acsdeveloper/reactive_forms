@@ -376,14 +376,13 @@ class _DynamicFormState extends State<DynamicForm>
     }
   }
 
-
-  /// Skips to the last unanswered required question in the form when the form is
-  /// initially loaded in draft mode. This is useful for when the user has already
-  /// partially filled out the form and wants to quickly navigate to the last
-  /// unanswered question. If the form is not in draft mode or `showOneByOne` is not
-  /// enabled, this method does nothing. If the user has not filled out any
-  /// questions, this method does nothing.
-  void skipToLastUnansweredQuestion() {
+  /// Skips to the first unanswered required question in the form when in step-by-step
+  /// (draft) mode. If all required questions are answered, skips to the last question.
+  /// If the form is not in step-by-step mode, does nothing.
+  ///
+  /// This function is used to automatically navigate to the first unanswered
+  /// required question after the form is initially populated with saved data.
+  void skipToFirstUnansweredQuestion() {
     if (!widget.showOneByOne ||
         !widget.draftMode ||
         widget.initialValues == null ||
@@ -391,113 +390,84 @@ class _DynamicFormState extends State<DynamicForm>
       return;
     }
 
-    // Start recursive check from the first question
-    _checkNextQuestion(0);
-  }
-
-  /// Recursively checks the next question in the form to see if it's visible and
-  /// required but empty. If it is, it sets the pointer to that question to make
-  /// the user fill it out. If it's not, it recursively checks the next question
-  /// until it finds one that is or it reaches the end of the form.
-  void _checkNextQuestion(int currentIndex) {
-    // Base case: If we've reached the end of the form, exit recursion
-    if (currentIndex >= widget.formJson.length) {
-      // If all required questions are filled, set pointer to the last filled question
-      _navigateToLastFilledQuestion();
-      return;
-    }
-
-    final field = widget.formJson[currentIndex];
-
-    bool isVisible = true;
-
-    // Check visibility based on 'showWhen' conditions
-    if (field['showWhen'] != null) {
-      final showWhenConditions = field['showWhen'] as Map<String, dynamic>;
-      final conditionKey = showWhenConditions.keys.first;
-      final conditionValue = showWhenConditions[conditionKey];
-
-      // If the related condition fails, the field is not visible
-      if (widget.initialValues![conditionKey] != conditionValue) {
-        isVisible = false;
-      }
-    }
-
-    if (!isVisible) {
-      // Skip this question if it's not visible
-      _checkNextQuestion(currentIndex + 1);
-      return;
-    }
-
-    // Get the value for the field and check if it's empty
-    final value = widget.initialValues![field['name']];
-    final bool isEmpty = value == null ||
-        (value is String && value.trim().isEmpty) ||
-        (value is List && value.isEmpty);
-
-    // If the question is required and empty, navigate to this question
-    if (field['required'] == true && isEmpty) {
-      setState(() {
-        _currentGroupPointer = currentIndex;
-      });
-      return; // Exit recursion and set the pointer to the first unanswered required question
-    }
-
-    // If the question is not required or it is filled, continue to the next question
-    _checkNextQuestion(currentIndex + 1);
-  }
-
-
-  /// Find the last filled question in the form and set the pointer to it.
-  ///
-  /// This method iterates through the questions in the form and keeps track of the
-  /// last filled question. If a filled question is found, it sets the `_currentGroupPointer` to
-  /// the index of the last filled question. If the question after the last filled question is
-  /// not visible due to 'showWhen' conditions, the pointer is set to the last filled question.
-  ///
-  /// This method is called when the user saves the form and navigates back to the form. It
-  /// ensures that the user is taken to the last filled question in the form.
-  void _navigateToLastFilledQuestion() {
-    int lastFilledIndex = -1;
-
-    // Find the last filled question (whether required or not)
+    // Find first required question that is unanswered in initial values
+    int targetFormIndex = -1;
+    int visibleQuestionCount = 0;
     for (int i = 0; i < widget.formJson.length; i++) {
       final field = widget.formJson[i];
+      bool isVisible = true;
+      if (field['showWhen'] != null) {
+        final showWhenConditions = field['showWhen'] as Map<String, dynamic>;
+        final conditionKey = showWhenConditions.keys.first;
+        final conditionValue = showWhenConditions[conditionKey];
+
+        // Check if the related question is answered correctly
+        if (widget.initialValues![conditionKey] != conditionValue) {
+          isVisible = false; // Hide the question if condition fails
+        }
+      }
+
+      if (!isVisible) continue; // Skip if not visible
+      visibleQuestionCount++;
       final value = widget.initialValues![field['name']];
       final bool isEmpty = value == null ||
           (value is String && value.trim().isEmpty) ||
           (value is List && value.isEmpty);
-
-      if (!isEmpty) {
-        lastFilledIndex = i;
+      if (isEmpty) {
+        targetFormIndex = i;
+        break;
       }
     }
 
-    // If we found a filled question, set the pointer to the last filled question
-    if (lastFilledIndex != -1) {
-      bool isVisible = true;
-
-      // Check visibility based on 'showWhen' conditions
-      if (widget.formJson[lastFilledIndex + 1]['showWhen'] != null) {
-        final showWhenConditions = widget.formJson[lastFilledIndex + 1]
-            ['showWhen'] as Map<String, dynamic>;
-        final conditionKey = showWhenConditions.keys.first;
-        final conditionValue = showWhenConditions[conditionKey];
-
-        // If the related condition fails, the field is not visible
-        if (widget.initialValues![conditionKey] != conditionValue) {
-          setState(() {
-            isVisible = false;
-          });
-        }
-      }
+    if (targetFormIndex == -1 && visibleQuestionCount > 0) {
       setState(() {
         _currentGroupPointer =
-            isVisible ? lastFilledIndex + 1 : lastFilledIndex;
+            visibleQuestionCount - 1; // Set to last visible index
+      });
+      return; // No unanswered required questions found
+    }
+
+    if (targetFormIndex == -1) return;
+
+    final String targetName =
+        widget.formJson[targetFormIndex]['name'].toString();
+
+    // Locate this field in internal list
+    final int internalIndex =
+        _internalFields.indexWhere((f) => f['name'] == targetName);
+    if (internalIndex == -1) return;
+
+    // Find the anchor pointer that contains this field (accounting for grouped fields)
+    int pointer = -1;
+    for (int p = 0; p < _groupAnchors.length; p++) {
+      final int anchorIndex = _groupAnchors[p];
+      final List<int> groupIndices =
+          _anchorToFieldIndices[anchorIndex] ?? [anchorIndex];
+      if (groupIndices.contains(internalIndex)) {
+        pointer = p;
+        break;
+      }
+    }
+
+    // Fallback: try direct anchor name match
+    if (pointer == -1) {
+      pointer = _groupAnchors.indexWhere((anchorIdx) =>
+          _internalFields[anchorIdx]['name'].toString() == targetName);
+    }
+
+    if (pointer != -1) {
+      setState(() {
+        _currentGroupPointer = pointer;
+      });
+
+      // Align controller page index with the chosen anchor after the frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _groupAnchors.isEmpty) return;
+        controller.currentQuestionIndex = _groupAnchors[_currentGroupPointer];
+        _safeCalculateProgress();
       });
     }
   }
-
 
   @override
   void initState() {
@@ -535,7 +505,7 @@ class _DynamicFormState extends State<DynamicForm>
     _recomputeGroupStructure();
 
     // Jump to first unanswered required question in draft + one-by-one mode
-    skipToLastUnansweredQuestion();
+    skipToFirstUnansweredQuestion();
 
     // Listen to form value changes and update question visibility
     _formValueChangeSubscription =
