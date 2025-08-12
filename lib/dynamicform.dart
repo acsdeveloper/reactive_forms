@@ -131,7 +131,6 @@ class _DynamicFormState extends State<DynamicForm>
 
   // Subscription to form value changes - will be used to update visibility
   late StreamSubscription<dynamic> _formValueChangeSubscription;
-  bool hasCalledSkip = false;
 
   // Check if the current question should be visible, and if not, skip to the next visible one
   void _updateCurrentQuestionBasedOnVisibility() {
@@ -2743,22 +2742,6 @@ class _DynamicFormState extends State<DynamicForm>
                       icon: const Icon(Icons.arrow_back_ios_new_rounded,
                           color: Colors.black),
                     ),
-            // ElevatedButton(
-            //   onPressed: () => _submitForm(context, isDraft: true),
-            //   style: ElevatedButton.styleFrom(
-            //     backgroundColor: buttonColor,
-            //     foregroundColor: widget.buttonTextColor,
-            //     padding:
-            //         const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            //   ),
-            //   child: Text(
-            //     widget.submitButtonText ?? 'Save as draft',
-            //     style: widget.fontFamily.copyWith(
-            //       color: widget.buttonTextColor,
-            //       fontSize: 16,
-            //     ),
-            //   ),
-            // ),
             if (shouldShowSubmit)
               Row(
                 children: [
