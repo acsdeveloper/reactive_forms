@@ -413,9 +413,13 @@ class _DynamicFormState extends State<DynamicForm>
       final bool isEmpty = value == null ||
           (value is String && value.trim().isEmpty) ||
           (value is List && value.isEmpty);
-      if (isEmpty) {
+      if (isEmpty ||
+          !validateCurrentSection() ||
+          !_checkIfRequiredFilesUploaded()) {
         targetFormIndex = i;
         break;
+      } else {
+        moveToNextQuestion(context);
       }
     }
 
