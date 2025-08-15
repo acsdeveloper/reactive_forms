@@ -1118,12 +1118,13 @@ class _DynamicFormState extends State<DynamicForm>
                   field: FormFieldModel.fromJson(field),
                   onChanged: (List<String> value) {
                     // Force direct update to the FormGroup's value
-                    controller.form.patchValue({field['name']: value});
+                    controller.form.patchValue(
+                        {field['name']: value.isEmpty ? null : value});
 
                     // Explicitly update control to ensure type consistency
                     final control = controller.form.control(field['name']);
                     if (control is FormControl<dynamic>) {
-                      control.updateValue(value);
+                      control.updateValue(value.isEmpty ? null : value);
                     }
 
                     // Debug info
@@ -1131,7 +1132,7 @@ class _DynamicFormState extends State<DynamicForm>
                         'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
                     print('Current form value: ${controller.form.value}');
 
-                    state.didChange(value);
+                    state.didChange(value.isEmpty ? null : value);
                     state.control.markAsTouched();
                   },
                   value: currentValue,
