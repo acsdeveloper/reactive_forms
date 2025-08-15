@@ -58,14 +58,15 @@ class DynamicFormController extends ChangeNotifier {
 
         if (field['type'] == 'multiselect') {
           List<String> initialValue = [];
-          if (initial != null && initial is List<String>) {
+          if (initial != null && initial is List<dynamic>) {
             initialValue = initial
                 .where((item) => field['options'].contains(item))
+                .map((item) => item.toString())
                 .toList();
           }
 
           controls[fieldName] = FormControl<List<String>>(
-            value: initialValue,
+            value: initialValue.isNotEmpty ? initialValue : null,
             validators: field['required'] == true ? [Validators.required] : [],
           );
 
