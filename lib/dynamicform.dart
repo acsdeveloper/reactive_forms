@@ -1773,6 +1773,7 @@ class _DynamicFormState extends State<DynamicForm>
                           .copyWith(color: Colors.red[700], fontSize: 12),
                     ),
                     maxLines: 3,
+                    minLines: 1,
                     validationMessages: {
                       'required': (_) => StringConstants.commentsAreRequired,
                     },
@@ -2018,6 +2019,7 @@ class _DynamicFormState extends State<DynamicForm>
                   .copyWith(color: Colors.red[700], fontSize: 12),
             ),
             maxLines: 3,
+            minLines: 1,
             validationMessages: {
               'required': (_) => StringConstants.commentsAreRequired,
             },
@@ -2171,6 +2173,7 @@ class _DynamicFormState extends State<DynamicForm>
                   .copyWith(color: Colors.red[700], fontSize: 12),
             ),
             maxLines: 3,
+            minLines: 1,
             validationMessages: {
               'required': (_) => StringConstants.commentsAreRequired,
             },
@@ -2475,6 +2478,7 @@ class _DynamicFormState extends State<DynamicForm>
                   .copyWith(color: Colors.red[700], fontSize: 12),
             ),
             maxLines: 3,
+            minLines: 1,
             validationMessages: {
               'required': (_) => StringConstants.commentsAreRequired,
             },
@@ -2630,6 +2634,7 @@ class _DynamicFormState extends State<DynamicForm>
                   .copyWith(color: Colors.red[700], fontSize: 12),
             ),
             maxLines: 3,
+            minLines: 1,
             validationMessages: {
               'required': (_) => StringConstants.commentsAreRequired,
             },
