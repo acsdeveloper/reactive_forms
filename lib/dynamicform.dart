@@ -2717,10 +2717,19 @@ class _DynamicFormState extends State<DynamicForm>
                         ),
                       ),
                     )
-                  : IconButton(
-                      onPressed: () => previousButtonPressed(context),
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                          color: Colors.black),
+                  : Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                          color: widget.primaryColor,
+                          borderRadius: BorderRadius.circular(4.0)),
+                      child: Center(
+                        child: IconButton(
+                          onPressed: () => previousButtonPressed(context),
+                          icon: Icon(Icons.arrow_back_ios_new_rounded,
+                              color: widget.buttonTextColor),
+                        ),
+                      ),
                     ),
             if (shouldShowSubmit)
               Row(
@@ -2783,10 +2792,19 @@ class _DynamicFormState extends State<DynamicForm>
                         ),
                       ),
                     )
-                  : IconButton(
-                      onPressed: () => nextButtonPressed(context),
-                      icon: const Icon(Icons.arrow_forward_ios_rounded,
-                          color: Colors.black),
+                  : Container(
+                      height: 40,
+                      width: 40,
+                      decoration: BoxDecoration(
+                          color: widget.primaryColor,
+                          borderRadius: BorderRadius.circular(4.0)),
+                      child: Center(
+                        child: IconButton(
+                          onPressed: () => nextButtonPressed(context),
+                          icon: Icon(Icons.arrow_forward_ios_rounded,
+                              color: widget.buttonTextColor),
+                        ),
+                      ),
                     ),
             ],
           ],
