@@ -2720,6 +2720,7 @@ class _DynamicFormState extends State<DynamicForm>
                   : Container(
                       width: 40,
                       height: 40,
+                      margin: const EdgeInsets.only(left: 5),
                       decoration: BoxDecoration(
                           color: widget.primaryColor,
                           borderRadius: BorderRadius.circular(4.0)),
@@ -2795,6 +2796,7 @@ class _DynamicFormState extends State<DynamicForm>
                   : Container(
                       height: 40,
                       width: 40,
+                      margin: const EdgeInsets.only(right: 5),
                       decoration: BoxDecoration(
                           color: widget.primaryColor,
                           borderRadius: BorderRadius.circular(4.0)),
