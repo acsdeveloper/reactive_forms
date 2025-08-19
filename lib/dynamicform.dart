@@ -47,7 +47,6 @@ class DynamicForm extends StatefulWidget {
   final RxBool draftbtnClicked;
   final BottomNavigationType bottomNavigationType;
   final Map<String, dynamic>? initialValues;
-  final TextTheme? textTheme;
 
   DynamicForm({
     required this.formJson,
@@ -67,7 +66,6 @@ class DynamicForm extends StatefulWidget {
     this.initialValues,
     this.draftMode = false,
     RxBool? draftbtnClicked,
-    this.textTheme,
     super.key,
   }) : draftbtnClicked = draftbtnClicked ?? false.obs;
 
@@ -784,7 +782,6 @@ class _DynamicFormState extends State<DynamicForm>
 
     return Theme(
       data: Theme.of(context).copyWith(
-        textTheme: widget.textTheme,
           // We don't need to modify the textTheme if fontFamily is already a TextStyle
           // The fontFamily will be applied directly to each widget
           ),
