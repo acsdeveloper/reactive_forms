@@ -9,23 +9,26 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
+
 import 'package:reactive_forms/reactive_forms.dart';
 import 'package:reactiveform/bottom_navigation_typr.dart';
 import 'package:reactiveform/components/app_snackbar.dart';
 import 'package:reactiveform/components/app_typographpy.dart';
 import 'package:reactiveform/constants.dart';
 import 'package:reactiveform/constants/app.assests.dart';
+import 'package:reactiveform/models/form_field_model.dart';
 import 'package:reactiveform/string_constants.dart';
 import 'package:flutter/services.dart';
+import 'package:reactiveform/widgets/multi_select_form_field.dart';
 import 'dart:async'; // Added for Completer
 import 'dynamicformcontroller.dart';
-import 'package:reactiveform/models/form_field_model.dart';
 import 'package:http/http.dart' as http;
+import 'dart:math' as math;
 
 // Conditional import for web
 import 'web_utils.dart' if (dart.library.html) 'dart:html' as html;
 
-import 'widgets/multi_select_form_field.dart';
+enum ViewType { oneByOne, full, shortText }
 
 class DynamicForm extends StatefulWidget {
   final List<Map<String, dynamic>> formJson;
@@ -47,6 +50,8 @@ class DynamicForm extends StatefulWidget {
   final RxBool draftbtnClicked;
   final BottomNavigationType bottomNavigationType;
   final Map<String, dynamic>? initialValues;
+  final bool showShortText; // New: compact grid mode
+  final ViewType? viewType; // New: renders based on enum
 
   DynamicForm({
     required this.formJson,
@@ -64,6 +69,8 @@ class DynamicForm extends StatefulWidget {
     this.isManageToCheckPress = false,
     this.bottomNavigationType = BottomNavigationType.button,
     this.initialValues,
+    this.showShortText = false,
+    this.viewType,
     this.draftMode = false,
     RxBool? draftbtnClicked,
     super.key,
@@ -132,9 +139,28 @@ class _DynamicFormState extends State<DynamicForm>
   // Subscription to form value changes - will be used to update visibility
   late StreamSubscription<dynamic> _formValueChangeSubscription;
 
+  // Track if user attempted to submit in short text mode to show error dots
+  bool _shortTextSubmitAttempted = false;
+
+  // Caches to make draft status sticky across rebuilds
+  final Map<int, bool> _anchorDraftCache = {};
+  final Map<String, bool> _questionDraftCacheByName = {};
+  int? _expandedAnchor; // short-text mode: which anchor is expanded inline
+
+  // Convenience getters to preserve existing behavior while introducing enum
+  ViewType get _effectiveViewType {
+    if (widget.viewType != null) return widget.viewType!;
+    if (widget.showShortText == true) return ViewType.shortText;
+    if (widget.showOneByOne == true) return ViewType.oneByOne;
+    return ViewType.full;
+  }
+
+  bool get _isShortText => _effectiveViewType == ViewType.shortText;
+  bool get _isOneByOne => _effectiveViewType == ViewType.oneByOne;
+
   // Check if the current question should be visible, and if not, skip to the next visible one
   void _updateCurrentQuestionBasedOnVisibility() {
-    if (!widget.showOneByOne) return; // Only applicable in step-by-step mode
+    if (!_isOneByOne) return; // Only applicable in step-by-step mode
 
     // If the current question pointer is out of bounds, reset to the beginning
     if (_currentGroupPointer < 0 ||
@@ -260,7 +286,7 @@ class _DynamicFormState extends State<DynamicForm>
 
   // Check if the current question should be visible when going backwards, and if not, find the previous visible one
   void _updateCurrentQuestionBasedOnVisibilityForPrevious() {
-    if (!widget.showOneByOne) return; // Only applicable in step-by-step mode
+    if (!_isOneByOne) return; // Only applicable in step-by-step mode
 
     // If the current question pointer is out of bounds, reset to the beginning
     if (_currentGroupPointer < 0 ||
@@ -383,7 +409,7 @@ class _DynamicFormState extends State<DynamicForm>
   /// This function is used to automatically navigate to the first unanswered
   /// required question after the form is initially populated with saved data.
   void skipToFirstUnansweredQuestion() {
-    if (!widget.showOneByOne ||
+    if (!_isOneByOne ||
         !widget.draftMode ||
         widget.initialValues == null ||
         (widget.initialValues?.isNotEmpty != true)) {
@@ -734,7 +760,7 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Determine if the current question has groupWith property to show the FAB
     bool currentQuestionHasGroupWith = false;
-    if (widget.showOneByOne &&
+    if (_isOneByOne &&
         _groupAnchors.isNotEmpty &&
         _currentGroupPointer >= 0 &&
         _currentGroupPointer < _groupAnchors.length) {
@@ -789,36 +815,37 @@ class _DynamicFormState extends State<DynamicForm>
         formGroup: controller.form,
         child: Scaffold(
           // Only show the FloatingActionButton if the current question has a groupWith property
-          floatingActionButton:
-              widget.showOneByOne && currentQuestionHasGroupWith
-                  ? FloatingActionButton(
-                      onPressed: () => _addNewSet(),
-                      child: const Icon(Icons.add),
-                    )
-                  : null,
-          body: LayoutBuilder(
-            builder: (context, constraints) {
-              // Create a unique key that includes the current group pointer
-              // This ensures the widget tree is rebuilt when the current question changes
-              final uniqueKey = ValueKey(
-                  '${StringConstants.form}_pointer${_currentGroupPointer}_index${controller.currentQuestionIndex}_totalFields${_internalFields.length}');
+          floatingActionButton: _isOneByOne && currentQuestionHasGroupWith
+              ? FloatingActionButton(
+                  onPressed: () => _addNewSet(),
+                  child: const Icon(Icons.add),
+                )
+              : null,
+          body: _isShortText
+              ? Padding(
+                  padding: const EdgeInsets.all(10.0),
+                  child: _buildShortTextGrid(),
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final uniqueKey = ValueKey(
+                        '${StringConstants.form}_pointer${_currentGroupPointer}_index${controller.currentQuestionIndex}_totalFields${_internalFields.length}');
 
-              return SingleChildScrollView(
-                key: uniqueKey,
-                padding: const EdgeInsets.all(10.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // When showing one by one, we only show the current group of fields
-                    if (widget.showOneByOne) ..._buildOneByOneFields(),
-                    // When showing all at once, we show all fields
-                    if (!widget.showOneByOne) ..._buildAllFields(),
-                    if (_showAttachmentError) _buildErrorMessage(),
-                  ],
+                    return SingleChildScrollView(
+                      key: uniqueKey,
+                      padding: const EdgeInsets.all(10.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_isOneByOne) ..._buildOneByOneFields(),
+                          if (!_isOneByOne) ..._buildAllFields(),
+                          if (!_isShortText && _showAttachmentError)
+                            _buildErrorMessage(),
+                        ],
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
           bottomNavigationBar: _buildBottomNavigation(buttonColor,
               widget.isManageToCheckPress, widget.bottomNavigationType),
         ),
@@ -828,12 +855,194 @@ class _DynamicFormState extends State<DynamicForm>
 
   Widget _buildBottomNavigation(Color buttonColor, bool isManageToCheckPress,
       BottomNavigationType bottomNavigationType) {
+    // In short text mode, always show submit button only
+    if (_isShortText) {
+      return _buildSubmitButton(buttonColor, isManageToCheckPress);
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: widget.showOneByOne
+      child: _isOneByOne
           ? _buildStepNavigation(
               buttonColor, isManageToCheckPress, bottomNavigationType)
           : _buildSubmitButton(buttonColor, isManageToCheckPress),
+    );
+  }
+
+  Widget _buildDraftBanner() {
+    return Positioned(
+      top: -30,
+      left: -30,
+      child: Transform.rotate(
+        angle: -math.pi / 4,
+        child: Container(
+          color: Colors.amber,
+          padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 17),
+        ),
+      ),
+    );
+  }
+
+  // Build compact grid of question cards for short text mode
+  Widget _buildShortTextGrid() {
+    // Ensure grouping exists
+    if (_groupAnchors.isEmpty || _anchorToFieldIndices.isEmpty) {
+      _recomputeGroupStructure();
+    }
+
+    // Derive visible anchors by showWhen
+    final visibleFormIndices = _getVisibleQuestionIndices();
+    final Set<String> visibleNames = visibleFormIndices
+        .map((i) => widget.formJson[i]['name']?.toString() ?? '')
+        .toSet();
+
+    List<int> displayAnchors = [];
+    for (final anchor in _groupAnchors) {
+      if (anchor >= 0 && anchor < _internalFields.length) {
+        final n = _internalFields[anchor]['name']?.toString() ?? '';
+        if (visibleNames.isEmpty || visibleNames.contains(n)) {
+          displayAnchors.add(anchor);
+        }
+      }
+    }
+
+    // Fallback to direct index mapping if no anchors matched yet
+    if (displayAnchors.isEmpty) {
+      for (final i in visibleFormIndices) {
+        final n = widget.formJson[i]['name']?.toString();
+        final idx =
+            _internalFields.indexWhere((f) => f['name']?.toString() == n);
+        if (idx != -1) {
+          displayAnchors.add(idx);
+          _anchorToFieldIndices.putIfAbsent(idx, () => [idx]);
+        }
+      }
+    }
+
+    if (displayAnchors.isEmpty) return const SizedBox.shrink();
+
+    return SingleChildScrollView(
+      child: Column(
+        children: List.generate(displayAnchors.length, (index) {
+          final anchor = displayAnchors[index];
+          final field = _internalFields[anchor];
+          final String name = field['name']?.toString() ?? '';
+          final String label = field['label']?.toString() ?? name;
+          final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+          final List<Map<String, dynamic>> fields =
+              indices.map((i) => _internalFields[i]).toList();
+          final bool showErrorDot = widget.showShortText &&
+              _shortTextSubmitAttempted &&
+              !_isAnchorGroupValid(anchor);
+          final int? qNum = _anchorToQuestionNumber[anchor];
+          RxBool isExpanded = false.obs;
+
+          return Card(
+            clipBehavior: Clip.hardEdge,
+            margin: const EdgeInsets.only(bottom: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(
+                color:
+                    showErrorDot ? const Color(0xFFDE4B40) : Color(0xFFE0E0E0),
+                width: showErrorDot ? 2 : 1,
+              ),
+            ),
+            child: Stack(children: [
+              _buildDraftBanner(),
+              Positioned(
+                top: 8,
+                left: 4,
+                child: Transform.rotate(
+                  angle: -math.pi / 4,
+                  child: Text("Draft",
+                      style: TextStyle(
+                        fontSize: 6,
+                        fontWeight: FontWeight.w400,
+                        fontFamily: widget.fontFamily.fontFamily,
+                        color: Colors.black, // Always set color in TextSpan
+                      )),
+                ),
+              ),
+              ExpansionTile(
+                key: ValueKey('exp_${anchor}_${_expandedAnchor == anchor}'),
+                initiallyExpanded: _expandedAnchor == anchor,
+                onExpansionChanged: (expanded) {
+                  isExpanded.value = expanded;
+                  setState(() {
+                    _expandedAnchor = expanded
+                        ? anchor
+                        : (_expandedAnchor == anchor ? null : _expandedAnchor);
+                  });
+                },
+                shape: const RoundedRectangleBorder(
+                  side: BorderSide.none,
+                ),
+                collapsedShape: const RoundedRectangleBorder(
+                  side: BorderSide.none,
+                ),
+                expansionAnimationStyle: AnimationStyle(
+                    duration: const Duration(milliseconds: 300),
+                    reverseDuration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    reverseCurve: Curves.easeInOut),
+                maintainState: true,
+                title: Expanded(
+                  child: Obx(
+                    () => RichText(
+                      textAlign: TextAlign.left,
+                      softWrap: true,
+                      overflow: isExpanded.value
+                          ? TextOverflow.clip
+                          : TextOverflow.ellipsis,
+                      text: TextSpan(
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: widget.fontFamily.fontFamily,
+                          color: Colors.black, // Always set color in TextSpan
+                        ),
+                        children: [
+                          TextSpan(text: 'Q$qNum: $label'),
+                          if (field['required'] == true)
+                            const TextSpan(
+                              text: ' *', // stays next to label
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16.0,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                children: [
+                  ReactiveForm(
+                    formGroup: controller.form,
+                    child: StreamBuilder(
+                      stream: controller.form.valueChanges,
+                      builder: (context, __) => SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.all(10.0).copyWith(bottom: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildCardForFields(fields, false),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ]),
+          );
+        }),
+      ),
     );
   }
 
@@ -967,9 +1176,12 @@ class _DynamicFormState extends State<DynamicForm>
   Widget _buildCardForFields(
       List<Map<String, dynamic>> fields, bool isDuplicated) {
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      elevation: widget.showShortText ? 0 : 1.0,
+      margin: widget.showShortText
+          ? EdgeInsets.zero
+          : const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: EdgeInsets.all(widget.showShortText ? 0 : 12.0),
         child: Column(
           children: [
             if (isDuplicated)
@@ -1279,6 +1491,7 @@ class _DynamicFormState extends State<DynamicForm>
                           setState(() {
                             controller.uploadedFiles[field['name']] = files;
                           });
+                          // controller.notifyListeners();
                         },
                         uploadedFiles:
                             controller.uploadedFiles[field['name']] ?? [],
@@ -1287,6 +1500,7 @@ class _DynamicFormState extends State<DynamicForm>
                             // For single file upload, set to empty list when file is removed
                             controller.uploadedFiles[field['name']] = [];
                           });
+                          // controller.notifyListeners();
                         },
                         isRequired: isRequired,
                         questionNumber: _getQuestionNumberForField(field),
@@ -1351,6 +1565,7 @@ class _DynamicFormState extends State<DynamicForm>
 
   Widget _buildLabelRow(Map<String, dynamic> field) {
     if (field['label'] == null) return const SizedBox.shrink();
+    if (widget.showShortText) return const SizedBox.shrink();
 
     // Find the anchor index for this field
     int? anchorIndex;
@@ -1529,8 +1744,10 @@ class _DynamicFormState extends State<DynamicForm>
         ...options
             .map<Widget>(
               (option) => RadioListTile<String>(
+                contentPadding: EdgeInsets.zero,
                 title: Text(option, style: widget.fontFamily),
                 value: option,
+                // dense: true,
                 groupValue: controller.form.control(field['name']).value,
                 activeColor: widget.primaryColor,
                 onChanged: (value) {
@@ -1564,7 +1781,7 @@ class _DynamicFormState extends State<DynamicForm>
                   }
 
                   // Auto-navigation logic copied from dropdown implementation
-                  if (widget.showOneByOne) {
+                  if (widget.showOneByOne && !widget.showShortText) {
                     // Add a small delay to allow the value to be set before navigation
                     Future.delayed(const Duration(milliseconds: 300), () {
                       // Only proceed with auto-navigation if we're not on the submit page
@@ -1713,6 +1930,7 @@ class _DynamicFormState extends State<DynamicForm>
                       setState(() {
                         controller.uploadedFiles[field['name']] = files;
                       });
+                      // controller.notifyListeners();
                     },
                     uploadedFiles:
                         controller.uploadedFiles[field['name']] ?? [],
@@ -1721,6 +1939,7 @@ class _DynamicFormState extends State<DynamicForm>
                         // For single file upload, set to empty list when file is removed
                         controller.uploadedFiles[field['name']] = [];
                       });
+                      // controller.notifyListeners();
                     },
                     isRequired: isRequired,
                     questionNumber: _getQuestionNumberForField(field),
@@ -2026,7 +2245,7 @@ class _DynamicFormState extends State<DynamicForm>
             },
             // Add onSubmitted to validate the form when user submits via keyboard
             onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+              if (_isOneByOne && !isCurrentQuestionEffectivelyLast()) {
                 validateCurrentSection();
               }
             },
@@ -2180,7 +2399,7 @@ class _DynamicFormState extends State<DynamicForm>
             },
             // Add onSubmitted to validate the form when user submits via keyboard
             onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+              if (_isOneByOne && !isCurrentQuestionEffectivelyLast()) {
                 validateCurrentSection();
               }
             },
@@ -2433,6 +2652,7 @@ class _DynamicFormState extends State<DynamicForm>
                     setState(() {
                       controller.uploadedFiles[field['name']] = files;
                     });
+                    // controller.notifyListeners();
                   },
                   uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
                   onRemoveUploadedFile: (file) {
@@ -2440,6 +2660,7 @@ class _DynamicFormState extends State<DynamicForm>
                       // For single file upload, set to empty list when file is removed
                       controller.uploadedFiles[field['name']] = [];
                     });
+                    // controller.notifyListeners();
                   },
                   isRequired: isRequired,
                   questionNumber: _getQuestionNumberForField(field),
@@ -2485,7 +2706,7 @@ class _DynamicFormState extends State<DynamicForm>
             },
             // Add onSubmitted to validate the form when user submits via keyboard
             onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+              if (_isOneByOne && !isCurrentQuestionEffectivelyLast()) {
                 validateCurrentSection();
               }
             },
@@ -2641,7 +2862,7 @@ class _DynamicFormState extends State<DynamicForm>
             },
             // Add onSubmitted to validate the form when user submits via keyboard
             onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+              if (_isOneByOne && !isCurrentQuestionEffectivelyLast()) {
                 validateCurrentSection();
               }
             },
@@ -2818,7 +3039,8 @@ class _DynamicFormState extends State<DynamicForm>
   Widget _buildSubmitButton(Color buttonColor, bool isManageToCheckPress) {
     return Row(children: [
       if (isManageToCheckPress) ...[
-        ElevatedButton(
+        Expanded(
+            child: ElevatedButton(
           onPressed: () => _submitForm(context),
           style: ElevatedButton.styleFrom(
             backgroundColor: buttonColor,
@@ -2826,12 +3048,13 @@ class _DynamicFormState extends State<DynamicForm>
             padding: const EdgeInsets.symmetric(vertical: 16),
             minimumSize: const Size(double.infinity, 50),
           ),
-          child: Text(widget.submitButtonText ?? 'Submit',
+          child: Text(StringConstants.managerToCheck,
               style: widget.fontFamily.copyWith(color: widget.buttonTextColor)),
-        ),
+        )),
         const SizedBox(width: 10),
       ],
-      ElevatedButton(
+      Expanded(
+          child: ElevatedButton(
         onPressed: () => _submitForm(context),
         style: ElevatedButton.styleFrom(
           backgroundColor: buttonColor,
@@ -2841,12 +3064,22 @@ class _DynamicFormState extends State<DynamicForm>
         ),
         child: Text(widget.submitButtonText ?? 'Submit',
             style: widget.fontFamily.copyWith(color: widget.buttonTextColor)),
-      )
+      ))
     ]);
   }
 
   void _submitForm(BuildContext context,
       {bool isManageToCheckPress = false, bool isDraft = false}) {
+    // In short text mode, validate the entire form before proceed
+    if (widget.showShortText && !isDraft) {
+      setState(() {
+        _shortTextSubmitAttempted = true;
+      });
+      if (!_validateAllQuestionsAndAttachments()) {
+        // AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
+        return;
+      }
+    }
     // First validate the current question if in step-by-step mode
     if (widget.showOneByOne &&
         controller.currentQuestionIndex < widget.formJson.length &&
@@ -2912,6 +3145,316 @@ class _DynamicFormState extends State<DynamicForm>
     // Submit the cleaned data
     widget.onSubmit(
         cleanedFormData, cleanedUploadedFiles, isManageToCheckPress);
+  }
+
+  // Validate all questions and required attachments in short text mode
+  bool _validateAllQuestionsAndAttachments() {
+    bool isValid = true;
+
+    // Iterate each anchor (question group)
+    for (final anchor in _groupAnchors) {
+      final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+      for (final idx in indices) {
+        if (idx < 0 || idx >= _internalFields.length) continue;
+        final field = _internalFields[idx];
+        final String fieldName = field['name']?.toString() ?? '';
+
+        // Skip non-visible fields according to showWhen
+        if (!_shouldFieldBeVisible(field)) continue;
+
+        if (controller.form.contains(fieldName)) {
+          final control = controller.form.control(fieldName);
+          control.markAsTouched();
+          if (!control.valid) {
+            isValid = false;
+          }
+        }
+
+        // Files/comments requirements
+        if (!_validateFieldAttachmentsIfRequired(field)) {
+          isValid = false;
+        }
+
+        if (!_validateFieldCommentsIfRequired(field)) {
+          isValid = false;
+        }
+      }
+    }
+
+    return isValid;
+  }
+
+  int? _findFirstInvalidAnchor() {
+    for (final anchor in _groupAnchors) {
+      final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+      for (final idx in indices) {
+        if (idx < 0 || idx >= _internalFields.length) continue;
+        final field = _internalFields[idx];
+        final String fieldName = field['name']?.toString() ?? '';
+
+        // Skip hidden fields
+        if (!_shouldFieldBeVisible(field)) continue;
+
+        // Control invalid
+        if (controller.form.contains(fieldName)) {
+          final control = controller.form.control(fieldName);
+          if (!control.valid) return anchor;
+        }
+
+        // Attachments missing if required
+        if (!_validateFieldAttachmentsIfRequired(field)) return anchor;
+
+        // Comments missing if required
+        if (!_validateFieldCommentsIfRequired(field)) return anchor;
+      }
+    }
+    return null;
+  }
+
+  bool _shouldFieldBeVisible(Map<String, dynamic> field) {
+    if (field['showWhen'] == null) return true;
+    final conditions = field['showWhen'] as Map<String, dynamic>;
+    bool shouldShow = true;
+    conditions.forEach((dependentField, expectedValue) {
+      if (!controller.form.contains(dependentField)) {
+        shouldShow = false;
+        return;
+      }
+      final currentValue = controller.form.control(dependentField).value;
+      bool matches;
+      if (expectedValue is List) {
+        if (currentValue is List) {
+          matches = currentValue.any((v) => expectedValue.contains(v));
+        } else {
+          matches = expectedValue.contains(currentValue);
+        }
+      } else if (currentValue is List) {
+        matches = currentValue.contains(expectedValue);
+      } else {
+        matches = currentValue == expectedValue;
+      }
+      shouldShow = shouldShow && matches;
+    });
+    return shouldShow;
+  }
+
+  bool _validateFieldAttachmentsIfRequired(Map<String, dynamic> field) {
+    final String fieldName = field['name']?.toString() ?? '';
+
+    // Determine requirement using same rules as _checkIfRequiredFilesUploaded
+    dynamic currentValue = controller.form.contains(fieldName)
+        ? controller.form.control(fieldName).value
+        : null;
+
+    bool requiresAttachments = false;
+
+    if (field['type'] == 'file' && field['required'] == true) {
+      requiresAttachments = true;
+    }
+
+    if (field['requireAttachmentsOn'] != null) {
+      if (field['requireAttachmentsOn'] == true) {
+        requiresAttachments = true;
+      } else {
+        List<dynamic> requiredOptions = field['requireAttachmentsOn'] is List
+            ? field['requireAttachmentsOn']
+            : [field['requireAttachmentsOn']];
+        if (currentValue is List) {
+          requiresAttachments =
+              currentValue.any((value) => requiredOptions.contains(value));
+        } else {
+          requiresAttachments = requiredOptions.contains(currentValue);
+        }
+      }
+    }
+
+    if (field['enableAttachmentsOn'] != null && !requiresAttachments) {
+      List<dynamic> enabledOptions = field['enableAttachmentsOn'] is List
+          ? field['enableAttachmentsOn']
+          : [field['enableAttachmentsOn']];
+      if (currentValue is List) {
+        requiresAttachments =
+            currentValue.any((value) => enabledOptions.contains(value));
+      } else {
+        requiresAttachments = enabledOptions.contains(currentValue);
+      }
+    }
+
+    if (field['attachmentsRequired'] == true && !requiresAttachments) {
+      requiresAttachments = true;
+    }
+
+    if (field['hasAttachments'] == true && !requiresAttachments) {
+      bool hasConditionalAttachments = field['requireAttachmentsOn'] != null ||
+          field['disableAttachmentsOn'] != null;
+
+      if (!hasConditionalAttachments) {
+        requiresAttachments = true;
+      } else {
+        bool isRequireAttachmentsOnEmpty =
+            field['requireAttachmentsOn'] is List &&
+                (field['requireAttachmentsOn'] as List).isEmpty;
+        bool isDisableAttachmentsOnEmpty =
+            field['disableAttachmentsOn'] is List &&
+                (field['disableAttachmentsOn'] as List).isEmpty;
+        if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
+          requiresAttachments = true;
+        }
+      }
+    }
+
+    if (field['disableAttachmentsOn'] != null) {
+      List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
+          ? field['disableAttachmentsOn']
+          : [field['disableAttachmentsOn']];
+      if (currentValue is List) {
+        if (currentValue.any((v) => disabledOptions.contains(v))) {
+          requiresAttachments = false;
+        }
+      } else if (disabledOptions.contains(currentValue)) {
+        requiresAttachments = false;
+      }
+    }
+
+    if (!requiresAttachments) return true;
+
+    final uploads = controller.uploadedFiles[fieldName];
+    if (uploads == null || uploads.isEmpty) {
+      _lastValidationErrorField = field;
+      return false;
+    }
+    return true;
+  }
+
+  bool _validateFieldCommentsIfRequired(Map<String, dynamic> field) {
+    if (field['hasComments'] == true) {
+      final fieldControlName = field['name']?.toString() ?? '';
+      final commentControlName = '${fieldControlName}_comment';
+      if (controller.form.contains(commentControlName) &&
+          controller.form.contains(fieldControlName)) {
+        final fieldControl = controller.form.control(fieldControlName);
+        final commentControl = controller.form.control(commentControlName);
+        final show = controller.shouldShowCommentsBasedOnFieldValue(
+            field, fieldControl.value);
+        if (show) {
+          commentControl.markAsTouched();
+          if (!commentControl.valid) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  // Check validity of all controls in a question anchor (including grouped fields)
+  bool _isAnchorGroupValid(int anchor) {
+    final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+    for (final idx in indices) {
+      if (idx < 0 || idx >= _internalFields.length) continue;
+      final field = _internalFields[idx];
+      final String fieldName = field['name']?.toString() ?? '';
+
+      if (controller.form.contains(fieldName)) {
+        final control = controller.form.control(fieldName);
+        if (!control.valid) return false;
+      }
+
+      // Attachment requirement
+      if (!_validateFieldAttachmentsIfRequired(field)) return false;
+
+      // Comments requirement
+      if (!_validateFieldCommentsIfRequired(field)) return false;
+    }
+    return true;
+  }
+
+  /// Returns true if any content is present for the given anchor (question) that would
+  /// indicate the user started filling it: control value, attachments, or comments.
+  bool isAnchorDraft(int anchor) {
+    if (_anchorDraftCache.containsKey(anchor))
+      return _anchorDraftCache[anchor]!;
+
+    final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+    bool hasContent = false;
+    for (final idx in indices) {
+      if (idx < 0 || idx >= _internalFields.length) continue;
+      final field = _internalFields[idx];
+      if (_isFieldDraft(field)) {
+        hasContent = true;
+        break;
+      }
+    }
+    _anchorDraftCache[anchor] = hasContent;
+    return hasContent;
+  }
+
+  /// Returns true if the question identified by its base field name has any content filled.
+  /// This checks the main control, attachments and optional comment control.
+  bool isQuestionDraftByName(String fieldName) {
+    if (_questionDraftCacheByName.containsKey(fieldName)) {
+      return _questionDraftCacheByName[fieldName]!;
+    }
+    // Try to resolve anchor by name first
+    final anchor = _groupAnchors.firstWhere(
+      (a) =>
+          a >= 0 &&
+          a < _internalFields.length &&
+          (_internalFields[a]['name']?.toString() ?? '') == fieldName,
+      orElse: () => -1,
+    );
+    if (anchor != -1) {
+      final res = isAnchorDraft(anchor);
+      _questionDraftCacheByName[fieldName] = res;
+      return res;
+    }
+
+    // Fallback: find any field with that name in internal list
+    final idx = _internalFields
+        .indexWhere((f) => (f['name']?.toString() ?? '') == fieldName);
+    if (idx != -1) {
+      final res = _isFieldDraft(_internalFields[idx]);
+      _questionDraftCacheByName[fieldName] = res;
+      return res;
+    }
+    _questionDraftCacheByName[fieldName] = false;
+    return false;
+  }
+
+  /// Core check: determines if a single field has any content indicating a draft
+  bool _isFieldDraft(Map<String, dynamic> field) {
+    final String fieldName = field['name']?.toString() ?? '';
+
+    // 1) Attachments present
+    final attachments = controller.uploadedFiles[fieldName] ?? [];
+    if (attachments.isNotEmpty) return true;
+
+    // 2) Main control value present
+    if (controller.form.contains(fieldName)) {
+      final control = controller.form.control(fieldName);
+      final value = control.value;
+      if (value != null) {
+        if (value is String) {
+          if (value.trim().isNotEmpty) return true;
+        } else if (value is List) {
+          if (value.isNotEmpty) return true;
+        } else {
+          // Numbers or other scalar types
+          return true;
+        }
+      }
+    }
+
+    // 3) Comment control value present
+    final commentControlName = '${fieldName}_comment';
+    if (controller.form.contains(commentControlName)) {
+      final commentValue = controller.form.control(commentControlName).value;
+      if (commentValue != null &&
+          commentValue is String &&
+          commentValue.trim().isNotEmpty) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   String _getFileType(String fileName) {
@@ -3542,6 +4085,14 @@ class _DynamicFormState extends State<DynamicForm>
           duration: const Duration(seconds: 3),
         ),
       );
+      // Auto-focus first unanswered in short text mode
+      if (_isShortText) {
+        final anchor = _findFirstInvalidAnchor();
+        if (anchor != null) {
+          print('sdf');
+          // _openQuestionEditor(anchor);
+        }
+      }
       return;
     }
 
@@ -3553,6 +4104,14 @@ class _DynamicFormState extends State<DynamicForm>
       // Show a snackbar to inform the user that validation failed
       AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
 
+      // Auto-focus first unanswered in short text mode
+      if (_isShortText) {
+        final anchor = _findFirstInvalidAnchor();
+        if (anchor != null) {
+          print('sdf');
+          // _openQuestionEditor(anchor);
+        }
+      }
       return;
     }
 

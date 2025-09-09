@@ -45,10 +45,14 @@ class KitchenInspectionScreen extends StatelessWidget {
           fontFamily:
               const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           context: context,
-          showOneByOne: true,
+          showOneByOne: false,
           primaryColor: Colors.black,
+          showShortText: true,
           formJson: formJson,
           bookingAppModelFileUpload: true,
+          isManageToCheckPress: true,
+          draftMode: true,
+          bottomNavigationType: BottomNavigationType.button,
           onSubmit: (formData, attachments, bool? isManageToCheckPress) {
             
           },
