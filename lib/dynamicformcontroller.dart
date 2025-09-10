@@ -1169,4 +1169,215 @@ class DynamicFormController extends ChangeNotifier {
     // First try to determine from file extension
     return fileName.split('.').last;
   }
+
+  /// The function determines whether a field should be visible based on specified conditions.
+  ///
+  /// Args:
+  ///   field (Map<String, dynamic>): The `shouldFieldBeVisible` function takes a `Map<String, dynamic>`
+  /// named `field` as a parameter. This map represents a field in a form and contains information about
+  /// when the field should be visible based on certain conditions specified in the `showWhen` key of
+  /// the map.
+  ///
+  /// Returns:
+  ///   The function `shouldFieldBeVisible` returns a boolean value indicating whether the field should
+  /// be visible based on the conditions specified in the `field` parameter.
+  bool shouldFieldBeVisible(Map<String, dynamic> field) {
+    if (field['showWhen'] == null) return true;
+    final conditions = field['showWhen'] as Map<String, dynamic>;
+    bool shouldShow = true;
+    conditions.forEach((dependentField, expectedValue) {
+      if (!form.contains(dependentField)) {
+        shouldShow = false;
+        return;
+      }
+      final currentValue = form.control(dependentField).value;
+      bool matches;
+      if (expectedValue is List) {
+        if (currentValue is List) {
+          matches = currentValue.any((v) => expectedValue.contains(v));
+        } else {
+          matches = expectedValue.contains(currentValue);
+        }
+      } else if (currentValue is List) {
+        matches = currentValue.contains(expectedValue);
+      } else {
+        matches = currentValue == expectedValue;
+      }
+      shouldShow = shouldShow && matches;
+    });
+    return shouldShow;
+  }
+
+  /// The function `validateFieldAttachmentsIfRequired` checks if field attachments are required based
+  /// on specified conditions and returns true if attachments are present, false otherwise.
+  ///
+  /// Args:
+  ///   field (Map<String, dynamic>): The `field` parameter in the `validateFieldAttachmentsIfRequired`
+  /// function is a Map that contains information about a specific field in a form. It includes details
+  /// such as the field name, type, required status, options for requiring attachments, enabling
+  /// attachments, disabling attachments, and whether attachments are currently present
+  ///   lastValidationErrorField: The `lastValidationErrorField` parameter in the
+  /// `validateFieldAttachmentsIfRequired` function is used to store the last field that failed
+  /// validation due to missing attachments. If the field does not have the required attachments, the
+  /// function sets `lastValidationErrorField` to that field and returns `false`. This parameter
+  ///
+  /// Returns:
+  ///   The function `validateFieldAttachmentsIfRequired` returns a boolean value. It returns `true` if
+  /// the field does not require attachments or if attachments are present, and it returns `false` if
+  /// attachments are required but not present for the field.
+  bool validateFieldAttachmentsIfRequired(
+      Map<String, dynamic> field, lastValidationErrorField) {
+    final String fieldName = field['name']?.toString() ?? '';
+
+    // Determine requirement using same rules as _checkIfRequiredFilesUploaded
+    dynamic currentValue =
+        form.contains(fieldName) ? form.control(fieldName).value : null;
+
+    bool requiresAttachments = false;
+
+    if (field['type'] == 'file' && field['required'] == true) {
+      requiresAttachments = true;
+    }
+
+    if (field['requireAttachmentsOn'] != null) {
+      if (field['requireAttachmentsOn'] == true) {
+        requiresAttachments = true;
+      } else {
+        List<dynamic> requiredOptions = field['requireAttachmentsOn'] is List
+            ? field['requireAttachmentsOn']
+            : [field['requireAttachmentsOn']];
+        if (currentValue is List) {
+          requiresAttachments =
+              currentValue.any((value) => requiredOptions.contains(value));
+        } else {
+          requiresAttachments = requiredOptions.contains(currentValue);
+        }
+      }
+    }
+
+    if (field['enableAttachmentsOn'] != null && !requiresAttachments) {
+      List<dynamic> enabledOptions = field['enableAttachmentsOn'] is List
+          ? field['enableAttachmentsOn']
+          : [field['enableAttachmentsOn']];
+      if (currentValue is List) {
+        requiresAttachments =
+            currentValue.any((value) => enabledOptions.contains(value));
+      } else {
+        requiresAttachments = enabledOptions.contains(currentValue);
+      }
+    }
+
+    if (field['attachmentsRequired'] == true && !requiresAttachments) {
+      requiresAttachments = true;
+    }
+
+    if (field['hasAttachments'] == true && !requiresAttachments) {
+      bool hasConditionalAttachments = field['requireAttachmentsOn'] != null ||
+          field['disableAttachmentsOn'] != null;
+
+      if (!hasConditionalAttachments) {
+        requiresAttachments = true;
+      } else {
+        bool isRequireAttachmentsOnEmpty =
+            field['requireAttachmentsOn'] is List &&
+                (field['requireAttachmentsOn'] as List).isEmpty;
+        bool isDisableAttachmentsOnEmpty =
+            field['disableAttachmentsOn'] is List &&
+                (field['disableAttachmentsOn'] as List).isEmpty;
+        if (isRequireAttachmentsOnEmpty && isDisableAttachmentsOnEmpty) {
+          requiresAttachments = true;
+        }
+      }
+    }
+
+    if (field['disableAttachmentsOn'] != null) {
+      List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
+          ? field['disableAttachmentsOn']
+          : [field['disableAttachmentsOn']];
+      if (currentValue is List) {
+        if (currentValue.any((v) => disabledOptions.contains(v))) {
+          requiresAttachments = false;
+        }
+      } else if (disabledOptions.contains(currentValue)) {
+        requiresAttachments = false;
+      }
+    }
+
+    if (!requiresAttachments) return true;
+
+    final uploads = uploadedFiles[fieldName];
+    if (uploads == null || uploads.isEmpty) {
+      lastValidationErrorField = field;
+      return false;
+    }
+    return true;
+  }
+
+  /// This Dart function validates field comments if required based on certain conditions.
+  ///
+  /// Args:
+  ///   field (Map<String, dynamic>): The `validateFieldCommentsIfRequired` function takes a
+  /// `Map<String, dynamic>` named `field` as a parameter. This `field` map is expected to have a
+  /// key-value pair where the key is `'hasComments'` and the value is a boolean indicating whether
+  /// comments are present for the
+  ///
+  /// Returns:
+  ///   The function `validateFieldCommentsIfRequired` returns a boolean value - `true` or `false`.
+  bool validateFieldCommentsIfRequired(Map<String, dynamic> field) {
+    if (field['hasComments'] == true) {
+      final fieldControlName = field['name']?.toString() ?? '';
+      final commentControlName = '${fieldControlName}_comment';
+      if (form.contains(commentControlName) &&
+          form.contains(fieldControlName)) {
+        final fieldControl = form.control(fieldControlName);
+        final commentControl = form.control(commentControlName);
+        final show =
+            shouldShowCommentsBasedOnFieldValue(field, fieldControl.value);
+        if (show) {
+          commentControl.markAsTouched();
+          if (!commentControl.valid) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+// Validate all questions and required attachments in short text mode
+  bool validateAllQuestionsAndAttachments(groupAnchors, anchorToFieldIndices,
+      internalFields, lastValidationErrorField) {
+    bool isValid = true;
+
+    // Iterate each anchor (question group)
+    for (final anchor in groupAnchors) {
+      final List<int> indices = anchorToFieldIndices[anchor] ?? [anchor];
+      for (final idx in indices) {
+        if (idx < 0 || idx >= internalFields.length) continue;
+        final field = internalFields[idx];
+        final String fieldName = field['name']?.toString() ?? '';
+
+        // Skip non-visible fields according to showWhen
+        if (!shouldFieldBeVisible(field)) continue;
+
+        if (form.contains(fieldName)) {
+          final control = form.control(fieldName);
+          control.markAsTouched();
+          if (!control.valid) {
+            isValid = false;
+          }
+        }
+
+        // Files/comments requirements
+        if (!validateFieldAttachmentsIfRequired(
+            field, lastValidationErrorField)) {
+          isValid = false;
+        }
+
+        if (!validateFieldCommentsIfRequired(field)) {
+          isValid = false;
+        }
+      }
+    }
+
+    return isValid;
+  }
 }

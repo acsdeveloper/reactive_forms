@@ -21,6 +21,7 @@ import 'dart:async'; // Added for Completer
 import 'dynamicformcontroller.dart';
 import 'package:reactiveform/models/form_field_model.dart';
 import 'package:http/http.dart' as http;
+import 'dart:math' as math;
 
 // Conditional import for web
 import 'web_utils.dart' if (dart.library.html) 'dart:html' as html;
@@ -47,6 +48,8 @@ class DynamicForm extends StatefulWidget {
   final RxBool draftbtnClicked;
   final BottomNavigationType bottomNavigationType;
   final Map<String, dynamic>? initialValues;
+  final bool accordionView;
+  final ThemeData? themeData;
 
   DynamicForm({
     required this.formJson,
@@ -64,7 +67,9 @@ class DynamicForm extends StatefulWidget {
     this.isManageToCheckPress = false,
     this.bottomNavigationType = BottomNavigationType.button,
     this.initialValues,
+    this.accordionView = false,
     this.draftMode = false,
+    this.themeData,
     RxBool? draftbtnClicked,
     super.key,
   }) : draftbtnClicked = draftbtnClicked ?? false.obs;
@@ -131,6 +136,18 @@ class _DynamicFormState extends State<DynamicForm>
 
   // Subscription to form value changes - will be used to update visibility
   late StreamSubscription<dynamic> _formValueChangeSubscription;
+
+  // Track if user attempted to submit in accordionview mode to show error dots
+  bool _shortTextSubmitAttempted = false;
+
+  // Caches to make draft status sticky across rebuilds
+  final Map<int, bool> _anchorDraftCache = {};
+  int? _expandedAnchor; // accordionview mode: which anchor is expanded inline
+  late bool expandAll;
+  final ScrollController _scrollController = ScrollController();
+  final Map<int, GlobalKey> _fieldKeys = {};
+
+  // Convenience getters to preserve existing behavior while introducing enum
 
   // Check if the current question should be visible, and if not, skip to the next visible one
   void _updateCurrentQuestionBasedOnVisibility() {
@@ -484,6 +501,9 @@ class _DynamicFormState extends State<DynamicForm>
       }
     });
 
+    expandAll =
+        !widget.draftMode && widget.initialValues != null ? true : false;
+
     controller = DynamicFormController(
       formJson: widget.formJson,
       onSubmit: widget.onSubmit,
@@ -781,10 +801,11 @@ class _DynamicFormState extends State<DynamicForm>
     }
 
     return Theme(
-      data: Theme.of(context).copyWith(
-          // We don't need to modify the textTheme if fontFamily is already a TextStyle
-          // The fontFamily will be applied directly to each widget
-          ),
+      data: widget.themeData ??
+          Theme.of(context).copyWith(
+              // We don't need to modify the textTheme if fontFamily is already a TextStyle
+              // The fontFamily will be applied directly to each widget
+              ),
       child: ReactiveForm(
         formGroup: controller.form,
         child: Scaffold(
@@ -805,15 +826,20 @@ class _DynamicFormState extends State<DynamicForm>
 
               return SingleChildScrollView(
                 key: uniqueKey,
-                padding: const EdgeInsets.all(10.0),
+                padding: const EdgeInsets.all(10.0)
+                    .copyWith(top: widget.accordionView ? 0.0 : 10.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // When showing one by one, we only show the current group of fields
-                    if (widget.showOneByOne) ..._buildOneByOneFields(),
+                    if (widget.accordionView) _buildShortTextGrid(),
+                    if (!widget.accordionView && widget.showOneByOne)
+                      ..._buildOneByOneFields(),
                     // When showing all at once, we show all fields
-                    if (!widget.showOneByOne) ..._buildAllFields(),
-                    if (_showAttachmentError) _buildErrorMessage(),
+                    if (!widget.accordionView && !widget.showOneByOne)
+                      ..._buildAllFields(),
+                    if (!widget.accordionView && _showAttachmentError)
+                      _buildErrorMessage(),
                   ],
                 ),
               );
@@ -828,12 +854,238 @@ class _DynamicFormState extends State<DynamicForm>
 
   Widget _buildBottomNavigation(Color buttonColor, bool isManageToCheckPress,
       BottomNavigationType bottomNavigationType) {
+    // In accordionview mode, always show submit button only
+    if (widget.accordionView) {
+      return _buildSubmitButton(buttonColor, isManageToCheckPress);
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: widget.showOneByOne
           ? _buildStepNavigation(
               buttonColor, isManageToCheckPress, bottomNavigationType)
           : _buildSubmitButton(buttonColor, isManageToCheckPress),
+    );
+  }
+
+  /// The _buildDraftBanner function returns a Positioned widget containing a rotated Container with an
+  /// amber background color.
+  ///
+  /// Returns:
+  ///   A Positioned widget is being returned with a Transform.rotate widget as its child. The
+  /// Transform.rotate widget has a Container widget as its child, which has a color of Colors.amber and
+  /// padding set with EdgeInsets.symmetric(horizontal: 50, vertical: 17).
+  Widget _buildDraftBanner() {
+    return Positioned(
+      top: -30,
+      left: -30,
+      child: Transform.rotate(
+        angle: -math.pi / 4,
+        child: Container(
+          color: Colors.amber,
+          padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 17),
+        ),
+      ),
+    );
+  }
+
+  // Build compact grid of question cards for short text mode
+  /// This function builds a grid of short text input fields based on certain conditions and displays
+  /// them in an expandable/collapsible format within a SingleChildScrollView widget.
+  ///
+  /// Returns:
+  ///   The `_buildShortTextGrid` method returns a `Widget` which is a `SingleChildScrollView`
+  /// containing a `Column` with multiple child widgets including `Row`, `Text`, `Transform.scale`,
+  /// `CupertinoSwitch`, `SizedBox`, and a list of `Card` widgets generated based on the
+  /// `displayAnchors` list. Each `Card` widget contains various child widgets such
+  Widget _buildShortTextGrid() {
+    // Ensure grouping exists
+    if (_groupAnchors.isEmpty || _anchorToFieldIndices.isEmpty) {
+      _recomputeGroupStructure();
+    }
+
+    // Derive visible anchors by showWhen
+    final visibleFormIndices = _getVisibleQuestionIndices();
+    final Set<String> visibleNames = visibleFormIndices
+        .map((i) => widget.formJson[i]['name']?.toString() ?? '')
+        .toSet();
+
+    List<int> displayAnchors = [];
+    for (final anchor in _groupAnchors) {
+      if (anchor >= 0 && anchor < _internalFields.length) {
+        final n = _internalFields[anchor]['name']?.toString() ?? '';
+        if (visibleNames.isEmpty || visibleNames.contains(n)) {
+          displayAnchors.add(anchor);
+        }
+      }
+    }
+
+    // Fallback to direct index mapping if no anchors matched yet
+    if (displayAnchors.isEmpty) {
+      for (final i in visibleFormIndices) {
+        final n = widget.formJson[i]['name']?.toString();
+        final idx =
+            _internalFields.indexWhere((f) => f['name']?.toString() == n);
+        if (idx != -1) {
+          displayAnchors.add(idx);
+          _anchorToFieldIndices.putIfAbsent(idx, () => [idx]);
+        }
+      }
+    }
+
+    if (displayAnchors.isEmpty) return const SizedBox.shrink();
+    for (final anchor in _groupAnchors) {
+      _fieldKeys.putIfAbsent(
+          anchor, () => GlobalKey(debugLabel: 'index$anchor'));
+    }
+
+    return SingleChildScrollView(
+      controller: _scrollController,
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text(
+                  expandAll
+                      ? StringConstants.collapseAll
+                      : StringConstants.expandAll,
+                  style: Get.textTheme.headlineLarge?.copyWith(fontSize: 12)),
+              Transform.scale(
+                scale: 0.7,
+                alignment: Alignment.center,
+                child: CupertinoSwitch(
+                  activeColor: Get.theme.colorScheme.secondary,
+                  value: expandAll,
+                  onChanged: (value) {
+                    setState(() {
+                      expandAll = value;
+                    });
+                  },
+                ),
+              )
+            ],
+          ),
+          const SizedBox(height: 10.0),
+          // Use .map to build widgets properly
+          ...List.generate(displayAnchors.length, (index) {
+            final anchor = displayAnchors[index];
+            final field = _internalFields[anchor];
+            final String name = field['name']?.toString() ?? '';
+            final String label = field['label']?.toString() ?? name;
+            final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+            final List<Map<String, dynamic>> fields =
+                indices.map((i) => _internalFields[i]).toList();
+            final bool showErrorDot = widget.accordionView &&
+                _shortTextSubmitAttempted &&
+                !_isAnchorGroupValid(anchor);
+            final int? qNum = _anchorToQuestionNumber[anchor];
+            final bool isDraft = isAnchorDraft(anchor) && widget.draftMode;
+            return Card(
+              key: _fieldKeys[anchor],
+              clipBehavior: Clip.hardEdge,
+              margin: const EdgeInsets.only(bottom: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(
+                  color: showErrorDot
+                      ? Get.theme.colorScheme.onError
+                      : Get.theme.dividerColor.withOpacity(0.5),
+                  width: 1,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  if (isDraft) ...[
+                    _buildDraftBanner(),
+                    Positioned(
+                      top: 8,
+                      left: 4,
+                      child: Transform.rotate(
+                        angle: -math.pi / 4,
+                        child: Text(StringConstants.draft,
+                            style: Get.textTheme.headlineLarge
+                                ?.copyWith(fontSize: 6)),
+                      ),
+                    )
+                  ],
+                  ExpansionTile(
+                    key: ValueKey(
+                        '$expandAll exp_${anchor}_${_expandedAnchor == anchor}'),
+                    initiallyExpanded:
+                        expandAll ? expandAll : _expandedAnchor == anchor,
+                    onExpansionChanged: (expanded) {
+                      setState(() {
+                        _expandedAnchor = expanded
+                            ? anchor
+                            : (_expandedAnchor == anchor
+                                ? null
+                                : _expandedAnchor);
+                      });
+                    },
+                    shape: const RoundedRectangleBorder(side: BorderSide.none),
+                    collapsedShape:
+                        const RoundedRectangleBorder(side: BorderSide.none),
+                    expansionAnimationStyle: AnimationStyle(
+                      duration: const Duration(milliseconds: 300),
+                      reverseDuration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      reverseCurve: Curves.easeInOut,
+                    ),
+                    tilePadding: const EdgeInsets.symmetric(horizontal: 10),
+                    title: Container(
+                      height:
+                          _expandedAnchor == anchor || expandAll ? null : 40,
+                      padding: const EdgeInsets.only(top: 10.0),
+                      width: MediaQuery.of(context).size.width,
+                      child: RichText(
+                        textAlign: TextAlign.left,
+                        softWrap: true,
+                        overflow: _expandedAnchor == anchor || expandAll
+                            ? TextOverflow.clip
+                            : TextOverflow.ellipsis,
+                        text: TextSpan(
+                          style: Get.textTheme.labelLarge
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                          children: [
+                            TextSpan(text: 'Q$qNum: $label'),
+                            if (field['required'] == true)
+                              const TextSpan(
+                                text: ' *',
+                                style: TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16.0,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    children: [
+                      ReactiveForm(
+                        formGroup: controller.form,
+                        child: SafeArea(
+                          top: false,
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.all(10).copyWith(bottom: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildCardForFields(fields, false),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 
@@ -967,9 +1219,12 @@ class _DynamicFormState extends State<DynamicForm>
   Widget _buildCardForFields(
       List<Map<String, dynamic>> fields, bool isDuplicated) {
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      elevation: widget.accordionView ? 0 : 1.0,
+      margin: widget.accordionView
+          ? EdgeInsets.zero
+          : const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: EdgeInsets.all(widget.accordionView ? 0 : 12.0),
         child: Column(
           children: [
             if (isDuplicated)
@@ -1351,6 +1606,7 @@ class _DynamicFormState extends State<DynamicForm>
 
   Widget _buildLabelRow(Map<String, dynamic> field) {
     if (field['label'] == null) return const SizedBox.shrink();
+    if (widget.accordionView) return const SizedBox.shrink();
 
     // Find the anchor index for this field
     int? anchorIndex;
@@ -1525,58 +1781,66 @@ class _DynamicFormState extends State<DynamicForm>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildLabelRow(field),
-        const SizedBox(height: 4),
+        widget.accordionView
+            ? const SizedBox.shrink()
+            : const SizedBox(height: 4),
         ...options
             .map<Widget>(
-              (option) => RadioListTile<String>(
-                title: Text(option, style: widget.fontFamily),
-                value: option,
-                groupValue: controller.form.control(field['name']).value,
-                activeColor: widget.primaryColor,
-                onChanged: (value) {
-                  // Update the form using patchValue instead of directly setting the value
-                  // This will ensure that all reactive widgets listening to this field are notified
-                  if (value != null) {
-                    // Use patchValue to trigger proper reactive updates
-                    controller.form.patchValue({field['name']: value});
+              (option) => Transform.translate(
+                offset: Offset(widget.accordionView ? -8 : 0, 0),
+                child: RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(option, style: widget.fontFamily),
+                  value: option,
+                  dense: true,
+                  groupValue: controller.form.control(field['name']).value,
+                  activeColor: widget.primaryColor,
+                  onChanged: (value) {
+                    // Update the form using patchValue instead of directly setting the value
+                    // This will ensure that all reactive widgets listening to this field are notified
+                    if (value != null) {
+                      // Use patchValue to trigger proper reactive updates
+                      controller.form.patchValue({field['name']: value});
 
-                    // Also update the control directly to ensure consistency
-                    final formControl = controller.form.control(field['name']);
-                    if (formControl is FormControl<dynamic>) {
-                      formControl.markAsTouched();
-                      formControl.updateValue(value);
-                    }
+                      // Also update the control directly to ensure consistency
+                      final formControl =
+                          controller.form.control(field['name']);
+                      if (formControl is FormControl<dynamic>) {
+                        formControl.markAsTouched();
+                        formControl.updateValue(value);
+                      }
 
-                    // Debug log to verify the value change
-                    if (kDebugMode) {
-                      print(
-                          "Radio value changed to: $value for field ${field['name']}");
-                    }
-
-                    // Force the entire widget tree to rebuild to ensure
-                    // the FileUploadWidget appears or disappears as needed
-                    setState(() {
-                      // This empty setState will trigger a rebuild
+                      // Debug log to verify the value change
                       if (kDebugMode) {
-                        print("Forcing UI rebuild for radio button change");
+                        print(
+                            "Radio value changed to: $value for field ${field['name']}");
                       }
-                    });
-                  }
 
-                  // Auto-navigation logic copied from dropdown implementation
-                  if (widget.showOneByOne) {
-                    // Add a small delay to allow the value to be set before navigation
-                    Future.delayed(const Duration(milliseconds: 300), () {
-                      // Only proceed with auto-navigation if we're not on the submit page
-                      if (!isCurrentQuestionEffectivelyLast()) {
-                        // First validate the current form section
-                        if (validateCurrentSection()) {
-                          moveToNextQuestion(context);
+                      // Force the entire widget tree to rebuild to ensure
+                      // the FileUploadWidget appears or disappears as needed
+                      setState(() {
+                        // This empty setState will trigger a rebuild
+                        if (kDebugMode) {
+                          print("Forcing UI rebuild for radio button change");
                         }
-                      }
-                    });
-                  }
-                },
+                      });
+                    }
+
+                    // Auto-navigation logic copied from dropdown implementation
+                    if (widget.showOneByOne && !widget.accordionView) {
+                      // Add a small delay to allow the value to be set before navigation
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        // Only proceed with auto-navigation if we're not on the submit page
+                        if (!isCurrentQuestionEffectivelyLast()) {
+                          // First validate the current form section
+                          if (validateCurrentSection()) {
+                            moveToNextQuestion(context);
+                          }
+                        }
+                      });
+                    }
+                  },
+                ),
               ),
             )
             .toList(),
@@ -1801,7 +2065,9 @@ class _DynamicFormState extends State<DynamicForm>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildLabelRow(field),
-        const SizedBox(height: 4),
+        widget.accordionView
+            ? const SizedBox.shrink()
+            : const SizedBox(height: 4),
         InkWell(
           onTap: () {
             showModalBottomSheet(
@@ -2816,37 +3082,82 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   Widget _buildSubmitButton(Color buttonColor, bool isManageToCheckPress) {
-    return Row(children: [
-      if (isManageToCheckPress) ...[
-        ElevatedButton(
-          onPressed: () => _submitForm(context),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: buttonColor,
-            foregroundColor: widget.buttonTextColor,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            minimumSize: const Size(double.infinity, 50),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        if (isManageToCheckPress) ...[
+          SizedBox(
+            height: 42.0,
+            width: MediaQuery.of(context).size.width / 2.0,
+            child: ElevatedButton(
+              onPressed: () => _submitForm(context,
+                  isManageToCheckPress: isManageToCheckPress),
+              style: ElevatedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                backgroundColor: buttonColor,
+                foregroundColor: widget.buttonTextColor,
+              ),
+              child: Text(StringConstants.managerToCheck,
+                  style: widget.fontFamily
+                      .copyWith(color: widget.buttonTextColor)),
+            ),
           ),
-          child: Text(widget.submitButtonText ?? 'Submit',
-              style: widget.fontFamily.copyWith(color: widget.buttonTextColor)),
-        ),
-        const SizedBox(width: 10),
-      ],
-      ElevatedButton(
-        onPressed: () => _submitForm(context),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: buttonColor,
-          foregroundColor: widget.buttonTextColor,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          minimumSize: const Size(double.infinity, 50),
-        ),
-        child: Text(widget.submitButtonText ?? 'Submit',
-            style: widget.fontFamily.copyWith(color: widget.buttonTextColor)),
-      )
-    ]);
+          const SizedBox(width: 40),
+        ],
+        SizedBox(
+          height: 42.0,
+          width: MediaQuery.of(context).size.width / 3.5,
+          child: ElevatedButton(
+            onPressed: () => _submitForm(context),
+            style: ElevatedButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              backgroundColor: buttonColor,
+              foregroundColor: widget.buttonTextColor,
+            ),
+            child: Text(widget.submitButtonText ?? 'Submit',
+                style:
+                    widget.fontFamily.copyWith(color: widget.buttonTextColor)),
+          ),
+        )
+      ]),
+    );
   }
 
   void _submitForm(BuildContext context,
       {bool isManageToCheckPress = false, bool isDraft = false}) {
+    // In accordionview mode, validate the entire form before proceed
+    if (widget.accordionView && !isDraft) {
+      setState(() {
+        _shortTextSubmitAttempted = true;
+      });
+      if (!controller.validateAllQuestionsAndAttachments(_groupAnchors,
+          _anchorToFieldIndices, _internalFields, _lastValidationErrorField)) {
+        final anchor = _findFirstInvalidAnchor();
+        if (anchor != null) {
+          final key = _fieldKeys[anchor];
+          if (key != null) {
+            final context = key.currentContext;
+            if (context != null && context.mounted) {
+              Scrollable.ensureVisible(
+                context,
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeInOut,
+                alignment: 0.0,
+              );
+            }
+          }
+
+          setState(() {
+            _expandedAnchor = anchor;
+          });
+        }
+        AppSnackBar(Get.context!)
+            .showErrorSnackBar(StringConstants.fillMandatoryFields);
+        return;
+      }
+    }
     // First validate the current question if in step-by-step mode
     if (widget.showOneByOne &&
         controller.currentQuestionIndex < widget.formJson.length &&
@@ -2912,6 +3223,124 @@ class _DynamicFormState extends State<DynamicForm>
     // Submit the cleaned data
     widget.onSubmit(
         cleanedFormData, cleanedUploadedFiles, isManageToCheckPress);
+  }
+
+  
+
+  /// The function `_findFirstInvalidAnchor` iterates through group anchors and checks for invalid
+  /// fields based on form controls, attachments, and comments.
+  ///
+  /// Returns:
+  ///   The function `_findFirstInvalidAnchor` is returning an `int` value, which represents the first
+  /// invalid anchor found in the loop. If no invalid anchor is found, it will return `null`.
+  int? _findFirstInvalidAnchor() {
+    for (final anchor in _groupAnchors) {
+      final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+      for (final idx in indices) {
+        if (idx < 0 || idx >= _internalFields.length) continue;
+        final field = _internalFields[idx];
+        final String fieldName = field['name']?.toString() ?? '';
+
+        // Skip hidden fields
+        if (!controller.shouldFieldBeVisible(field)) continue;
+
+        // Control invalid
+        if (controller.form.contains(fieldName)) {
+          final control = controller.form.control(fieldName);
+          if (!control.valid) return anchor;
+        }
+
+        // Attachments missing if required
+        if (!controller.validateFieldAttachmentsIfRequired(
+            field, _lastValidationErrorField)) return anchor;
+
+        // Comments missing if required
+        if (!controller.validateFieldCommentsIfRequired(field)) return anchor;
+      }
+    }
+    return null;
+  }
+
+  // Check validity of all controls in a question anchor (including grouped fields)
+  bool _isAnchorGroupValid(int anchor) {
+    final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+    for (final idx in indices) {
+      if (idx < 0 || idx >= _internalFields.length) continue;
+      final field = _internalFields[idx];
+      final String fieldName = field['name']?.toString() ?? '';
+
+      if (controller.form.contains(fieldName)) {
+        final control = controller.form.control(fieldName);
+        if (!control.valid) return false;
+      }
+
+      // Attachment requirement
+      if (!controller.validateFieldAttachmentsIfRequired(
+          field, _lastValidationErrorField)) return false;
+
+      // Comments requirement
+      if (!controller.validateFieldCommentsIfRequired(field)) return false;
+    }
+    return true;
+  }
+
+  /// Returns true if any content is present for the given anchor (question) that would
+  /// indicate the user started filling it: control value, attachments, or comments.
+  bool isAnchorDraft(int anchor) {
+    if (_anchorDraftCache.containsKey(anchor)) {
+      return _anchorDraftCache[anchor]!;
+    }
+
+    final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+    bool hasContent = false;
+    for (final idx in indices) {
+      if (idx < 0 || idx >= _internalFields.length) continue;
+      final field = _internalFields[idx];
+      if (_isFieldDraft(field)) {
+        hasContent = true;
+        break;
+      }
+    }
+    _anchorDraftCache[anchor] = hasContent;
+    return hasContent;
+  }
+
+  /// Core check: determines if a single field has any content indicating a draft
+  bool _isFieldDraft(Map<String, dynamic> field) {
+    final String fieldName = field['name']?.toString() ?? '';
+
+    // 1) Attachments present
+    final attachments = controller.uploadedFiles[fieldName] ?? [];
+    if (attachments.isNotEmpty) return true;
+
+    // 2) Main control value present
+    if (controller.form.contains(fieldName)) {
+      final control = controller.form.control(fieldName);
+      final value = control.value;
+      if (value != null) {
+        if (value is String) {
+          if (value.trim().isNotEmpty) return true;
+        } else if (value is List) {
+          if (value.isNotEmpty) return true;
+        } else {
+          // Numbers or other scalar types
+          return true;
+        }
+      }
+    }
+
+    // 3) Comment control value present
+    final commentControlName = '${fieldName}_comment';
+    if (controller.form.contains(commentControlName)) {
+      final commentValue = controller.form.control(commentControlName).value;
+      if (commentValue != null &&
+          commentValue is String &&
+          commentValue.trim().isNotEmpty) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   String _getFileType(String fileName) {
