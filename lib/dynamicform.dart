@@ -501,8 +501,7 @@ class _DynamicFormState extends State<DynamicForm>
       }
     });
 
-    expandAll =
-        !widget.draftMode && widget.initialValues != null ? true : false;
+    expandAll = expandAll = !widget.draftMode && widget.initialValues != null;
 
     controller = DynamicFormController(
       formJson: widget.formJson,
@@ -3133,7 +3132,7 @@ class _DynamicFormState extends State<DynamicForm>
         _shortTextSubmitAttempted = true;
       });
       if (!controller.validateAllQuestionsAndAttachments(_groupAnchors,
-          _anchorToFieldIndices, _internalFields, _lastValidationErrorField)) {
+          _anchorToFieldIndices, _internalFields)) {
         final anchor = _findFirstInvalidAnchor();
         if (anchor != null) {
           final key = _fieldKeys[anchor];
@@ -3252,7 +3251,8 @@ class _DynamicFormState extends State<DynamicForm>
 
         // Attachments missing if required
         if (!controller.validateFieldAttachmentsIfRequired(
-            field, _lastValidationErrorField)) return anchor;
+            field))
+          return anchor;
 
         // Comments missing if required
         if (!controller.validateFieldCommentsIfRequired(field)) return anchor;
@@ -3276,7 +3276,7 @@ class _DynamicFormState extends State<DynamicForm>
 
       // Attachment requirement
       if (!controller.validateFieldAttachmentsIfRequired(
-          field, _lastValidationErrorField)) return false;
+          field)) return false;
 
       // Comments requirement
       if (!controller.validateFieldCommentsIfRequired(field)) return false;

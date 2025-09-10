@@ -1226,7 +1226,7 @@ class DynamicFormController extends ChangeNotifier {
   /// the field does not require attachments or if attachments are present, and it returns `false` if
   /// attachments are required but not present for the field.
   bool validateFieldAttachmentsIfRequired(
-      Map<String, dynamic> field, lastValidationErrorField) {
+      Map<String, dynamic> field) {
     final String fieldName = field['name']?.toString() ?? '';
 
     // Determine requirement using same rules as _checkIfRequiredFilesUploaded
@@ -1307,7 +1307,6 @@ class DynamicFormController extends ChangeNotifier {
 
     final uploads = uploadedFiles[fieldName];
     if (uploads == null || uploads.isEmpty) {
-      lastValidationErrorField = field;
       return false;
     }
     return true;
@@ -1344,7 +1343,7 @@ class DynamicFormController extends ChangeNotifier {
 
 // Validate all questions and required attachments in short text mode
   bool validateAllQuestionsAndAttachments(groupAnchors, anchorToFieldIndices,
-      internalFields, lastValidationErrorField) {
+      internalFields) {
     bool isValid = true;
 
     // Iterate each anchor (question group)
@@ -1368,7 +1367,7 @@ class DynamicFormController extends ChangeNotifier {
 
         // Files/comments requirements
         if (!validateFieldAttachmentsIfRequired(
-            field, lastValidationErrorField)) {
+            field)) {
           isValid = false;
         }
 
