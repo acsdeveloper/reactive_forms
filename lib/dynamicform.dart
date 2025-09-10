@@ -3083,7 +3083,11 @@ class _DynamicFormState extends State<DynamicForm>
   Widget _buildSubmitButton(Color buttonColor, bool isManageToCheckPress) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      child: Row(
+          mainAxisAlignment: isManageToCheckPress
+              ? MainAxisAlignment.spaceBetween
+              : MainAxisAlignment.end,
+          children: [
         if (isManageToCheckPress) ...[
           SizedBox(
             height: 42.0,
