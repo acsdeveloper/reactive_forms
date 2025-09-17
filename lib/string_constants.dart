@@ -113,7 +113,7 @@ class StringConstants {
   static const String delete = 'Delete';
   static const String yes = 'Yes';
   static const String no = 'No';
-   static String clickToUpload = "Click to Upload";
+  static String clickToUpload = "Click to Upload";
   static String captureToUpload = 'Capture & Upload';
   static String camera = 'Camera';
   static String files = 'Files';
@@ -125,5 +125,5 @@ class StringConstants {
   static const String draft = "Draft";
   static const String expandAll = "Expand All";
   static const String collapseAll = "Collapse All";
-  
+  static const String thisQuestionisRequired = "* This question is required.";
 }
