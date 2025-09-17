@@ -957,6 +957,7 @@ class _DynamicFormState extends State<DynamicForm>
                   value: expandAll,
                   onChanged: (value) {
                     setState(() {
+                      _expandedAnchor = null;
                       expandAll = value;
                     });
                   },
@@ -977,7 +978,6 @@ class _DynamicFormState extends State<DynamicForm>
             final bool showErrorDot = widget.accordionView &&
                 _shortTextSubmitAttempted &&
                 !_isAnchorGroupValid(anchor);
-            final int? qNum = _anchorToQuestionNumber[anchor];
             final bool isDraft = isAnchorDraft(anchor) && widget.draftMode;
             return Card(
               key: _fieldKeys[anchor],
@@ -1046,7 +1046,7 @@ class _DynamicFormState extends State<DynamicForm>
                           style: Get.textTheme.labelLarge
                               ?.copyWith(fontWeight: FontWeight.w600),
                           children: [
-                            TextSpan(text: 'Q$qNum: $label'),
+                            TextSpan(text: 'Q${index + 1}: $label'),
                             if (field['required'] == true)
                               const TextSpan(
                                 text: ' *',
@@ -1072,6 +1072,15 @@ class _DynamicFormState extends State<DynamicForm>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _buildCardForFields(fields, false),
+                                showErrorDot
+                                    ? Text(
+                                        StringConstants.thisQuestionisRequired,
+                                        style: Get.textTheme.headlineLarge
+                                            ?.copyWith(
+                                                color: Get
+                                                    .theme.colorScheme.onError),
+                                      )
+                                    : const SizedBox.shrink()
                               ],
                             ),
                           ),
@@ -1575,17 +1584,29 @@ class _DynamicFormState extends State<DynamicForm>
               ReactiveTextField(
                 formControlName: '${field['name']}_comment',
                 decoration: InputDecoration(
-                  // No labelText to avoid displaying "comments" in the field
-                  hintText: field['commentHint'] ?? '',
-                  labelStyle: widget.fontFamily,
-                  hintStyle: widget.fontFamily,
-                  // Add error style
-                  errorStyle: widget.fontFamily
-                      .copyWith(color: Colors.red[700], fontSize: 12),
-                ),
+                    // No labelText to avoid displaying "comments" in the field
+                    hintText: field['commentHint'] ?? '',
+                    labelStyle: widget.fontFamily,
+                    hintStyle: widget.fontFamily,
+                    // Add error style
+                    errorStyle: widget.accordionView
+                        ? controller
+                            .buildInputDecoration(widget.accordionView)
+                            .errorStyle
+                        : widget.fontFamily
+                            .copyWith(color: Colors.red[700], fontSize: 12),
+                    errorBorder: widget.accordionView
+                        ? UnderlineInputBorder(
+                            borderSide: BorderSide(
+                                color: Get.theme.colorScheme.onError))
+                        : null),
                 maxLines: 3,
                 validationMessages: {
-                  'required': (_) => StringConstants.commentsAreRequired,
+                  'required': (_) => widget.accordionView
+                      ? ""
+                      : widget.accordionView
+                          ? ""
+                          : StringConstants.commentsAreRequired,
                 },
                 // Add onSubmitted to validate the form when user submits via keyboard
                 onSubmitted: (_) {
@@ -2030,16 +2051,26 @@ class _DynamicFormState extends State<DynamicForm>
                   ReactiveTextField(
                     formControlName: '${field['name']}_comment',
                     decoration: InputDecoration(
-                      hintText: field['commentHint'] ?? '',
-                      labelStyle: widget.fontFamily,
-                      hintStyle: widget.fontFamily,
-                      errorStyle: widget.fontFamily
-                          .copyWith(color: Colors.red[700], fontSize: 12),
-                    ),
+                        hintText: field['commentHint'] ?? '',
+                        labelStyle: widget.fontFamily,
+                        hintStyle: widget.fontFamily,
+                        errorStyle: widget.accordionView
+                            ? controller
+                                .buildInputDecoration(widget.accordionView)
+                                .errorStyle
+                            : widget.fontFamily
+                                .copyWith(color: Colors.red[700], fontSize: 12),
+                        errorBorder: widget.accordionView
+                            ? UnderlineInputBorder(
+                                borderSide: BorderSide(
+                                    color: Get.theme.colorScheme.onError))
+                            : null),
                     maxLines: 3,
                     minLines: 1,
                     validationMessages: {
-                      'required': (_) => StringConstants.commentsAreRequired,
+                      'required': (_) => widget.accordionView
+                          ? ""
+                          : StringConstants.commentsAreRequired,
                     },
                     onSubmitted: (_) {
                       if (widget.showOneByOne &&
@@ -2276,18 +2307,28 @@ class _DynamicFormState extends State<DynamicForm>
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
+                // No labelText to avoid displaying "comments" in the field
+                hintText: field['commentHint'] ?? '',
+                labelStyle: widget.fontFamily,
+                hintStyle: widget.fontFamily,
+                // Add error style
+                errorStyle: widget.accordionView
+                    ? controller
+                        .buildInputDecoration(widget.accordionView)
+                        .errorStyle
+                    : widget.fontFamily
+                        .copyWith(color: Colors.red[700], fontSize: 12),
+                errorBorder: widget.accordionView
+                    ? UnderlineInputBorder(
+                        borderSide:
+                            BorderSide(color: Get.theme.colorScheme.onError))
+                    : null),
             maxLines: 3,
             minLines: 1,
             validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
+              'required': (_) => widget.accordionView
+                  ? ""
+                  : StringConstants.commentsAreRequired,
             },
             // Add onSubmitted to validate the form when user submits via keyboard
             onSubmitted: (_) {
@@ -2349,7 +2390,9 @@ class _DynamicFormState extends State<DynamicForm>
                       ReactiveTextField(
                         formControlName: field['name'],
                         validationMessages: {
-                          'required': (error) => StringConstants.requiredField,
+                          'required': (error) => widget.accordionView
+                              ? ""
+                              : StringConstants.requiredField,
                         },
                         keyboardType: field['type'] == 'number'
                             ? TextInputType.number
@@ -2367,18 +2410,8 @@ class _DynamicFormState extends State<DynamicForm>
                           }
                         },
                         cursorColor: Colors.black,
-                        decoration: InputDecoration(
-                          enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(
-                                color: Colors
-                                    .black), // Set underline color to black
-                          ),
-                          focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(
-                                color: Colors
-                                    .black), // Set focused underline color to black
-                          ),
-                        ),
+                        decoration: controller
+                            .buildInputDecoration(widget.accordionView),
                       ),
                     ],
                   );
@@ -2430,18 +2463,28 @@ class _DynamicFormState extends State<DynamicForm>
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
+                // No labelText to avoid displaying "comments" in the field
+                hintText: field['commentHint'] ?? '',
+                labelStyle: widget.fontFamily,
+                hintStyle: widget.fontFamily,
+                // Add error style
+                errorStyle: widget.accordionView
+                    ? controller
+                        .buildInputDecoration(widget.accordionView)
+                        .errorStyle
+                    : widget.fontFamily
+                        .copyWith(color: Colors.red[700], fontSize: 12),
+                errorBorder: widget.accordionView
+                    ? UnderlineInputBorder(
+                        borderSide:
+                            BorderSide(color: Get.theme.colorScheme.onError))
+                    : null),
             maxLines: 3,
             minLines: 1,
             validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
+              'required': (_) => widget.accordionView
+                  ? ""
+                  : StringConstants.commentsAreRequired,
             },
             // Add onSubmitted to validate the form when user submits via keyboard
             onSubmitted: (_) {
@@ -2592,7 +2635,8 @@ class _DynamicFormState extends State<DynamicForm>
                 keyboardType: TextInputType.number,
                 valueAccessor: NumValueAccessor(),
                 validationMessages: {
-                  'required': (error) => StringConstants.requiredField,
+                  'required': (error) =>
+                      widget.accordionView ? "" : StringConstants.requiredField,
                   'min': (error) =>
                       '${StringConstants.valueMustBeAtLeast} ${field['min']}',
                   'max': (error) =>
@@ -2735,18 +2779,28 @@ class _DynamicFormState extends State<DynamicForm>
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
+                // No labelText to avoid displaying "comments" in the field
+                hintText: field['commentHint'] ?? '',
+                labelStyle: widget.fontFamily,
+                hintStyle: widget.fontFamily,
+                // Add error style
+                errorStyle: widget.accordionView
+                    ? controller
+                        .buildInputDecoration(widget.accordionView)
+                        .errorStyle
+                    : widget.fontFamily
+                        .copyWith(color: Colors.red[700], fontSize: 12),
+                errorBorder: widget.accordionView
+                    ? UnderlineInputBorder(
+                        borderSide:
+                            BorderSide(color: Get.theme.colorScheme.onError))
+                    : null),
             maxLines: 3,
             minLines: 1,
             validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
+              'required': (_) => widget.accordionView
+                  ? ""
+                  : StringConstants.commentsAreRequired,
             },
             // Add onSubmitted to validate the form when user submits via keyboard
             onSubmitted: (_) {
@@ -2891,18 +2945,28 @@ class _DynamicFormState extends State<DynamicForm>
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
-              // No labelText to avoid displaying "comments" in the field
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              // Add error style
-              errorStyle: widget.fontFamily
-                  .copyWith(color: Colors.red[700], fontSize: 12),
-            ),
+                // No labelText to avoid displaying "comments" in the field
+                hintText: field['commentHint'] ?? '',
+                labelStyle: widget.fontFamily,
+                hintStyle: widget.fontFamily,
+                // Add error style
+                errorStyle: widget.accordionView
+                    ? controller
+                        .buildInputDecoration(widget.accordionView)
+                        .errorStyle
+                    : widget.fontFamily
+                        .copyWith(color: Colors.red[700], fontSize: 12),
+                errorBorder: widget.accordionView
+                    ? UnderlineInputBorder(
+                        borderSide:
+                            BorderSide(color: Get.theme.colorScheme.onError))
+                    : null),
             maxLines: 3,
             minLines: 1,
             validationMessages: {
-              'required': (_) => StringConstants.commentsAreRequired,
+              'required': (_) => widget.accordionView
+                  ? ""
+                  : StringConstants.commentsAreRequired,
             },
             // Add onSubmitted to validate the form when user submits via keyboard
             onSubmitted: (_) {

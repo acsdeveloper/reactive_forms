@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:get/get_core/src/get_main.dart';
 import 'package:reactive_forms/reactive_forms.dart';
 import 'package:reactiveform/components/app_snackbar.dart';
 import 'package:reactiveform/string_constants.dart';
@@ -492,8 +494,6 @@ class DynamicFormController extends ChangeNotifier {
 
     return shouldShowComments;
   }
-
-
 
   int findNextVisibleQuestionIndex() {
     print("Finding next visible question after ${_currentQuestionIndex}");
@@ -1225,8 +1225,7 @@ class DynamicFormController extends ChangeNotifier {
   ///   The function `validateFieldAttachmentsIfRequired` returns a boolean value. It returns `true` if
   /// the field does not require attachments or if attachments are present, and it returns `false` if
   /// attachments are required but not present for the field.
-  bool validateFieldAttachmentsIfRequired(
-      Map<String, dynamic> field) {
+  bool validateFieldAttachmentsIfRequired(Map<String, dynamic> field) {
     final String fieldName = field['name']?.toString() ?? '';
 
     // Determine requirement using same rules as _checkIfRequiredFilesUploaded
@@ -1342,8 +1341,8 @@ class DynamicFormController extends ChangeNotifier {
   }
 
 // Validate all questions and required attachments in short text mode
-  bool validateAllQuestionsAndAttachments(groupAnchors, anchorToFieldIndices,
-      internalFields) {
+  bool validateAllQuestionsAndAttachments(
+      groupAnchors, anchorToFieldIndices, internalFields) {
     bool isValid = true;
 
     // Iterate each anchor (question group)
@@ -1366,8 +1365,7 @@ class DynamicFormController extends ChangeNotifier {
         }
 
         // Files/comments requirements
-        if (!validateFieldAttachmentsIfRequired(
-            field)) {
+        if (!validateFieldAttachmentsIfRequired(field)) {
           isValid = false;
         }
 
@@ -1378,5 +1376,50 @@ class DynamicFormController extends ChangeNotifier {
     }
 
     return isValid;
+  }
+
+  /// The function `buildInputDecoration` returns an `InputDecoration` object with different border
+  /// styles based on the value of the `accordionView` parameter.
+  ///
+  /// Args:
+  ///   accordionView (bool): The `accordionView` parameter is a boolean value that determines whether
+  /// the input decoration should be styled for an accordion view. If `accordionView` is true, the
+  /// error border and error style will be customized with specific colors and styles for the accordion
+  /// view. Otherwise, the default input decoration styles will be
+  ///
+  /// Returns:
+  ///   The function `buildInputDecoration` returns an `InputDecoration` object with different border
+  /// configurations based on the value of the `accordionView` parameter. If `accordionView` is true,
+  /// it sets the error border color to the theme's error color, error style to transparent, and
+  /// focused error border color to red. Otherwise, it sets the error border and style to null. The
+  /// enabled border and
+  InputDecoration buildInputDecoration(bool accordionView) {
+    return InputDecoration(
+      errorBorder: accordionView
+          ? UnderlineInputBorder(
+              borderSide: BorderSide(
+                color: Get.theme.colorScheme.onError,
+              ),
+            )
+          : null,
+      errorStyle: accordionView
+          ? const TextStyle(
+              fontSize: 0,
+              height: 0,
+              color: Colors.transparent,
+            )
+          : null,
+      enabledBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: Colors.black),
+      ),
+      focusedBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: Colors.black),
+      ),
+      focusedErrorBorder: accordionView
+          ? const UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.red, width: 2),
+            )
+          : null,
+    );
   }
 }
