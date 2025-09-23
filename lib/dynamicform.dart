@@ -1079,12 +1079,14 @@ class _DynamicFormState extends State<DynamicForm>
                     ),
                   ),
                   children: [
-                    // Build only child fields; skip anchor control for option groups
+                    // Build only child fields; skip anchor control when this card represents a group
                     _buildCardForFields(
                       fields.where((f) {
                         if (f['name'] == field['name']) {
-                          // Skip rendering the anchor field when it is an option-group header
-                          return field['isOptionGroup'] != true;
+                          // If this is a grouped card (has more than the anchor) or an option group, hide the anchor input
+                          final bool hasChildren = (indices.length > 1);
+                          if (hasChildren) return false;
+                          if (field['isOptionGroup'] == true) return false;
                         }
                         return true;
                       }).toList(),
@@ -1502,6 +1504,42 @@ class _DynamicFormState extends State<DynamicForm>
       final bool isGroupedField = field['groupId'] != null;
       if (!isGroupedField) return const SizedBox.shrink();
     }
+
+    // If this field is the anchor of a group (parent referenced by others),
+    // and the group has children, do not render the anchor label inside the card.
+    // The anchor already appears as the card title.
+    int? anchorIndex;
+    for (var entry in _anchorToFieldIndices.entries) {
+      if (entry.value.any((idx) =>
+          idx < _internalFields.length &&
+          _internalFields[idx]['name'] == field['name'])) {
+        anchorIndex = entry.key;
+        break;
+      }
+    }
+
+    if (anchorIndex != null) {
+      final Map<String, dynamic> anchorField = _internalFields[anchorIndex];
+      final bool thisIsAnchor = anchorField['name'] == field['name'];
+      final int groupLen =
+          (_anchorToFieldIndices[anchorIndex] ?? const []).length;
+      // Hide anchor label when group has children
+      if (thisIsAnchor && groupLen > 1) {
+        return const SizedBox.shrink();
+      }
+      // Hide duplicate label if matches the card title (option label or anchor label)
+      final String cardTitle =
+          (anchorField['optionLabel']?.toString().trim().isNotEmpty ?? false)
+              ? anchorField['optionLabel'].toString().trim()
+              : (anchorField['label']?.toString().trim() ?? '');
+      final String childLabel = field['label']?.toString().trim() ?? '';
+      if (cardTitle.isNotEmpty && cardTitle == childLabel) {
+        return const SizedBox.shrink();
+      }
+    }
+
+    // Also hide label rows for synthetic option-group headers
+    if (field['isOptionGroup'] == true) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0, top: 8.0),
@@ -2474,30 +2512,68 @@ class _DynamicFormState extends State<DynamicForm>
             // If the form control exists but might not have the right type,
             // wrap it in a try-catch to prevent runtime errors
             try {
-              return ReactiveTextField<num>(
-                formControlName: field['name'],
-                keyboardType: TextInputType.number,
-                valueAccessor: NumValueAccessor(),
-                validationMessages: {
-                  'required': (error) =>
-                      widget.accordionView ? "" : StringConstants.requiredField,
-                  'min': (error) =>
-                      '${StringConstants.valueMustBeAtLeast} ${field['min']}',
-                  'max': (error) =>
-                      '${StringConstants.valueMustBeLessThanOrEqualTo} ${field['max']} ${StringConstants.characters}',
-                },
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) {
-                  if (widget.showOneByOne) {
-                    // Only proceed with auto-navigation if we're not on the submit page
-                    if (!isCurrentQuestionEffectivelyLast()) {
-                      // First validate the current form section
-                      if (validateCurrentSection()) {
-                        moveToNextQuestion(context);
+              final ctrl = controller.form.control(field['name']);
+              final bool controlIsNum =
+                  ctrl is FormControl<num> || ctrl.value is num;
+
+              if (controlIsNum) {
+                return ReactiveTextField<num>(
+                  formControlName: field['name'],
+                  keyboardType: TextInputType.number,
+                  valueAccessor: NumValueAccessor(),
+                  validationMessages: {
+                    'required': (error) => widget.accordionView
+                        ? ""
+                        : StringConstants.requiredField,
+                    'min': (error) =>
+                        '${StringConstants.valueMustBeAtLeast} ${field['min']}',
+                    'max': (error) =>
+                        '${StringConstants.valueMustBeLessThanOrEqualTo} ${field['max']} ${StringConstants.characters}',
+                  },
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (widget.showOneByOne) {
+                      if (!isCurrentQuestionEffectivelyLast()) {
+                        if (validateCurrentSection()) {
+                          moveToNextQuestion(context);
+                        }
                       }
                     }
-                  }
-                },
+                  },
+                  inputFormatters: [
+                    if (field['allowNegatives'] == false)
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+                    if (field['allowNegatives'] != false)
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.-]')),
+                    if (field['allowedDecimals'] == 0)
+                      FilteringTextInputFormatter.digitsOnly,
+                  ],
+                  decoration: InputDecoration(
+                    hintText: StringConstants.enterANumber +
+                        (field['min'] != null || field['max'] != null
+                            ? ' ('
+                            : '') +
+                        (field['min'] != null ? 'min: ${field['min']}' : '') +
+                        (field['min'] != null && field['max'] != null
+                            ? ', '
+                            : '') +
+                        (field['max'] != null ? 'max: ${field['max']}' : '') +
+                        (field['min'] != null || field['max'] != null
+                            ? ')'
+                            : ''),
+                    labelStyle: widget.fontFamily,
+                    hintStyle: widget.fontFamily,
+                    errorStyle: widget.fontFamily
+                        .copyWith(fontSize: 12, color: Colors.red),
+                  ),
+                );
+              }
+
+              // Fallback to plain TextField bound to String control to avoid type errors
+              return TextFormField(
+                initialValue: ctrl.value?.toString() ?? '',
+                keyboardType: TextInputType.number,
+                onChanged: (val) => ctrl.value = val,
                 inputFormatters: [
                   if (field['allowNegatives'] == false)
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
@@ -2507,20 +2583,9 @@ class _DynamicFormState extends State<DynamicForm>
                     FilteringTextInputFormatter.digitsOnly,
                 ],
                 decoration: InputDecoration(
-                  hintText: StringConstants.enterANumber +
-                      (field['min'] != null || field['max'] != null
-                          ? ' ('
-                          : '') +
-                      (field['min'] != null ? 'min: ${field['min']}' : '') +
-                      (field['min'] != null && field['max'] != null
-                          ? ', '
-                          : '') +
-                      (field['max'] != null ? 'max: ${field['max']}' : '') +
-                      (field['min'] != null || field['max'] != null ? ')' : ''),
+                  hintText: StringConstants.enterANumber,
                   labelStyle: widget.fontFamily,
                   hintStyle: widget.fontFamily,
-                  errorStyle: widget.fontFamily
-                      .copyWith(fontSize: 12, color: Colors.red),
                 ),
               );
             } catch (e) {
@@ -5705,10 +5770,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        
-
         // Field label if this is a standalone field (not just an attachment widget)
-        
 
         // Clear vertical spacing
         const SizedBox(height: 12),
