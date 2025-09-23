@@ -1356,6 +1356,75 @@ class _DynamicFormState extends State<DynamicForm>
 
   Widget _buildActualField(Map<String, dynamic> field,
       AbstractControl<dynamic> control, Map<String, dynamic>? initialValues) {
+    // Support comma-separated types like "text, file"
+    if (field['type'] is String && (field['type'] as String).contains(',')) {
+      final List<String> parts = (field['type'] as String)
+          .split(',')
+          .map((s) => s.trim().toLowerCase())
+          .toList();
+      final List<Widget> children = [];
+
+      for (int i = 0; i < parts.length; i++) {
+        final String part = parts[i];
+        final bool suppress = i > 0;
+        // Temporarily suppress label for subsequent parts
+        final previousSuppress = field['suppressLabel'];
+        if (suppress) field['suppressLabel'] = true;
+
+        Widget child;
+        switch (part) {
+          case 'text':
+            child = _buildTextField(field);
+            break;
+          case 'number':
+            child = _buildNumberField(field);
+            break;
+          case 'file':
+            child = _buildFileField(field);
+            break;
+          case 'radio':
+            child = _buildRadioField(field);
+            break;
+          case 'dropdown':
+            child = _buildDropdownField(field);
+            break;
+          case 'multiselect':
+            child = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildLabelRow(field),
+                // Fallback minimal message if builder not reachable here
+                Text(StringConstants.requiredField,
+                    style: const TextStyle(height: 0)),
+              ],
+            );
+            break;
+          default:
+            child = _buildTextField(field);
+            break;
+        }
+
+        // Restore previous suppress flag to avoid side effects
+        if (suppress) {
+          if (previousSuppress == null) {
+            field.remove('suppressLabel');
+          } else {
+            field['suppressLabel'] = previousSuppress;
+          }
+        }
+
+        children.add(child);
+        if (i < parts.length - 1) {
+          children.add(SizedBox(height: widget.accordionView ? 8 : 12));
+        }
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      );
+    }
+
     switch (field['type']) {
       case 'option':
       case 'radio':
@@ -1387,252 +1456,35 @@ class _DynamicFormState extends State<DynamicForm>
 
                 if (rawValue is List) {
                   currentValue =
-                      List<String>.from(rawValue.map((e) => e.toString()));
-                } else if (rawValue != null && rawValue != "") {
-                  // Handle case when it's a single value
-                  currentValue = [rawValue.toString()];
+                      rawValue.map((e) => e.toString()).toList(growable: false);
                 }
 
-                return MultiSelectFormField(
-                  field: FormFieldModel.fromJson(field),
-                  onChanged: (List<String> value) {
-                    // Force direct update to the FormGroup's value
-                    controller.form.patchValue(
-                        {field['name']: value.isEmpty ? null : value});
-
-                    // Explicitly update control to ensure type consistency
-                    final control = controller.form.control(field['name']);
-                    if (control is FormControl<dynamic>) {
-                      control.updateValue(value.isEmpty ? null : value);
-                    }
-
-                    // Debug info
-                    print(
-                        'Updated ${field['name']} with: $value (type: ${value.runtimeType})');
-                    print('Current form value: ${controller.form.value}');
-
-                    state.didChange(value.isEmpty ? null : value);
-                    state.control.markAsTouched();
-                  },
-                  value: currentValue,
-                  hasError: state.control.touched && !state.control.valid,
-                  errorText: state.control.touched && !state.control.valid
-                      ? 'Please select at least one option'
-                      : null,
+                return Wrap(
+                  spacing: 8.0,
+                  runSpacing: 4.0,
+                  children: (field['options'] as List<dynamic>? ?? [])
+                      .map((opt) => ChoiceChip(
+                            label: Text(opt.toString()),
+                            selected: currentValue.contains(opt.toString()),
+                            onSelected: (selected) {
+                              final List<String> updated =
+                                  List.from(currentValue);
+                              if (selected) {
+                                if (!updated.contains(opt.toString())) {
+                                  updated.add(opt.toString());
+                                }
+                              } else {
+                                updated.remove(opt.toString());
+                              }
+                              controller.form.control(field['name']).value =
+                                  updated;
+                              state.didChange(updated);
+                            },
+                          ))
+                      .toList(),
                 );
               },
             ),
-            // Add support for file uploads
-            if (field['hasAttachments'] == true)
-              ReactiveValueListenableBuilder(
-                formControlName: field['name'],
-                builder: (context, control, child) {
-                  // Get the disabledOptions list if it exists
-                  List<dynamic> disabledOptions =
-                      field['disableAttachmentsOn'] is List
-                          ? field['disableAttachmentsOn']
-                          : field['disableAttachmentsOn'] != null
-                              ? [field['disableAttachmentsOn']]
-                              : [];
-
-                  // For multiselect: check if any selected value is in disabledOptions
-                  final selectedValues = control.value is List
-                      ? control.value as List
-                      : control.value != null
-                          ? [control.value]
-                          : [];
-
-                  // Implementing exact logic as specified (adapted for multiselect):
-                  // IF disableAttachmentsOn is NOT empty AND any selectedAnswer is in disableAttachmentsOn
-                  bool isAttachmentDisabled = false;
-                  if (disabledOptions.isNotEmpty && selectedValues.isNotEmpty) {
-                    isAttachmentDisabled = selectedValues
-                        .any((value) => disabledOptions.contains(value));
-                  }
-
-                  // If any selected value is in disabledOptions, don't show attachments
-                  if (isAttachmentDisabled) {
-                    if (kDebugMode) {
-                      print(
-                          "📄 HIDING UPLOAD: At least one selected value is in disableAttachmentsOn list for multiselect");
-                    }
-                    return const SizedBox.shrink();
-                  }
-                  // ELSE: Show file upload (subject to other rules)
-
-                  // Check if the value is in requireAttachmentsOn or enableAttachmentsOn
-                  bool shouldShowAttachments = false;
-                  bool isRequired = false;
-
-                  // NEW RULE: If hasAttachments is true, disableAttachmentsOn is not empty,
-                  // and no selected value is in disableAttachmentsOn, show and require upload
-                  if (field['hasAttachments'] == true &&
-                      disabledOptions.isNotEmpty &&
-                      selectedValues.isNotEmpty &&
-                      !isAttachmentDisabled) {
-                    if (kDebugMode) {
-                      print(
-                          "📄 SHOWING UPLOAD: hasAttachments=true and no selected values are in disableAttachmentsOn for multiselect");
-                    }
-                    shouldShowAttachments = true;
-                    isRequired = true;
-                  }
-                  // Continue with existing conditions if the new rule didn't apply
-                  else {
-                    // Check requireAttachmentsOn
-                    if (field['requireAttachmentsOn'] != null) {
-                      List<dynamic> requiredOptions =
-                          field['requireAttachmentsOn'] is List
-                              ? field['requireAttachmentsOn']
-                              : [field['requireAttachmentsOn']];
-
-                      if (selectedValues.isNotEmpty) {
-                        if (selectedValues
-                            .any((value) => requiredOptions.contains(value))) {
-                          shouldShowAttachments = true;
-                          isRequired = true;
-                        }
-                      }
-                    }
-
-                    // Check for legacy attachmentsRequired property
-                    if (!shouldShowAttachments &&
-                        field['enableAttachmentsOn'] != null) {
-                      List<dynamic> enabledOptions =
-                          field['enableAttachmentsOn'] is List
-                              ? field['enableAttachmentsOn']
-                              : [field['enableAttachmentsOn']];
-
-                      if (selectedValues.isNotEmpty) {
-                        if (selectedValues
-                            .any((value) => enabledOptions.contains(value))) {
-                          shouldShowAttachments = true;
-                          isRequired = true;
-                        }
-                      }
-                    }
-
-                    // If the value is not in requireAttachmentsOn or enableAttachmentsOn, don't show upload
-                    if (!shouldShowAttachments) {
-                      // Original fallback check: If hasAttachments is true and none of the above conditions applied
-                      if (field['hasAttachments'] == true) {
-                        // Check if requireAttachmentsOn is empty or null
-                        bool isRequireAttachmentsOnEmpty =
-                            field['requireAttachmentsOn'] == null ||
-                                (field['requireAttachmentsOn'] is List &&
-                                    (field['requireAttachmentsOn'] as List)
-                                        .isEmpty);
-
-                        // Check if enableAttachmentsOn is empty or null
-                        bool isEnableAttachmentsOnEmpty =
-                            field['enableAttachmentsOn'] == null ||
-                                (field['enableAttachmentsOn'] is List &&
-                                    (field['enableAttachmentsOn'] as List)
-                                        .isEmpty);
-
-                        // If both are empty or null, show file uploads and make them required
-                        if (isRequireAttachmentsOnEmpty &&
-                            isEnableAttachmentsOnEmpty) {
-                          shouldShowAttachments = true;
-                          isRequired = true;
-                        } else {
-                          return const SizedBox.shrink();
-                        }
-                      } else {
-                        return const SizedBox.shrink();
-                      }
-                    }
-                  }
-
-                  return Column(
-                    children: [
-                      const SizedBox(height: 16),
-                      // Remove the duplicate "Upload Files" label since FileUploadWidget will show it
-                      FileUploadWidget(
-                        fieldName: field['name'],
-                        fieldLabel: field['label'],
-                        primaryColor: widget.primaryColor,
-                        fontFamily: widget.fontFamily,
-                        buttonTextColor: widget.buttonTextColor,
-                        onFilesUploaded: (files) {
-                          setState(() {
-                            controller.uploadedFiles[field['name']] = files;
-                          });
-                        },
-                        uploadedFiles:
-                            controller.uploadedFiles[field['name']] ?? [],
-                        onRemoveUploadedFile: (file) {
-                          setState(() {
-                            // For single file upload, set to empty list when file is removed
-                            controller.uploadedFiles[field['name']] = [];
-                          });
-                        },
-                        isRequired: isRequired,
-                        questionNumber: _getQuestionNumberForField(field),
-                        hasAttachments: field['hasAttachments'] == true,
-                        initialValues: initialValues,
-                        bookingAppModelFileUpload:
-                            widget.bookingAppModelFileUpload,
-                      ),
-                    ],
-                  );
-                },
-              ),
-            // Add support for comments
-            if (field['hasComments'] == true) ...[
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Text(
-                    field['commentLabel'] ?? StringConstants.comments,
-                    style: widget.fontFamily,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '*',
-                    style: widget.fontFamily.copyWith(
-                      color: const Color.fromARGB(255, 222, 75, 64),
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-              ReactiveTextField(
-                formControlName: '${field['name']}_comment',
-                decoration: InputDecoration(
-                    // No labelText to avoid displaying "comments" in the field
-                    hintText: field['commentHint'] ?? '',
-                    labelStyle: widget.fontFamily,
-                    hintStyle: widget.fontFamily,
-                    // Add error style
-                    errorStyle: widget.accordionView
-                        ? controller
-                            .buildInputDecoration(widget.accordionView)
-                            .errorStyle
-                        : widget.fontFamily
-                            .copyWith(color: Colors.red[700], fontSize: 12),
-                    errorBorder: widget.accordionView
-                        ? UnderlineInputBorder(
-                            borderSide: BorderSide(
-                                color: Get.theme.colorScheme.onError))
-                        : null),
-                maxLines: 3,
-                validationMessages: {
-                  'required': (_) => widget.accordionView
-                      ? ""
-                      : widget.accordionView
-                          ? ""
-                          : StringConstants.commentsAreRequired,
-                },
-                // Add onSubmitted to validate the form when user submits via keyboard
-                onSubmitted: (_) {
-                  if (widget.showOneByOne &&
-                      !isCurrentQuestionEffectivelyLast()) {
-                    validateCurrentSection();
-                  }
-                },
-              ),
-            ],
           ],
         );
       default:
@@ -1642,27 +1494,14 @@ class _DynamicFormState extends State<DynamicForm>
 
   Widget _buildLabelRow(Map<String, dynamic> field) {
     if (field['label'] == null) return const SizedBox.shrink();
+    // Allow callers to suppress label when composing multi-part fields
+    if (field['suppressLabel'] == true) return const SizedBox.shrink();
     // Show labels for grouped fields even in accordion view
     if (widget.accordionView) {
       // Check if this field is a child of a grouped field (has groupId)
       final bool isGroupedField = field['groupId'] != null;
       if (!isGroupedField) return const SizedBox.shrink();
     }
-
-    // Find the anchor index for this field
-    int? anchorIndex;
-    for (var entry in _anchorToFieldIndices.entries) {
-      if (entry.value.any((idx) =>
-          idx < _internalFields.length &&
-          _internalFields[idx]['name'] == field['name'])) {
-        anchorIndex = entry.key;
-        break;
-      }
-    }
-
-    // Get question number if available
-    int? questionNumber =
-        anchorIndex != null ? _anchorToQuestionNumber[anchorIndex] : null;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0, top: 8.0),
@@ -2846,6 +2685,7 @@ class _DynamicFormState extends State<DynamicForm>
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Determine if headers/labels should be hidden (composed fields)
                       FileUploadWidget(
                         fieldName: field['name'],
                         fieldLabel: field['label'],
@@ -5865,43 +5705,10 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Question number if provided and not just an attachment field
-        if (widget.questionNumber != null && (!widget.hasAttachments))
-          Text(
-            'Question ${widget.questionNumber}',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18.0,
-              color: widget.primaryColor ?? Theme.of(context).primaryColor,
-              fontFamily: widget.fontFamily?.fontFamily,
-            ),
-          ),
-        if (widget.questionNumber != null) const SizedBox(height: 4.0),
+        
 
         // Field label if this is a standalone field (not just an attachment widget)
-        if (!widget.hasAttachments)
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  widget.fieldLabel,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16.0,
-                    fontFamily: widget.fontFamily?.fontFamily,
-                  ),
-                ),
-              ),
-              if (widget.isRequired)
-                Text(
-                  '*',
-                  style: widget.fontFamily.copyWith(
-                    color: const Color.fromARGB(255, 222, 75, 64),
-                    fontSize: 16,
-                  ),
-                ),
-            ],
-          ),
+        
 
         // Clear vertical spacing
         const SizedBox(height: 12),
