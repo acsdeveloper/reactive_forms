@@ -2765,7 +2765,11 @@ class _DynamicFormState extends State<DynamicForm>
                               control.value =
                                   files.map((f) => f['fileName']).join(',');
                             } else {
-                              control.value = null;
+                              // Only clear if no composed text/number present
+                              if (!(field['type'] is String &&
+                                  (field['type'] as String).contains(','))) {
+                                control.value = null;
+                              }
                             }
                           });
                         },
@@ -2779,7 +2783,11 @@ class _DynamicFormState extends State<DynamicForm>
                             final remainingFiles =
                                 controller.uploadedFiles[field['name']] ?? [];
                             if (remainingFiles.isEmpty) {
-                              control.value = null;
+                              // Only clear if no composed text/number present
+                              if (!(field['type'] is String &&
+                                  (field['type'] as String).contains(','))) {
+                                control.value = null;
+                              }
                             } else {
                               control.value = remainingFiles
                                   .map((f) => f['fileName'])
@@ -2787,7 +2795,11 @@ class _DynamicFormState extends State<DynamicForm>
                             }
                           });
                         },
-                        isRequired: field['required'] == true,
+                        // Either text/number or file should satisfy requirement for composed types
+                        isRequired: (field['type'] is String &&
+                                (field['type'] as String).contains(','))
+                            ? false
+                            : field['required'] == true,
                         questionNumber: _getQuestionNumberForField(field),
                         hasAttachments: field['hasAttachments'] == true,
                         bookingAppModelFileUpload:
