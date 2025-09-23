@@ -67,7 +67,7 @@ class DynamicForm extends StatefulWidget {
     this.isManageToCheckPress = false,
     this.bottomNavigationType = BottomNavigationType.button,
     this.initialValues,
-    this.accordionView = false,
+    this.accordionView = true,
     this.draftMode = false,
     this.themeData,
     RxBool? draftbtnClicked,
@@ -503,14 +503,18 @@ class _DynamicFormState extends State<DynamicForm>
 
     expandAll = expandAll = !widget.draftMode && widget.initialValues != null;
 
+    // Transform incoming schema to expand groupId-based per-option groups
+    final List<Map<String, dynamic>> transformedFormJson =
+        _transformGroupIdIntoOptionGroups(widget.formJson);
+
     controller = DynamicFormController(
-      formJson: widget.formJson,
+      formJson: transformedFormJson,
       onSubmit: widget.onSubmit,
       isManageToCheckPress: widget.isManageToCheckPress,
       initialValues: widget.initialValues,
     );
 
-    _internalFields = List<Map<String, dynamic>>.from(widget.formJson);
+    _internalFields = List<Map<String, dynamic>>.from(transformedFormJson);
 
     // Add a listener to the controller to update the UI when the question changes
     controller.addListener(_onControllerChanged);
@@ -538,14 +542,6 @@ class _DynamicFormState extends State<DynamicForm>
           print(
               "Form values changed: ${formValues?.keys.join(', ') ?? 'null'}");
         }
-
-        // First, recalculate progress and visibility
-        _safeCalculateProgress();
-
-        // Then check if current question should be skipped
-        _updateCurrentQuestionBasedOnVisibility();
-
-        // Update UI
         setState(() {});
       }
     });
@@ -810,12 +806,7 @@ class _DynamicFormState extends State<DynamicForm>
         child: Scaffold(
           // Only show the FloatingActionButton if the current question has a groupWith property
           floatingActionButton:
-              widget.showOneByOne && currentQuestionHasGroupWith
-                  ? FloatingActionButton(
-                      onPressed: () => _addNewSet(),
-                      child: const Icon(Icons.add),
-                    )
-                  : null,
+              widget.showOneByOne && currentQuestionHasGroupWith ? null : null,
           body: LayoutBuilder(
             builder: (context, constraints) {
               // Create a unique key that includes the current group pointer
@@ -911,9 +902,22 @@ class _DynamicFormState extends State<DynamicForm>
     List<int> displayAnchors = [];
     for (final anchor in _groupAnchors) {
       if (anchor >= 0 && anchor < _internalFields.length) {
-        final n = _internalFields[anchor]['name']?.toString() ?? '';
-        if (visibleNames.isEmpty || visibleNames.contains(n)) {
-          displayAnchors.add(anchor);
+        final field = _internalFields[anchor];
+        final String n = field['name']?.toString() ?? '';
+        // If this is an option-group anchor (e.g., question_1_3), check base parent visibility
+        if (field['isOptionGroup'] == true) {
+          String base = n;
+          final lastUnderscore = base.lastIndexOf('_');
+          if (lastUnderscore > 0) {
+            base = base.substring(0, lastUnderscore);
+          }
+          if (visibleNames.isEmpty || visibleNames.contains(base)) {
+            displayAnchors.add(anchor);
+          }
+        } else {
+          if (visibleNames.isEmpty || visibleNames.contains(n)) {
+            displayAnchors.add(anchor);
+          }
         }
       }
     }
@@ -922,8 +926,23 @@ class _DynamicFormState extends State<DynamicForm>
     if (displayAnchors.isEmpty) {
       for (final i in visibleFormIndices) {
         final n = widget.formJson[i]['name']?.toString();
-        final idx =
-            _internalFields.indexWhere((f) => f['name']?.toString() == n);
+        if (n == null) continue;
+        // Try exact name match
+        int idx = _internalFields.indexWhere((f) => f['name']?.toString() == n);
+        if (idx == -1) {
+          // Try matching option-group anchors by base name
+          idx = _internalFields.indexWhere((f) {
+            final String fn = f['name']?.toString() ?? '';
+            final bool isOpt = f['isOptionGroup'] == true;
+            if (!isOpt) return false;
+            String base = fn;
+            final lastUnderscore = base.lastIndexOf('_');
+            if (lastUnderscore > 0) {
+              base = base.substring(0, lastUnderscore);
+            }
+            return base == n;
+          });
+        }
         if (idx != -1) {
           displayAnchors.add(idx);
           _anchorToFieldIndices.putIfAbsent(idx, () => [idx]);
@@ -931,169 +950,166 @@ class _DynamicFormState extends State<DynamicForm>
       }
     }
 
-    if (displayAnchors.isEmpty) return const SizedBox.shrink();
-    for (final anchor in _groupAnchors) {
-      _fieldKeys.putIfAbsent(
-          anchor, () => GlobalKey(debugLabel: 'index$anchor'));
-    }
-
-    return SingleChildScrollView(
-      controller: _scrollController,
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Text(
-                  expandAll
-                      ? StringConstants.collapseAll
-                      : StringConstants.expandAll,
-                  style: Get.textTheme.headlineLarge?.copyWith(fontSize: 12)),
-              Transform.scale(
-                scale: 0.7,
-                alignment: Alignment.center,
-                child: CupertinoSwitch(
-                  activeColor: Get.theme.colorScheme.secondary,
-                  value: expandAll,
-                  onChanged: (value) {
+    // Use .map to build widgets properly
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Text(
+                expandAll
+                    ? StringConstants.collapseAll
+                    : StringConstants.expandAll,
+                style: Get.textTheme.headlineLarge?.copyWith(fontSize: 12)),
+            Transform.scale(
+              scale: 0.7,
+              alignment: Alignment.center,
+              child: CupertinoSwitch(
+                activeColor: Get.theme.colorScheme.secondary,
+                value: expandAll,
+                onChanged: (value) {
+                  setState(() {
+                    _expandedAnchor = null;
+                    expandAll = value;
+                  });
+                },
+              ),
+            )
+          ],
+        ),
+        const SizedBox(height: 10.0),
+        // Use .map to build widgets properly
+        ...List.generate(displayAnchors.length, (index) {
+          final anchor = displayAnchors[index];
+          final field = _internalFields[anchor];
+          final String name = field['name']?.toString() ?? '';
+          // Prefer optionLabel for option-group anchors; fallback to label
+          final bool hasOptionLabel = field.containsKey('optionLabel') &&
+              field['optionLabel'] != null &&
+              field['optionLabel'].toString().isNotEmpty;
+          final String label = hasOptionLabel
+              ? field['optionLabel'].toString()
+              : (field['label']?.toString() ?? name);
+          final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+          final List<Map<String, dynamic>> fields =
+              indices.map((i) => _internalFields[i]).toList();
+          final bool showErrorDot = widget.accordionView &&
+              _shortTextSubmitAttempted &&
+              !_isAnchorGroupValid(anchor);
+          final bool isDraft = isAnchorDraft(anchor) && widget.draftMode;
+          return Card(
+            key: _fieldKeys[anchor],
+            clipBehavior: Clip.hardEdge,
+            margin: const EdgeInsets.only(bottom: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(
+                color: showErrorDot
+                    ? Get.theme.colorScheme.onError
+                    : Get.theme.dividerColor.withOpacity(0.5),
+                width: 1,
+              ),
+            ),
+            child: Stack(
+              children: [
+                if (isDraft) ...[
+                  _buildDraftBanner(),
+                  Positioned(
+                    top: 8,
+                    left: 4,
+                    child: Transform.rotate(
+                      angle: -math.pi / 4,
+                      child: Text(StringConstants.draft,
+                          style: Get.textTheme.headlineLarge
+                              ?.copyWith(fontSize: 6)),
+                    ),
+                  )
+                ],
+                ExpansionTile(
+                  key: ValueKey(
+                      '$expandAll exp_${anchor}_${_expandedAnchor == anchor}'),
+                  initiallyExpanded:
+                      expandAll ? expandAll : _expandedAnchor == anchor,
+                  onExpansionChanged: (expanded) {
                     setState(() {
-                      _expandedAnchor = null;
-                      expandAll = value;
+                      _expandedAnchor = expanded
+                          ? anchor
+                          : (_expandedAnchor == anchor
+                              ? null
+                              : _expandedAnchor);
                     });
                   },
-                ),
-              )
-            ],
-          ),
-          const SizedBox(height: 10.0),
-          // Use .map to build widgets properly
-          ...List.generate(displayAnchors.length, (index) {
-            final anchor = displayAnchors[index];
-            final field = _internalFields[anchor];
-            final String name = field['name']?.toString() ?? '';
-            final String label = field['label']?.toString() ?? name;
-            final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
-            final List<Map<String, dynamic>> fields =
-                indices.map((i) => _internalFields[i]).toList();
-            final bool showErrorDot = widget.accordionView &&
-                _shortTextSubmitAttempted &&
-                !_isAnchorGroupValid(anchor);
-            final bool isDraft = isAnchorDraft(anchor) && widget.draftMode;
-            return Card(
-              key: _fieldKeys[anchor],
-              clipBehavior: Clip.hardEdge,
-              margin: const EdgeInsets.only(bottom: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(
-                  color: showErrorDot
-                      ? Get.theme.colorScheme.onError
-                      : Get.theme.dividerColor.withOpacity(0.5),
-                  width: 1,
-                ),
-              ),
-              child: Stack(
-                children: [
-                  if (isDraft) ...[
-                    _buildDraftBanner(),
-                    Positioned(
-                      top: 8,
-                      left: 4,
-                      child: Transform.rotate(
-                        angle: -math.pi / 4,
-                        child: Text(StringConstants.draft,
-                            style: Get.textTheme.headlineLarge
-                                ?.copyWith(fontSize: 6)),
-                      ),
-                    )
-                  ],
-                  ExpansionTile(
-                    key: ValueKey(
-                        '$expandAll exp_${anchor}_${_expandedAnchor == anchor}'),
-                    initiallyExpanded:
-                        expandAll ? expandAll : _expandedAnchor == anchor,
-                    onExpansionChanged: (expanded) {
-                      setState(() {
-                        _expandedAnchor = expanded
-                            ? anchor
-                            : (_expandedAnchor == anchor
-                                ? null
-                                : _expandedAnchor);
-                      });
-                    },
-                    shape: const RoundedRectangleBorder(side: BorderSide.none),
-                    collapsedShape:
-                        const RoundedRectangleBorder(side: BorderSide.none),
-                    expansionAnimationStyle: AnimationStyle(
-                      duration: const Duration(milliseconds: 300),
-                      reverseDuration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                      reverseCurve: Curves.easeInOut,
-                    ),
-                    tilePadding: const EdgeInsets.symmetric(horizontal: 10),
-                    title: Container(
-                      height:
-                          _expandedAnchor == anchor || expandAll ? null : 40,
-                      padding: const EdgeInsets.only(top: 10.0),
-                      width: MediaQuery.of(context).size.width,
-                      child: RichText(
-                        textAlign: TextAlign.left,
-                        softWrap: true,
-                        overflow: _expandedAnchor == anchor || expandAll
-                            ? TextOverflow.clip
-                            : TextOverflow.ellipsis,
-                        text: TextSpan(
-                          style: Get.textTheme.labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                          children: [
-                            TextSpan(text: 'Q${index + 1}: $label'),
-                            if (field['required'] == true)
-                              const TextSpan(
-                                text: ' *',
-                                style: TextStyle(
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16.0,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    children: [
-                      ReactiveForm(
-                        formGroup: controller.form,
-                        child: SafeArea(
-                          top: false,
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.all(10).copyWith(bottom: 8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildCardForFields(fields, false),
-                                showErrorDot
-                                    ? Text(
-                                        StringConstants.thisQuestionisRequired,
-                                        style: Get.textTheme.headlineLarge
-                                            ?.copyWith(
-                                                color: Get
-                                                    .theme.colorScheme.onError),
-                                      )
-                                    : const SizedBox.shrink()
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                  shape: const RoundedRectangleBorder(side: BorderSide.none),
+                  collapsedShape:
+                      const RoundedRectangleBorder(side: BorderSide.none),
+                  expansionAnimationStyle: AnimationStyle(
+                    duration: const Duration(milliseconds: 300),
+                    reverseDuration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    reverseCurve: Curves.easeInOut,
                   ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 10),
+                  title: Container(
+                    height: _expandedAnchor == anchor || expandAll ? null : 40,
+                    padding: const EdgeInsets.only(top: 10.0),
+                    width: MediaQuery.of(context).size.width,
+                    child: RichText(
+                      textAlign: TextAlign.left,
+                      softWrap: true,
+                      overflow: _expandedAnchor == anchor || expandAll
+                          ? TextOverflow.clip
+                          : TextOverflow.ellipsis,
+                      text: TextSpan(
+                        style: Get.textTheme.labelLarge
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                        children: [
+                          TextSpan(text: 'Q${index + 1}: $label'),
+                          if (field['required'] == true)
+                            const TextSpan(
+                              text: ' *',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16.0,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  children: [
+                    // Build only child fields; skip anchor control for option groups
+                    _buildCardForFields(
+                      fields.where((f) {
+                        if (f['name'] == field['name']) {
+                          // Skip rendering the anchor field when it is an option-group header
+                          return field['isOptionGroup'] != true;
+                        }
+                        return true;
+                      }).toList(),
+                      false,
+                    ),
+                  ],
+                ),
+                if (showErrorDot)
+                  Positioned(
+                    right: 16,
+                    top: 16,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: Get.theme.colorScheme.error,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 
@@ -1239,10 +1255,10 @@ class _DynamicFormState extends State<DynamicForm>
               Align(
                 alignment: Alignment.centerRight,
                 child: IconButton(
-                  color: const Color.fromARGB(255, 222, 75, 64),
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => _removeSet(
-                      fields.map((e) => e['name'] as String).toList()),
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () {
+                    _deleteDuplicateGroup(fields);
+                  },
                 ),
               ),
             ...fields.map(_buildField).toList(),
@@ -3152,43 +3168,43 @@ class _DynamicFormState extends State<DynamicForm>
               ? MainAxisAlignment.spaceBetween
               : MainAxisAlignment.end,
           children: [
-        if (isManageToCheckPress) ...[
-          SizedBox(
-            height: 42.0,
-            width: MediaQuery.of(context).size.width / 2.0,
-            child: ElevatedButton(
-              onPressed: () => _submitForm(context,
-                  isManageToCheckPress: isManageToCheckPress),
-              style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                backgroundColor: buttonColor,
-                foregroundColor: widget.buttonTextColor,
+            if (isManageToCheckPress) ...[
+              SizedBox(
+                height: 42.0,
+                width: MediaQuery.of(context).size.width / 2.0,
+                child: ElevatedButton(
+                  onPressed: () => _submitForm(context,
+                      isManageToCheckPress: isManageToCheckPress),
+                  style: ElevatedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    backgroundColor: buttonColor,
+                    foregroundColor: widget.buttonTextColor,
+                  ),
+                  child: Text(StringConstants.managerToCheck,
+                      style: widget.fontFamily
+                          .copyWith(color: widget.buttonTextColor)),
+                ),
               ),
-              child: Text(StringConstants.managerToCheck,
-                  style: widget.fontFamily
-                      .copyWith(color: widget.buttonTextColor)),
-            ),
-          ),
-          const SizedBox(width: 40),
-        ],
-        SizedBox(
-          height: 42.0,
-          width: MediaQuery.of(context).size.width / 3.5,
-          child: ElevatedButton(
-            onPressed: () => _submitForm(context),
-            style: ElevatedButton.styleFrom(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-              backgroundColor: buttonColor,
-              foregroundColor: widget.buttonTextColor,
-            ),
-            child: Text(widget.submitButtonText ?? 'Submit',
-                style:
-                    widget.fontFamily.copyWith(color: widget.buttonTextColor)),
-          ),
-        )
-      ]),
+              const SizedBox(width: 40),
+            ],
+            SizedBox(
+              height: 42.0,
+              width: MediaQuery.of(context).size.width / 3.5,
+              child: ElevatedButton(
+                onPressed: () => _submitForm(context),
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  backgroundColor: buttonColor,
+                  foregroundColor: widget.buttonTextColor,
+                ),
+                child: Text(widget.submitButtonText ?? 'Submit',
+                    style: widget.fontFamily
+                        .copyWith(color: widget.buttonTextColor)),
+              ),
+            )
+          ]),
     );
   }
 
@@ -3199,8 +3215,8 @@ class _DynamicFormState extends State<DynamicForm>
       setState(() {
         _shortTextSubmitAttempted = true;
       });
-      if (!controller.validateAllQuestionsAndAttachments(_groupAnchors,
-          _anchorToFieldIndices, _internalFields)) {
+      if (!controller.validateAllQuestionsAndAttachments(
+          _groupAnchors, _anchorToFieldIndices, _internalFields)) {
         final anchor = _findFirstInvalidAnchor();
         if (anchor != null) {
           final key = _fieldKeys[anchor];
@@ -3292,8 +3308,6 @@ class _DynamicFormState extends State<DynamicForm>
         cleanedFormData, cleanedUploadedFiles, isManageToCheckPress);
   }
 
-  
-
   /// The function `_findFirstInvalidAnchor` iterates through group anchors and checks for invalid
   /// fields based on form controls, attachments, and comments.
   ///
@@ -3318,8 +3332,7 @@ class _DynamicFormState extends State<DynamicForm>
         }
 
         // Attachments missing if required
-        if (!controller.validateFieldAttachmentsIfRequired(
-            field))
+        if (!controller.validateFieldAttachmentsIfRequired(field))
           return anchor;
 
         // Comments missing if required
@@ -3343,8 +3356,7 @@ class _DynamicFormState extends State<DynamicForm>
       }
 
       // Attachment requirement
-      if (!controller.validateFieldAttachmentsIfRequired(
-          field)) return false;
+      if (!controller.validateFieldAttachmentsIfRequired(field)) return false;
 
       // Comments requirement
       if (!controller.validateFieldCommentsIfRequired(field)) return false;
@@ -4171,7 +4183,7 @@ class _DynamicFormState extends State<DynamicForm>
       fieldNameToIndex[_internalFields[i]['name'].toString()] = i;
     }
 
-    // Track all fields that are children (have groupWith property)
+    // Track all fields that are children (have groupWith or groupId property)
     Set<int> childFieldIndices = {};
 
     // First pass: identify direct parent-child relationships
@@ -4180,13 +4192,17 @@ class _DynamicFormState extends State<DynamicForm>
       final field = _internalFields[i];
       final String fieldName = field['name'].toString();
       final String? groupWith = field['groupWith']?.toString();
+      final String? groupId = field['groupId']?.toString();
+      final String? groupingTarget = (groupId != null && groupId.isNotEmpty)
+          ? groupId
+          : ((groupWith != null && groupWith.isNotEmpty) ? groupWith : null);
 
-      if (groupWith != null && groupWith.isNotEmpty) {
+      if (groupingTarget != null && groupingTarget.isNotEmpty) {
         // This field refers to a parent
         childFieldIndices.add(i); // Mark as a child field
 
-        // Resolve ultimate parent to handle chained relationships
-        String ultimateParent = _resolveUltimateParent(groupWith);
+        // Resolve ultimate parent to handle chained relationships (use groupWith chain resolver as-is)
+        String ultimateParent = _resolveUltimateParent(groupingTarget);
 
         // Check if parent field exists
         if (fieldNameToIndex.containsKey(ultimateParent)) {
@@ -4196,9 +4212,9 @@ class _DynamicFormState extends State<DynamicForm>
           anchorToChildIndices.putIfAbsent(ultimateParent, () => []).add(i);
 
           // Debug
-          if (kDebugMode && ultimateParent != groupWith) {
+          if (kDebugMode && ultimateParent != groupingTarget) {
             print(
-                "Chain detected: $fieldName -> $groupWith -> $ultimateParent");
+                "Chain detected: $fieldName -> $groupingTarget -> $ultimateParent");
           }
         } else if (kDebugMode) {
           print(
@@ -5010,6 +5026,104 @@ class _DynamicFormState extends State<DynamicForm>
     // Return all fields in the current question group
     return fieldIndices.map((idx) => _internalFields[idx]).toList();
   }
+
+  // Transform groupId-based child fields into per-option grouped anchors with duplicated children
+  List<Map<String, dynamic>> _transformGroupIdIntoOptionGroups(
+      List<Map<String, dynamic>> source) {
+    // Deep copy to avoid mutating original
+    final List<Map<String, dynamic>> original =
+        source.map((e) => Map<String, dynamic>.from(e)).toList();
+
+    // Map parent name -> list of indices of children referencing it via groupId
+    final Map<String, List<int>> parentToChildIdx = {};
+    for (int i = 0; i < original.length; i++) {
+      final field = original[i];
+      final String? groupId = field['groupId']?.toString();
+      if (groupId != null && groupId.isNotEmpty) {
+        parentToChildIdx.putIfAbsent(groupId, () => []).add(i);
+      }
+    }
+
+    // Identify parents that have options and are referenced
+    final Set<String> parents = parentToChildIdx.keys.toSet();
+
+    // Build the transformed list
+    final List<Map<String, dynamic>> transformed = [];
+
+    for (int i = 0; i < original.length; i++) {
+      final field = original[i];
+      final String name = field['name']?.toString() ?? '';
+
+      // If this is a parent with option-based grouping requirement
+      if (parents.contains(name)) {
+        final List<dynamic> options =
+            (field['options'] as List<dynamic>?)?.toList() ?? const [];
+        final List<int> childIdx = parentToChildIdx[name] ?? const [];
+
+        if (options.isNotEmpty && childIdx.isNotEmpty) {
+          // For each option, create an anchor clone and child clones
+          for (int optIndex = 0; optIndex < options.length; optIndex++) {
+            final String optionLabel = options[optIndex].toString();
+
+            // Anchor clone (acts as group header)
+            final Map<String, dynamic> anchor =
+                Map<String, dynamic>.from(field);
+            anchor['name'] = '${name}_${optIndex + 1}';
+            anchor['label'] =
+                field['label']; // keep original question text if needed
+            anchor['optionLabel'] = optionLabel; // title will use this
+            anchor['isOptionGroup'] = true;
+            // Remove interactive attributes from anchor
+            anchor.remove('required');
+            anchor.remove('options');
+            transformed.add(anchor);
+
+            // Child clones for this option
+            for (final ci in childIdx) {
+              final Map<String, dynamic> child =
+                  Map<String, dynamic>.from(original[ci]);
+              child['name'] = '${child['name']}_${optIndex + 1}';
+              child['groupId'] = anchor['name'];
+              transformed.add(child);
+            }
+          }
+
+          // Skip adding the original parent and its original children
+          // They are replaced by the expanded structures
+          continue;
+        }
+      }
+
+      // Keep field as-is (do not normalize groupId to groupWith)
+      transformed.add(field);
+    }
+
+    return transformed;
+  }
+
+  void _deleteDuplicateGroup(List<Map<String, dynamic>> fields) {
+    try {
+      final List<String> names =
+          fields.map((f) => f['name'].toString()).toList(growable: false);
+
+      setState(() {
+        // Remove from form controls if present
+        if (controller.form != null) {
+          try {
+            controller.removeFormControls(names);
+          } catch (_) {}
+        }
+        // Remove from internal model
+        _internalFields
+            .removeWhere((f) => names.contains(f['name']?.toString() ?? ''));
+        _recomputeGroupStructure();
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error deleting duplicate group: $e');
+      }
+    }
+  }
 }
 
 class _DropdownSearch extends StatefulWidget {
@@ -5267,7 +5381,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
           IOSUiSettings(),
           WebUiSettings(
             context: Get.context!,
-            presentStyle: CropperPresentStyle.dialog,
+            presentStyle: WebPresentStyle.dialog,
           ),
         ],
       );

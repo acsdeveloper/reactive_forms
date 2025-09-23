@@ -1,81 +1,89 @@
 final List<Map<String, dynamic>> formJson = [
   {
     "name": "question_1",
-    "type": "radio",
-    "label": "Is the fridge operating between 0-5°C?",
-    "options": ["A1", "B1", "C1", "D1"],
-    "required": true,
-    "hasAttachments": true,
-    "requireAttachmentsOn": ["A1"],
-    "disableAttachmentsOn": ["NO"],
-    "hasComments": true
+    "type": "dropdown",
+    "label": "Fridge number or name ",
+    "options": [
+      "Walk in Fridge 1",
+      "Drinks Fridge 2",
+      "Drinks Fridge 3",
+      "Drinks Fridge 4",
+      "UC Fridge 5",
+      "UC Fridge 6",
+      "UC Fridge 7",
+      "BOH Milk Fridge 8"
+    ],
+    "required": false,
+    "hasAttachments": false,
+    "requireAttachmentsOn": [],
+    "disableAttachmentsOn": [],
+    "hasComments": false,
+    "commentsRequired": false,
   },
   {
     "name": "question_2",
-    "type": "radio",
-    "label": "Is the freezer operating below -18°C?",
-    "options": ["Yes", "No"],
+    "type": "number",
+    "label": "Temperature in degree C?",
+    "options": [],
     "required": true,
-    "hasAttachments": true,
-    "requireAttachmentsOn": ["YES"],
-    "disableAttachmentsOn": ["NO"],
+    "hasAttachments": false,
+    "requireAttachmentsOn": [],
+    "disableAttachmentsOn": [],
     "hasComments": false,
-    "showWhen": {
-      "question_1": ["A1", "B1"]
-    }
+    "commentsRequired": false,
+    "groupId": "question_1"
   },
   {
     "name": "question_3",
-    "type": "number",
-    "label": "Was the temperature checked twice today (AM & PM)?",
+    "type": "radio",
+    "label": "Initials of person completing the check ",
+    "options": ["RT", "Other"],
     "required": true,
     "hasAttachments": false,
-    "max": 240
+    "requireAttachmentsOn": [],
+    "disableAttachmentsOn": [],
+    "hasComments": false,
+    "commentsRequired": false,
+    "groupId": "question_1"
   },
   {
     "name": "question_4",
-    "type": "number",
-    "label": "Was the jelly pot or thermometer used to check the temperature?",
+    "type": "text",
+    "label": "Initials of person completing the check if other ",
+    "options": [],
     "required": true,
     "hasAttachments": false,
-    "max": 240
+    "requireAttachmentsOn": [],
+    "disableAttachmentsOn": [],
+    "hasComments": false,
+    "commentsRequired": false,
+    "showWhen": {"question_3": "Other"},
   },
   {
     "name": "question_5",
-    "type": "number",
-    "label": "Was any issue found during the temperature check?",
+    "type": "radio",
+    "label": "Fridge temperature within permissible limits of 1-5 degree C?",
+    "options": ["Yes", "No"],
     "required": true,
     "hasAttachments": false,
-    "disableAttachmentsOn": ["NO"],
-    "showWhen": {
-      "question_2": ["Yes"],
-      "question_1": ["A1"]
-    }
+    "requireAttachmentsOn": [],
+    "disableAttachmentsOn": [],
+    "hasComments": false,
+    "commentsRequired": false,
   },
   {
     "name": "question_6",
     "type": "text",
-    "label": "If an issue was found, describe the problem.",
-    "required": true,
-    "hasAttachments": true,
-    "requiredAttachmentsOn": true,
-  },
-  {
-    "name": "question_7",
-    "type": "radio",
-    "label": "Were corrective actions taken to resolve the issue?",
-    "options": ["Yes", "No"],
-    "required": true,
-    "hasAttachments": true,
-    "hasComments": false
-  },
-  {
-    "name": "question_8",
-    "type": "number",
-    "label": "If corrective actions were taken, describe them.",
+    "label":
+        "Corrective action taken if temperature outside of permissible limits ",
+    "options": [],
     "required": true,
     "hasAttachments": false,
-    "max": 240
+    "requireAttachmentsOn": [],
+    "disableAttachmentsOn": [],
+    "hasComments": false,
+    "commentsRequired": false,
+    "showWhen": {"question_4": "No"},
   }
 ];
 
@@ -117,7 +125,8 @@ final Map<String, dynamic> sampleInitialValues = {
   'question_6': 'Found minor issue with door seal.',
   'question_6_attachments': [
     {
-      'file_url': 'http://checklist-epic.petcaretechnologies.com/api/calendar/checklist-epic/calendar/5fa00635-1e6a-4978-9282-cdb6bdca1d98.jpeg',
+      'file_url':
+          'http://checklist-epic.petcaretechnologies.com/api/calendar/checklist-epic/calendar/5fa00635-1e6a-4978-9282-cdb6bdca1d98.jpeg',
       'question_name': 'question_6',
       'question_label': 'If an issue was found, describe the problem.'
     }

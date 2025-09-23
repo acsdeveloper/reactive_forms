@@ -43,7 +43,7 @@ dependencies:
   universal_html: ^2.2.4
   get: ^4.6.6
   google_fonts: ^6.2.1
-  image_cropper: ^5.0.1
+  image_cropper: ^8.0.2
   cached_network_image: ^3.3.0
   flutter_svg: ^2.0.7
   http: ^1.1.0
@@ -63,6 +63,9 @@ dev_dependencies:
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
+dependency_overrides:
+  image_cropper_platform_interface: ^6.0.0
+
 flutter:
 
   # The following line ensures that the Material Icons font is
