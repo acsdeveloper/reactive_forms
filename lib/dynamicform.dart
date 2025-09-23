@@ -1248,7 +1248,7 @@ class _DynamicFormState extends State<DynamicForm>
           ? EdgeInsets.zero
           : const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: Padding(
-        padding: EdgeInsets.all(widget.accordionView ? 0 : 12.0),
+        padding: EdgeInsets.all(widget.accordionView ? 16.0 : 12.0),
         child: Column(
           children: [
             if (isDuplicated)
@@ -1642,7 +1642,12 @@ class _DynamicFormState extends State<DynamicForm>
 
   Widget _buildLabelRow(Map<String, dynamic> field) {
     if (field['label'] == null) return const SizedBox.shrink();
-    if (widget.accordionView) return const SizedBox.shrink();
+    // Show labels for grouped fields even in accordion view
+    if (widget.accordionView) {
+      // Check if this field is a child of a grouped field (has groupId)
+      final bool isGroupedField = field['groupId'] != null;
+      if (!isGroupedField) return const SizedBox.shrink();
+    }
 
     // Find the anchor index for this field
     int? anchorIndex;
@@ -1660,43 +1665,27 @@ class _DynamicFormState extends State<DynamicForm>
         anchorIndex != null ? _anchorToQuestionNumber[anchorIndex] : null;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.only(bottom: 12.0, top: 8.0),
+      child: Row(
         children: [
-          if (questionNumber != null)
-            Text(
-              'Question $questionNumber',
+          Expanded(
+            child: Text(
+              field['label'],
               style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18.0,
-                color: widget.primaryColor ?? Theme.of(context).primaryColor,
+                fontWeight: FontWeight.w500,
+                fontSize: 16.0,
                 fontFamily: widget.fontFamily?.fontFamily,
               ),
             ),
-          if (questionNumber != null) const SizedBox(height: 4.0),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  field['label'],
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16.0,
-                    fontFamily: widget.fontFamily?.fontFamily,
-                  ),
-                ),
-              ),
-              if (field['required'] == true)
-                Text(' *',
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16.0,
-                      fontFamily: widget.fontFamily?.fontFamily,
-                    )),
-            ],
           ),
+          if (field['required'] == true)
+            Text(' *',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16.0,
+                  fontFamily: widget.fontFamily?.fontFamily,
+                )),
         ],
       ),
     );
