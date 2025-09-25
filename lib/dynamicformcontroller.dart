@@ -126,6 +126,21 @@ class DynamicFormController extends ChangeNotifier {
               validators: [Validators.required],
             );
           }
+        } else if (field['type'] == 'temp') {
+          controls[fieldName] = FormControl<double>(
+            value: initial != null ? double.tryParse(initial.toString()) : 20.0,
+            validators: _getValidators(field['required'] == true, field),
+          );
+
+          if (field['hasComments'] == true) {
+            controls['${fieldName}_comment'] = FormControl<String>(
+              value: initialValues != null &&
+                      initialValues!.containsKey('${fieldName}_comment')
+                  ? initialValues!['${fieldName}_comment']
+                  : '',
+              validators: [Validators.required],
+            );
+          }
         } else if (field['type'] == 'radio') {
           if (field['options'] == null || (field['options'] as List).isEmpty) {
             field['options'] = ['Yes', 'No'];
@@ -214,7 +229,7 @@ class DynamicFormController extends ChangeNotifier {
       }
     }
 
-    if (field?['type'] == 'number') {
+    if (field?['type'] == 'number' || field?['type'] == 'temp') {
       if (field?['min'] != null) {
         validatorsList.add(Validators.min(field!['min']));
       }
@@ -912,6 +927,19 @@ class DynamicFormController extends ChangeNotifier {
           List<Validator> validators = _getValidators(isRequired, f);
           newControls[n] = FormControl<num>(
               value: initial != null ? initial : null, validators: validators);
+          if (f['hasComments'] == true) {
+            newControls['${n}_comment'] = FormControl<String>(
+                value: initialValues != null &&
+                        initialValues!.containsKey('${n}_comment')
+                    ? initialValues!['${n}_comment']
+                    : '',
+                validators: [Validators.required]);
+          }
+        } else if (f['type'] == 'temp') {
+          List<Validator> validators = _getValidators(isRequired, f);
+          newControls[n] = FormControl<double>(
+              value: initial != null ? double.tryParse(initial.toString()) : 20.0, 
+              validators: validators);
           if (f['hasComments'] == true) {
             newControls['${n}_comment'] = FormControl<String>(
                 value: initialValues != null &&
