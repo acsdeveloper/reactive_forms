@@ -349,11 +349,11 @@ class DynamicFormController extends ChangeNotifier {
       );
       
       final String groupLabel = parentField['label']?.toString() ?? parentName;
-      final String fridgeName = formValue[parentName]?.toString() ?? parentName;
+      final String groupName = formValue[parentName]?.toString() ?? parentName;
       
       nestedData[parentName] = {
-        'fridge_name': fridgeName,
-        'fridge_label': groupLabel,
+        'name': groupName,
+        'label': groupLabel,
         'data': groupData,
       };
     });
