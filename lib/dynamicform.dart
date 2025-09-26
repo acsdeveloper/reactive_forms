@@ -508,13 +508,26 @@ class _DynamicFormState extends State<DynamicForm>
         _transformGroupIdIntoOptionGroups(widget.formJson);
 
     controller = DynamicFormController(
-      formJson: transformedFormJson,
+      formJson: widget.formJson, // Use original formJson, not transformed
       onSubmit: widget.onSubmit,
       isManageToCheckPress: widget.isManageToCheckPress,
       initialValues: widget.initialValues,
     );
 
     _internalFields = List<Map<String, dynamic>>.from(transformedFormJson);
+
+    // Add form controls for the transformed fields only
+    // Filter out original fields that have been transformed
+    final List<Map<String, dynamic>> fieldsToAdd = [];
+    for (final field in _internalFields) {
+      final fieldName = field['name'].toString();
+      // Only add fields that are not the original child fields (question_4, question_5, question_6)
+      // since they are replaced by their transformed versions
+      if (!['question_4', 'question_5', 'question_6'].contains(fieldName)) {
+        fieldsToAdd.add(field);
+      }
+    }
+    controller.addFormControls(fieldsToAdd);
 
     // Add a listener to the controller to update the UI when the question changes
     controller.addListener(_onControllerChanged);
@@ -1296,12 +1309,19 @@ class _DynamicFormState extends State<DynamicForm>
 
             conditions.forEach((dependentField, expectedValue) {
               if (!controller.form.contains(dependentField)) {
+                if (kDebugMode) {
+                  print("showWhen: Field '$fieldName' depends on '$dependentField' but form doesn't contain it");
+                }
                 shouldShow = false;
                 return;
               }
 
               final dependentControl = form.control(dependentField);
               final currentValue = dependentControl.value;
+              
+              if (kDebugMode) {
+                print("showWhen: Field '$fieldName' depends on '$dependentField' = '$expectedValue', current value = '$currentValue'");
+              }
 
               // Check if the dependent field itself has a showWhen condition
               // Only check if we're not already evaluating it (to prevent circular deps)
@@ -1500,8 +1520,8 @@ class _DynamicFormState extends State<DynamicForm>
     if (field['suppressLabel'] == true) return const SizedBox.shrink();
     // Show labels for grouped fields even in accordion view
     if (widget.accordionView) {
-      // Check if this field is a child of a grouped field (has groupId)
-      final bool isGroupedField = field['groupId'] != null;
+      // Check if this field is a child of a grouped field (has groupId or groupWith)
+      final bool isGroupedField = field['groupId'] != null || field['groupWith'] != null;
       if (!isGroupedField) return const SizedBox.shrink();
     }
 
@@ -1523,10 +1543,13 @@ class _DynamicFormState extends State<DynamicForm>
       final bool thisIsAnchor = anchorField['name'] == field['name'];
       final int groupLen =
           (_anchorToFieldIndices[anchorIndex] ?? const []).length;
-      // Hide anchor label when group has children
-      if (thisIsAnchor && groupLen > 1) {
+      
+      // For our new structure, we want to show labels for parent fields (fridge names)
+      // Only hide labels for option-group headers (isOptionGroup = true)
+      if (thisIsAnchor && groupLen > 1 && field['isOptionGroup'] == true) {
         return const SizedBox.shrink();
       }
+      
       // Hide duplicate label if matches the card title (option label or anchor label)
       final String cardTitle =
           (anchorField['optionLabel']?.toString().trim().isNotEmpty ?? false)
@@ -3121,8 +3144,73 @@ class _DynamicFormState extends State<DynamicForm>
       setState(() {
         _shortTextSubmitAttempted = true;
       });
-      if (!controller.validateAllQuestionsAndAttachments(
-          _groupAnchors, _anchorToFieldIndices, _internalFields)) {
+      
+      // Check if form is valid using controller's validation logic
+      bool isValid = true;
+      
+      // Only validate fields that are in _internalFields (the transformed fields)
+      for (final field in _internalFields) {
+        final controlName = field['name'].toString();
+        
+        // Skip if this field is not in the form controls
+        if (!controller.form.contains(controlName)) continue;
+        
+        final control = controller.form.control(controlName);
+        
+        // Skip comment fields
+        if (controlName.endsWith('_comment')) continue;
+        
+        
+        // Find the field definition for this control
+        final fieldDef = controller.findFieldDefinition(controlName);
+        if (fieldDef == null) {
+          continue;
+        }
+        
+        
+        // Check if this field should be visible using the current field (which has the correct showWhen conditions)
+        bool shouldBeVisible = controller.shouldFieldBeVisible(field);
+        
+        if (!shouldBeVisible) {
+          continue;
+        }
+        
+        // Check if field is required and empty
+        if (fieldDef['required'] == true) {
+          final value = control.value;
+          final isEmpty = value == null || 
+                         value.toString().isEmpty || 
+                         value.toString() == 'null' ||
+                         (value is List && value.isEmpty);
+          
+          if (isEmpty) {
+            isValid = false;
+            break;
+          }
+        }
+        
+        // Also check if control is invalid (for other validation rules like email format, etc.)
+        if (!control.valid) {
+          isValid = false;
+          break;
+        }
+        
+        // Check if attachments are required
+        if (!controller.validateFieldAttachmentsIfRequired(fieldDef)) {
+          isValid = false;
+          break;
+        }
+        
+        // Check if comments are required
+        if (!controller.validateFieldCommentsIfRequired(fieldDef)) {
+          isValid = false;
+          break;
+        }
+      }
+      
+      
+      if (!isValid) {
+        // Find the first invalid field and scroll to it
         final anchor = _findFirstInvalidAnchor();
         if (anchor != null) {
           final key = _fieldKeys[anchor];
@@ -3142,10 +3230,22 @@ class _DynamicFormState extends State<DynamicForm>
             _expandedAnchor = anchor;
           });
         }
-        AppSnackBar(Get.context!)
+        AppSnackBar(context)
             .showErrorSnackBar(StringConstants.fillMandatoryFields);
         return;
       }
+      
+      // If validation passes, proceed with submission
+      final formValue = Map<String, dynamic>.from(controller.form.value);
+      final nestedFormData = controller.createNestedStructure(formValue);
+      
+      try {
+        widget.onSubmit(nestedFormData, controller.uploadedFiles, isManageToCheckPress);
+      } catch (e) {
+        // Show error to user
+        AppSnackBar(context).showErrorSnackBar("Error submitting form: $e");
+      }
+      return;
     }
     // First validate the current question if in step-by-step mode
     if (widget.showOneByOne &&
@@ -3209,9 +3309,12 @@ class _DynamicFormState extends State<DynamicForm>
       }
     }
 
-    // Submit the cleaned data
+    // Create nested structure for grouped fields
+    final nestedFormData = controller.createNestedStructure(cleanedFormData);
+    
+    // Submit the nested data
     widget.onSubmit(
-        cleanedFormData, cleanedUploadedFiles, isManageToCheckPress);
+        nestedFormData, cleanedUploadedFiles, isManageToCheckPress);
   }
 
   /// The function `_findFirstInvalidAnchor` iterates through group anchors and checks for invalid
@@ -3231,9 +3334,16 @@ class _DynamicFormState extends State<DynamicForm>
         // Skip hidden fields
         if (!controller.shouldFieldBeVisible(field)) continue;
 
+        // For grouped fields, we need to find the actual form control name
+        String actualFieldName = fieldName;
+        if (field['groupWith'] != null) {
+          final parentName = field['groupWith'].toString();
+          actualFieldName = '${fieldName}_${parentName}';
+        }
+
         // Control invalid
-        if (controller.form.contains(fieldName)) {
-          final control = controller.form.control(fieldName);
+        if (controller.form.contains(actualFieldName)) {
+          final control = controller.form.control(actualFieldName);
           if (!control.valid) return anchor;
         }
 
@@ -3256,8 +3366,15 @@ class _DynamicFormState extends State<DynamicForm>
       final field = _internalFields[idx];
       final String fieldName = field['name']?.toString() ?? '';
 
-      if (controller.form.contains(fieldName)) {
-        final control = controller.form.control(fieldName);
+      // For grouped fields, we need to find the actual form control name
+      String actualFieldName = fieldName;
+      if (field['groupWith'] != null) {
+        final parentName = field['groupWith'].toString();
+        actualFieldName = '${fieldName}_${parentName}';
+      }
+
+      if (controller.form.contains(actualFieldName)) {
+        final control = controller.form.control(actualFieldName);
         if (!control.valid) return false;
       }
 
@@ -4170,6 +4287,15 @@ class _DynamicFormState extends State<DynamicForm>
       if (childIndices != null && childIndices.isNotEmpty) {
         groupIndices.addAll(childIndices);
       }
+      
+      // Also add any fields that have groupWith pointing to this field
+      for (int j = 0; j < _internalFields.length; j++) {
+        final childField = _internalFields[j];
+        final String? groupWith = childField['groupWith']?.toString();
+        if (groupWith == fieldName && !groupIndices.contains(j)) {
+          groupIndices.add(j);
+        }
+      }
 
       // Store the group
       _anchorToFieldIndices[i] = groupIndices;
@@ -4933,75 +5059,99 @@ class _DynamicFormState extends State<DynamicForm>
     return fieldIndices.map((idx) => _internalFields[idx]).toList();
   }
 
-  // Transform groupId-based child fields into per-option grouped anchors with duplicated children
+  // Transform groupId-based fields into grouped accordion structure
   List<Map<String, dynamic>> _transformGroupIdIntoOptionGroups(
       List<Map<String, dynamic>> source) {
     // Deep copy to avoid mutating original
     final List<Map<String, dynamic>> original =
         source.map((e) => Map<String, dynamic>.from(e)).toList();
 
-    // Map parent name -> list of indices of children referencing it via groupId
-    final Map<String, List<int>> parentToChildIdx = {};
+    // Map field name -> its index for quick lookup
+    final Map<String, int> fieldNameToIndex = {};
+    
     for (int i = 0; i < original.length; i++) {
       final field = original[i];
-      final String? groupId = field['groupId']?.toString();
-      if (groupId != null && groupId.isNotEmpty) {
-        parentToChildIdx.putIfAbsent(groupId, () => []).add(i);
-      }
+      final String fieldName = field['name']?.toString() ?? '';
+      fieldNameToIndex[fieldName] = i;
     }
-
-    // Identify parents that have options and are referenced
-    final Set<String> parents = parentToChildIdx.keys.toSet();
 
     // Build the transformed list
     final List<Map<String, dynamic>> transformed = [];
+    final Set<int> processedFields = {};
+
+    // First, identify all parent fields (those with groupId containing child references)
+    final Map<String, List<String>> parentToChildren = {};
+    final Set<String> childFields = {};
 
     for (int i = 0; i < original.length; i++) {
       final field = original[i];
-      final String name = field['name']?.toString() ?? '';
+      final String fieldName = field['name']?.toString() ?? '';
+      final String? groupId = field['groupId']?.toString();
 
-      // If this is a parent with option-based grouping requirement
-      if (parents.contains(name)) {
-        final List<dynamic> options =
-            (field['options'] as List<dynamic>?)?.toList() ?? const [];
-        final List<int> childIdx = parentToChildIdx[name] ?? const [];
-
-        if (options.isNotEmpty && childIdx.isNotEmpty) {
-          // For each option, create an anchor clone and child clones
-          for (int optIndex = 0; optIndex < options.length; optIndex++) {
-            final String optionLabel = options[optIndex].toString();
-
-            // Anchor clone (acts as group header)
-            final Map<String, dynamic> anchor =
-                Map<String, dynamic>.from(field);
-            anchor['name'] = '${name}_${optIndex + 1}';
-            anchor['label'] =
-                field['label']; // keep original question text if needed
-            anchor['optionLabel'] = optionLabel; // title will use this
-            anchor['isOptionGroup'] = true;
-            // Remove interactive attributes from anchor
-            anchor.remove('required');
-            anchor.remove('options');
-            transformed.add(anchor);
-
-            // Child clones for this option
-            for (final ci in childIdx) {
-              final Map<String, dynamic> child =
-                  Map<String, dynamic>.from(original[ci]);
-              child['name'] = '${child['name']}_${optIndex + 1}';
-              child['groupId'] = anchor['name'];
-              transformed.add(child);
-            }
-          }
-
-          // Skip adding the original parent and its original children
-          // They are replaced by the expanded structures
-          continue;
+      if (groupId != null && groupId.isNotEmpty) {
+        // Parse comma-separated child names
+        final List<String> childNames = groupId.split(',').map((s) => s.trim()).toList();
+        parentToChildren[fieldName] = childNames;
+        
+        // Mark these as child fields
+        for (final childName in childNames) {
+          childFields.add(childName);
         }
       }
+    }
 
-      // Keep field as-is (do not normalize groupId to groupWith)
-      transformed.add(field);
+    // Process all fields
+    for (int i = 0; i < original.length; i++) {
+      if (processedFields.contains(i)) continue;
+      
+      final field = original[i];
+      final String fieldName = field['name']?.toString() ?? '';
+
+      if (parentToChildren.containsKey(fieldName)) {
+        // This is a parent field - add it and its children
+        final Map<String, dynamic> parentField = Map<String, dynamic>.from(field);
+        parentField.remove('groupId'); // Remove groupId from parent
+        transformed.add(parentField);
+          processedFields.add(i);
+
+        // Add all its children (create copies for each parent)
+        final List<String> childNames = parentToChildren[fieldName]!;
+        for (final childName in childNames) {
+          if (fieldNameToIndex.containsKey(childName)) {
+            final int childIdx = fieldNameToIndex[childName]!;
+            // Always create a copy of the child field for this parent
+            final Map<String, dynamic> childField = Map<String, dynamic>.from(original[childIdx]);
+            childField['groupWith'] = fieldName;
+            // Create unique name for this instance
+            childField['name'] = '${childName}_${fieldName}';
+            
+            // Update showWhen conditions to reference the correct parent field
+            if (childField['showWhen'] != null) {
+              final Map<String, dynamic> showWhen = Map<String, dynamic>.from(childField['showWhen']);
+              final Map<String, dynamic> updatedShowWhen = {};
+              showWhen.forEach((key, value) {
+                // If the referenced field is also a child field, update the reference
+                if (childFields.contains(key)) {
+                  updatedShowWhen['${key}_${fieldName}'] = value;
+        } else {
+                  updatedShowWhen[key] = value;
+                }
+              });
+              childField['showWhen'] = updatedShowWhen;
+            }
+            
+            transformed.add(childField);
+          }
+        }
+      } else if (childFields.contains(fieldName)) {
+        // This is a child field that's already been processed as part of a parent group
+        // Skip it here as it will be added when processing its parent
+        continue;
+      } else {
+        // Standalone field - add as is
+        transformed.add(field);
+        processedFields.add(i);
+      }
     }
 
     return transformed;

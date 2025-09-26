@@ -197,10 +197,6 @@ class DynamicFormController extends ChangeNotifier {
 
     _addControlsForFields(formJson);
     form = FormGroup(controls);
-    if (kDebugMode) {
-      print('Initial form values: ${form.value}');
-      print('Initial uploaded files: $uploadedFiles');
-    }
   }
 
   List<Validator<dynamic>> _getValidators(
@@ -238,34 +234,344 @@ class DynamicFormController extends ChangeNotifier {
   void submitForm(BuildContext context) {
     bool isValid = true;
 
-    for (var field in formJson) {
-      final fieldName = field['name'];
-      final control = form.control(fieldName);
+    if (kDebugMode) {
+      print("=== SUBMIT FORM VALIDATION ===");
+    }
 
-      if (!control.valid && field['required'] == true) {
+    // Get all form controls and validate only visible ones
+    for (var controlName in form.controls.keys) {
+      final control = form.control(controlName);
+      
+      // Skip comment fields for now
+      if (controlName.endsWith('_comment')) continue;
+      
+      
+      // Check if this field should be visible
+      bool shouldValidate = shouldValidateField(controlName);
+      
+      if (!shouldValidate) {
+        continue;
+      }
+      
+      if (!control.valid) {
+        // Find the field definition to check if it's required
+        final field = findFieldDefinition(controlName);
+        if (field != null && field['required'] == true) {
         isValid = false;
         break;
+        }
       }
     }
 
+
     if (isValid) {
       final formValue = Map<String, dynamic>.from(form.value);
-      onSubmit(formValue, uploadedFiles, isManageToCheckPress);
+      final nestedFormValue = createNestedStructure(formValue);
+      onSubmit(nestedFormValue, uploadedFiles, isManageToCheckPress);
     } else {
       form.markAllAsTouched();
       _handleFormErrors(context);
     }
   }
 
-  void _handleFormErrors(BuildContext context) {
-    int errorIndex = formJson.indexWhere((field) {
-      final control = form.control(field['name']);
-      return field['required'] == true &&
-          (control.value == null || control.value.toString().isEmpty);
+  /// Creates a nested JSON structure for grouped fields
+  Map<String, dynamic> createNestedStructure(Map<String, dynamic> formValue) {
+    final Map<String, dynamic> nestedData = {};
+    final Map<String, Map<String, dynamic>> groups = {};
+    final Map<String, dynamic> standaloneFields = {};
+
+    // First, identify which fields have groupId (are parent fields)
+    final Set<String> parentFields = {};
+    for (var field in formJson) {
+      if (field['groupId'] != null && field['groupId'].toString().isNotEmpty) {
+        parentFields.add(field['name']);
+      }
+    }
+
+    // Group fields by their parent (only for fields that have groupId)
+    formValue.forEach((fieldName, value) {
+      // Check if this is a grouped field (has pattern: originalName_parentName)
+      if (fieldName.contains('_question_')) {
+        final parts = fieldName.split('_question_');
+        if (parts.length == 2) {
+          final originalName = parts[0];
+          final parentName = 'question_${parts[1]}';
+          
+          // Only create groups for fields that have groupId
+          if (parentFields.contains(parentName)) {
+            // Check if this field should be visible based on showWhen conditions
+            if (_shouldIncludeFieldInOutput(fieldName, originalName, parentName)) {
+              // Initialize group if it doesn't exist
+              if (!groups.containsKey(parentName)) {
+                groups[parentName] = {};
+              }
+              
+              // Add the field to the group with the required structure
+              groups[parentName]![originalName] = {
+                'answer': value?.toString() ?? '',
+                'comment': formValue['${fieldName}_comment']?.toString() ?? '',
+                'imageUrls': formValue['${fieldName}_images'] ?? [],
+                'question': _getFieldLabel(originalName),
+                'questionId': originalName,
+              };
+            }
+          } else {
+            // This is a standalone field that happens to have underscore in name
+            standaloneFields[fieldName] = {
+              'answer': value?.toString() ?? '',
+              'comment': formValue['${fieldName}_comment']?.toString() ?? '',
+              'imageUrls': formValue['${fieldName}_images'] ?? [],
+              'question': _getFieldLabel(fieldName),
+              'questionId': fieldName,
+            };
+          }
+        }
+      } else {
+        // This is a standalone field or parent field
+        if (!parentFields.contains(fieldName)) {
+          standaloneFields[fieldName] = {
+            'answer': value?.toString() ?? '',
+            'comment': formValue['${fieldName}_comment']?.toString() ?? '',
+            'imageUrls': formValue['${fieldName}_images'] ?? [],
+            'question': _getFieldLabel(fieldName),
+            'questionId': fieldName,
+          };
+        }
+      }
     });
+
+    // Add groups to nested data (only for fields with groupId)
+    groups.forEach((parentName, groupData) {
+      // Find the parent field to get its label and value
+      final parentField = formJson.firstWhere(
+        (field) => field['name'] == parentName,
+        orElse: () => <String, dynamic>{},
+      );
+      
+      final String groupLabel = parentField['label']?.toString() ?? parentName;
+      final String fridgeName = formValue[parentName]?.toString() ?? parentName;
+      
+      nestedData[parentName] = {
+        'fridge_name': fridgeName,
+        'fridge_label': groupLabel,
+        'data': groupData,
+      };
+    });
+
+    // Add standalone fields (fields that don't have groupId)
+    standaloneFields.forEach((fieldName, value) {
+      nestedData[fieldName] = value;
+    });
+
+    return nestedData;
+  }
+
+  /// Get the field label for a given field name
+  String _getFieldLabel(String fieldName) {
+    final field = formJson.firstWhere(
+      (field) => field['name'] == fieldName,
+      orElse: () => <String, dynamic>{},
+    );
+    return field['label']?.toString() ?? fieldName;
+  }
+
+  /// Check if a field should be included in the output based on showWhen conditions
+  bool _shouldIncludeFieldInOutput(String fieldName, String originalName, String parentName) {
+    // Find the original field definition
+    final originalField = formJson.firstWhere(
+      (field) => field['name'] == originalName,
+      orElse: () => <String, dynamic>{},
+    );
+
+    if (originalField.isEmpty) return true;
+
+    // If no showWhen condition, include the field
+    if (originalField['showWhen'] == null) return true;
+
+    final conditions = originalField['showWhen'] as Map<String, dynamic>;
+    bool shouldShow = true;
+
+    conditions.forEach((dependentField, expectedValue) {
+      // Check if the dependent field exists in the form
+      if (!form.contains(dependentField)) {
+        shouldShow = false;
+        return;
+      }
+
+      // Get the value of the dependent field
+      final fieldValue = form.control(dependentField).value;
+      bool fieldMatches = false;
+
+      if (fieldValue is List && expectedValue is List) {
+        fieldMatches = fieldValue.any((v) => expectedValue.contains(v));
+      } else if (fieldValue is List) {
+        fieldMatches = fieldValue.contains(expectedValue);
+      } else if (expectedValue is List) {
+        fieldMatches = expectedValue.contains(fieldValue);
+      } else {
+        fieldMatches = (fieldValue == expectedValue);
+      }
+
+      shouldShow = shouldShow && fieldMatches;
+    });
+
+    return shouldShow;
+  }
+
+  /// Check if a field should be validated based on showWhen conditions
+  bool shouldValidateField(String controlName) {
+    // Find the field definition for this control
+    final field = findFieldDefinition(controlName);
+    if (field == null) {
+      if (kDebugMode) {
+        print("_shouldValidateField: Field definition not found for $controlName");
+      }
+      return true;
+    }
+
+    // If no showWhen condition, validate the field
+    if (field['showWhen'] == null) {
+      if (kDebugMode) {
+        print("_shouldValidateField: No showWhen condition for $controlName - validating");
+      }
+      return true;
+    }
+
+    final conditions = field['showWhen'] as Map<String, dynamic>;
+    bool shouldShow = true;
+
+    if (kDebugMode) {
+      print("_shouldValidateField: Checking $controlName with conditions: $conditions");
+    }
+
+    conditions.forEach((dependentField, expectedValue) {
+      // For grouped fields, we need to find the correct transformed field name
+      String actualDependentField = _findTransformedFieldName(controlName, dependentField);
+      
+      if (kDebugMode) {
+        print("_shouldValidateField: $controlName depends on $actualDependentField = $expectedValue");
+      }
+      
+      // Check if the dependent field exists in the form
+      if (!form.contains(actualDependentField)) {
+        if (kDebugMode) {
+          print("_shouldValidateField: Dependent field $actualDependentField not found in form");
+        }
+        shouldShow = false;
+        return;
+      }
+
+      // Get the value of the dependent field
+      final fieldValue = form.control(actualDependentField).value;
+      bool fieldMatches = false;
+
+      if (fieldValue is List && expectedValue is List) {
+        fieldMatches = fieldValue.any((v) => expectedValue.contains(v));
+      } else if (fieldValue is List) {
+        fieldMatches = fieldValue.contains(expectedValue);
+      } else if (expectedValue is List) {
+        fieldMatches = expectedValue.contains(fieldValue);
+      } else {
+        fieldMatches = (fieldValue == expectedValue);
+      }
+
+      if (kDebugMode) {
+        print("_shouldValidateField: $controlName - $actualDependentField = $fieldValue, expected = $expectedValue, matches = $fieldMatches");
+      }
+
+      shouldShow = shouldShow && fieldMatches;
+    });
+
+    if (kDebugMode) {
+      print("_shouldValidateField: $controlName should validate = $shouldShow");
+    }
+
+    return shouldShow;
+  }
+
+  /// Find the transformed field name for showWhen conditions
+  String _findTransformedFieldName(String currentFieldName, String dependentField) {
+    // If current field is grouped (has pattern: originalName_parentName)
+    if (currentFieldName.contains('_question_')) {
+      final parts = currentFieldName.split('_question_');
+      if (parts.length == 2) {
+        final parentName = 'question_${parts[1]}';
+        // Return the transformed dependent field name
+        return '${dependentField}_${parentName}';
+      }
+    }
+    
+    // If current field is not grouped, return the original dependent field name
+    return dependentField;
+  }
+
+  /// Find the field definition for a control name
+  Map<String, dynamic>? findFieldDefinition(String controlName) {
+    
+    // Check if it's a grouped field (has pattern: originalName_parentName)
+    if (controlName.contains('_question_')) {
+      final parts = controlName.split('_question_');
+      if (parts.length == 2) {
+        final originalName = parts[0];
+        final field = formJson.firstWhere(
+          (field) => field['name'] == originalName,
+          orElse: () => <String, dynamic>{},
+        );
+        return field.isNotEmpty ? field : null;
+      }
+    }
+    
+    // Check if it's a direct field
+    final field = formJson.firstWhere(
+      (field) => field['name'] == controlName,
+      orElse: () => <String, dynamic>{},
+    );
+    return field.isNotEmpty ? field : null;
+  }
+
+  /// Creates a clean group key from the fridge label
+  String _createGroupKey(String label) {
+    // Extract fridge name from label (e.g., "Fridge name/number: Walk in Fridge 1" -> "walk_in_fridge_1")
+    final fridgeName = label.split(':').last.trim().toLowerCase()
+        .replaceAll(' ', '_')
+        .replaceAll('-', '_');
+    return fridgeName;
+  }
+
+  void _handleFormErrors(BuildContext context) {
+    // Find the first invalid field that should be visible
+    String? firstInvalidField;
+    
+    for (var controlName in form.controls.keys) {
+      if (controlName.endsWith('_comment')) continue;
+      
+      final control = form.control(controlName);
+      if (!control.valid && shouldValidateField(controlName)) {
+        final field = findFieldDefinition(controlName);
+        if (field != null && field['required'] == true) {
+          firstInvalidField = controlName;
+          break;
+        }
+      }
+    }
+
+    if (firstInvalidField != null) {
+      // Find the index of the field in formJson for navigation
+      int errorIndex = formJson.indexWhere((field) => field['name'] == firstInvalidField);
+      if (errorIndex == -1) {
+        // If it's a grouped field, find the parent field
+        if (firstInvalidField.contains('_question_')) {
+          final parts = firstInvalidField.split('_question_');
+          if (parts.length == 2) {
+            final parentName = 'question_${parts[1]}';
+            errorIndex = formJson.indexWhere((field) => field['name'] == parentName);
+          }
+        }
+      }
 
     if (errorIndex != -1) {
       _currentQuestionIndex = errorIndex;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1185,12 +1491,20 @@ class DynamicFormController extends ChangeNotifier {
     if (field['showWhen'] == null) return true;
     final conditions = field['showWhen'] as Map<String, dynamic>;
     bool shouldShow = true;
+    
+    
     conditions.forEach((dependentField, expectedValue) {
-      if (!form.contains(dependentField)) {
+      // For grouped fields, we need to find the correct transformed field name
+      String actualDependentField = _findTransformedFieldNameForVisibility(field, dependentField);
+      
+      
+      if (!form.contains(actualDependentField)) {
         shouldShow = false;
         return;
       }
-      final currentValue = form.control(dependentField).value;
+      final currentValue = form.control(actualDependentField).value;
+      
+      
       bool matches;
       if (expectedValue is List) {
         if (currentValue is List) {
@@ -1203,9 +1517,43 @@ class DynamicFormController extends ChangeNotifier {
       } else {
         matches = currentValue == expectedValue;
       }
+      
+      
       shouldShow = shouldShow && matches;
     });
+    
+    
     return shouldShow;
+  }
+
+  /// Find the transformed field name for showWhen conditions in shouldFieldBeVisible
+  String _findTransformedFieldNameForVisibility(Map<String, dynamic> currentField, String dependentField) {
+    // Check if current field is grouped (has groupWith property)
+    if (currentField['groupWith'] != null) {
+      final parentName = currentField['groupWith'].toString();
+      
+      // Check if the dependent field is also a child field that should be transformed
+      // Look for the dependent field in the original formJson to see if it's a child field
+      final dependentFieldDef = formJson.firstWhere(
+        (field) => field['name'] == dependentField,
+        orElse: () => <String, dynamic>{},
+      );
+      
+      if (dependentFieldDef.isNotEmpty && dependentFieldDef['groupWith'] != null) {
+        // The dependent field is also a child field, so it should be transformed
+        final transformedName = '${dependentField}_${parentName}';
+        
+        
+        return transformedName;
+      } else {
+        // The dependent field is not a child field, return as is
+        return dependentField;
+      }
+    }
+    
+    
+    // If current field is not grouped, return the original dependent field name
+    return dependentField;
   }
 
   /// The function `validateFieldAttachmentsIfRequired` checks if field attachments are required based
