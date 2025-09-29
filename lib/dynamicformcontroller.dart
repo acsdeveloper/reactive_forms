@@ -128,7 +128,7 @@ class DynamicFormController extends ChangeNotifier {
           }
         } else if (field['type'] == 'temp') {
           controls[fieldName] = FormControl<double>(
-            value: initial != null ? double.tryParse(initial.toString()) : 0.0,
+            value: double.tryParse(initial?.toString() ?? '') ?? 0.0,
             validators: _getValidators(field['required'] == true, field),
           );
 
