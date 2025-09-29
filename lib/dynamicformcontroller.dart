@@ -392,14 +392,23 @@ class DynamicFormController extends ChangeNotifier {
     bool shouldShow = true;
 
     conditions.forEach((dependentField, expectedValue) {
+      // For grouped fields, we need to check the transformed field name
+      String actualDependentField = dependentField;
+      
+      // If the dependent field is also a child field, it might be transformed
+      // Check if there's a transformed version with the same parent
+      if (form.contains('${dependentField}_${parentName}')) {
+        actualDependentField = '${dependentField}_${parentName}';
+      }
+      
       // Check if the dependent field exists in the form
-      if (!form.contains(dependentField)) {
+      if (!form.contains(actualDependentField)) {
         shouldShow = false;
         return;
       }
 
       // Get the value of the dependent field
-      final fieldValue = form.control(dependentField).value;
+      final fieldValue = form.control(actualDependentField).value;
       bool fieldMatches = false;
 
       if (fieldValue is List && expectedValue is List) {
