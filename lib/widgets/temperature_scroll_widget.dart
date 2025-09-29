@@ -20,10 +20,10 @@ class TemperatureScrollWidget extends StatefulWidget {
   const TemperatureScrollWidget({
     super.key,
     required this.formControlName,
-    this.min = -30.0,
-    this.max = 130.0,
+    this.min = -25.0,
+    this.max = 110.0,
     this.step = 0.1,
-    this.initialValue = 20.0,
+    this.initialValue = 0.0,
     this.unit = '°C',
     this.textStyle,
     this.primaryColor,
@@ -38,10 +38,9 @@ class TemperatureScrollWidget extends StatefulWidget {
 }
 
 class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
-  // Controllers for 3-column picker
+  // Controllers for 2-column picker (integer + decimal)
   late FixedExtentScrollController _intController;
   late FixedExtentScrollController _decController;
-  late FixedExtentScrollController _unitController;
   // Controller for legacy single-column picker
   FixedExtentScrollController? _allController;
 
@@ -49,10 +48,9 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
   late double _currentValueCelsius;
 
   // Display state
-  late List<int> _intValues; // integer part values for current unit
+  late List<int> _intValues; // integer part values (-25 to 110)
   int _currentInt = 0;
   int _currentDec = 0; // 0..9
-  String _currentUnit = '°C'; // '°C' or '°F'
   // Legacy list of values (either °C or °F depending on widget.unit)
   List<double> _allValues = [];
 
@@ -61,13 +59,11 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
     super.initState();
     _currentValueCelsius = widget.initialValue;
     if (widget.useTriplePicker) {
-      _currentUnit = '°C';
       _rebuildRanges();
 
       // Derive display parts from initial value (in Celsius)
-      final initialInDisplayUnit = _toDisplayUnit(_currentValueCelsius, _currentUnit);
-      _currentInt = initialInDisplayUnit.truncate();
-      _currentDec = ((initialInDisplayUnit.abs() * 10).round() % 10);
+      _currentInt = _currentValueCelsius.truncate();
+      _currentDec = ((_currentValueCelsius.abs() * 10).round() % 10);
 
       // Snap to valid integer in range
       if (!_intValues.contains(_currentInt)) {
@@ -78,15 +74,10 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
         initialItem: _intValues.indexOf(_currentInt),
       );
       _decController = FixedExtentScrollController(initialItem: _currentDec);
-      _unitController = FixedExtentScrollController(
-        initialItem: _currentUnit == '°C' ? 0 : 1,
-      );
     } else {
-      _currentUnit = widget.unit;
       _buildAllValues();
-      final displayVal = _toDisplayUnit(_currentValueCelsius, _currentUnit);
       final closest = _allValues.reduce((a, b) =>
-          (a - displayVal).abs() < (b - displayVal).abs() ? a : b);
+          (a - _currentValueCelsius).abs() < (b - _currentValueCelsius).abs() ? a : b);
       _allController = FixedExtentScrollController(
         initialItem: _allValues.indexOf(closest),
       );
@@ -94,26 +85,16 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
   }
 
   void _rebuildRanges() {
-    // Build integer values list for current unit
-    if (_currentUnit == '°C') {
-      _intValues = List<int>.generate(
-          (widget.max!.floor() - widget.min!.ceil()) + 1,
-          (i) => widget.min!.ceil() + i);
-    } else {
-      // Convert bounds from Celsius to Fahrenheit and build range
-      final minF = _cToF(widget.min!);
-      final maxF = _cToF(widget.max!);
-      final start = minF.round();
-      final end = maxF.round();
-      _intValues = List<int>.generate((end - start) + 1, (i) => start + i);
-    }
+    // Build integer values list for Celsius (-25 to 110)
+    _intValues = List<int>.generate(
+        (widget.max!.floor() - widget.min!.ceil()) + 1,
+        (i) => widget.min!.ceil() + i);
   }
 
   @override
   void dispose() {
     _intController.dispose();
     _decController.dispose();
-    _unitController.dispose();
     _allController?.dispose();
     super.dispose();
   }
@@ -145,7 +126,7 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
         child: widget.useTriplePicker ? Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Integer part picker
+            // Integer part picker (-25 to 110)
             Expanded(
               flex: 5,
               child: CupertinoPicker(
@@ -208,42 +189,15 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
                     )),
               ),
             ),
-            // Space
-            const SizedBox(width: 4),
-            // Unit picker (°C / °F)
+            // Space and unit
+            const SizedBox(width: 8),
             Expanded(
-              flex: 4,
-              child: CupertinoPicker(
-                scrollController: _unitController,
-                itemExtent: 40,
-                magnification: 1.15,
-                useMagnifier: true,
-                squeeze: 1.15,
-                selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
-                  background: Colors.grey.withOpacity(0.12),
+              flex: 3,
+              child: Center(
+                child: Text(
+                  '°C',
+                  style: textStyle?.copyWith(fontWeight: FontWeight.w600,fontSize: 20),
                 ),
-                onSelectedItemChanged: (idx) {
-                  setState(() {
-                    final newUnit = idx == 0 ? '°C' : '°F';
-                    if (newUnit != _currentUnit) {
-                      // Convert current Celsius value to new unit for display parts
-                      _currentUnit = newUnit;
-                      _rebuildRanges();
-                      final displayVal = _toDisplayUnit(_currentValueCelsius, _currentUnit);
-                      _currentInt = _snapToRange(displayVal.truncate());
-                      _currentDec = ((displayVal.abs() * 10).round() % 10);
-                      _jumpToControllers();
-                    }
-                  });
-                },
-                children: ['°C', '°F']
-                    .map((u) => Center(
-                          child: Text(
-                            u,
-                            style: textStyle?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                        ))
-                    .toList(),
               ),
             ),
           ],
@@ -259,14 +213,14 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
           onSelectedItemChanged: (idx) {
             final val = _allValues[idx];
             setState(() {
-              _currentValueCelsius = _currentUnit == '°C' ? val : _fToC(val);
+              _currentValueCelsius = val;
             });
             widget.onChanged?.call(_currentValueCelsius);
           },
           children: _allValues
               .map((v) => Center(
                     child: Text(
-                      '${v.toStringAsFixed(1)} ${_currentUnit}',
+                      '${v.toStringAsFixed(1)} °C',
                       style: textStyle?.copyWith(fontWeight: FontWeight.w600),
                     ),
                   ))
@@ -277,11 +231,6 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
   }
 
   // Helpers
-  double _cToF(double c) => (c * 9 / 5) + 32;
-  double _fToC(double f) => (f - 32) * 5 / 9;
-
-  double _toDisplayUnit(double celsius, String unit) =>
-      unit == '°C' ? celsius : _cToF(celsius);
 
   int _closestIntInRange(int value) => _snapToRange(value);
 
@@ -303,31 +252,19 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
   }
 
   void _updateCurrentCelsiusFromDisplay() {
-    // Build the signed value in current unit from parts
+    // Build the signed value from parts (always in Celsius)
     final sign = _currentInt < 0 ? -1 : 1;
     final magnitude = _currentInt.abs() + (_currentDec / 10.0);
-    final displayVal = sign * magnitude;
-    _currentValueCelsius =
-        _currentUnit == '°C' ? displayVal : _fToC(displayVal);
+    _currentValueCelsius = sign * magnitude;
   }
 
   void _buildAllValues() {
     _allValues = [];
-    // Build in display unit (widget.unit)
-    if (widget.unit == '°C') {
-      double current = widget.min!;
-      while (current <= widget.max! + 1e-9) {
-        _allValues.add(double.parse(current.toStringAsFixed(1)));
-        current += widget.step;
-      }
-    } else {
-      // Fahrenheit list converted from Celsius bounds
-      double currentC = widget.min!;
-      while (currentC <= widget.max! + 1e-9) {
-        final f = _cToF(currentC);
-        _allValues.add(double.parse(f.toStringAsFixed(1)));
-        currentC += widget.step;
-      }
+    // Build in Celsius only
+    double current = widget.min!;
+    while (current <= widget.max! + 1e-9) {
+      _allValues.add(double.parse(current.toStringAsFixed(1)));
+      current += widget.step;
     }
   }
 
@@ -338,15 +275,13 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
     setState(() {
       _currentValueCelsius = clamped;
       if (widget.useTriplePicker) {
-        final displayVal = _toDisplayUnit(_currentValueCelsius, _currentUnit);
-        _currentInt = _snapToRange(displayVal.truncate());
-        _currentDec = ((displayVal.abs() * 10).round() % 10);
+        _currentInt = _snapToRange(_currentValueCelsius.truncate());
+        _currentDec = ((_currentValueCelsius.abs() * 10).round() % 10);
         _jumpToControllers();
       } else {
         _buildAllValues();
-        final displayVal = _toDisplayUnit(_currentValueCelsius, _currentUnit);
         final closest = _allValues.reduce((a, b) =>
-            (a - displayVal).abs() < (b - displayVal).abs() ? a : b);
+            (a - _currentValueCelsius).abs() < (b - _currentValueCelsius).abs() ? a : b);
         final idx = _allValues.indexOf(closest);
         if (idx >= 0) {
           _allController?.jumpToItem(idx);
@@ -362,7 +297,6 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
       _intController.jumpToItem(intIdx);
     }
     _decController.jumpToItem(_currentDec);
-    _unitController.jumpToItem(_currentUnit == '°C' ? 0 : 1);
   }
 }
 
@@ -382,10 +316,10 @@ class ReactiveTemperatureScrollWidget extends StatelessWidget {
   const ReactiveTemperatureScrollWidget({
     super.key,
     required this.formControlName,
-    this.min = -30.0,
-    this.max = 130.0,
+    this.min = -25.0,
+    this.max = 110.0,
     this.step = 0.1,
-    this.initialValue = 20.0,
+    this.initialValue = 0.0,
     this.unit = '°C',
     this.textStyle,
     this.primaryColor,

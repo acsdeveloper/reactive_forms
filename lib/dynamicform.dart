@@ -2755,10 +2755,10 @@ class _DynamicFormState extends State<DynamicForm>
               if (controlIsDouble) {
                 return ReactiveTemperatureScrollWidget(
                   formControlName: field['name'],
-                  min: field['min']?.toDouble() ?? -30.0,
-                  max: field['max']?.toDouble() ?? 130.0,
+                  min: field['min']?.toDouble() ?? -25.0,
+                  max: field['max']?.toDouble() ?? 110.0,
                   step: field['step']?.toDouble() ?? 0.1,
-                  initialValue: ctrl.value?.toDouble() ?? 20.0,
+                  initialValue: ctrl.value?.toDouble() ?? 0.0,
                   unit: field['unit'] ?? '°C',
                   textStyle: widget.fontFamily,
                   primaryColor: widget.primaryColor,
@@ -2769,9 +2769,9 @@ class _DynamicFormState extends State<DynamicForm>
 
               // Fallback to plain TextField bound to String control to avoid type errors
               return TextFormField(
-                initialValue: ctrl.value?.toString() ?? '20.0',
+                initialValue: ctrl.value?.toString() ?? '0.0',
                 keyboardType: TextInputType.number,
-                onChanged: (val) => ctrl.value = double.tryParse(val) ?? 20.0,
+                onChanged: (val) => ctrl.value = double.tryParse(val) ?? 0.0,
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.-]')),
                 ],

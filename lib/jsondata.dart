@@ -32,8 +32,8 @@ final List<Map<String, dynamic>> formJson = [
     "hasComments": false,
     "commentsRequired": false,
     "groupId": "question_1",
-    "min": -30.0,
-    "max": 130.0,
+    "min": -25.0,
+    "max": 110.0,
     "step": 0.1,
     "unit": "°C"
   },

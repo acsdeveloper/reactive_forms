@@ -128,7 +128,7 @@ class DynamicFormController extends ChangeNotifier {
           }
         } else if (field['type'] == 'temp') {
           controls[fieldName] = FormControl<double>(
-            value: initial != null ? double.tryParse(initial.toString()) : 20.0,
+            value: initial != null ? double.tryParse(initial.toString()) : 0.0,
             validators: _getValidators(field['required'] == true, field),
           );
 
@@ -938,7 +938,7 @@ class DynamicFormController extends ChangeNotifier {
         } else if (f['type'] == 'temp') {
           List<Validator> validators = _getValidators(isRequired, f);
           newControls[n] = FormControl<double>(
-              value: initial != null ? double.tryParse(initial.toString()) : 20.0, 
+              value: initial != null ? double.tryParse(initial.toString()) : 0.0, 
               validators: validators);
           if (f['hasComments'] == true) {
             newControls['${n}_comment'] = FormControl<String>(
