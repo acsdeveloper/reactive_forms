@@ -27,6 +27,7 @@ import 'dart:math' as math;
 import 'web_utils.dart' if (dart.library.html) 'dart:html' as html;
 
 import 'widgets/multi_select_form_field.dart';
+import 'widgets/temperature_scroll_widget.dart';
 
 class DynamicForm extends StatefulWidget {
   final List<Map<String, dynamic>> formJson;
@@ -1381,6 +1382,9 @@ class _DynamicFormState extends State<DynamicForm>
           case 'number':
             child = _buildNumberField(field);
             break;
+          case 'temp':
+            child = _buildTempField(field);
+            break;
           case 'file':
             child = _buildFileField(field);
             break;
@@ -1438,6 +1442,8 @@ class _DynamicFormState extends State<DynamicForm>
         return _buildTextField(field);
       case FieldType.number:
         return _buildNumberField(field);
+      case FieldType.temp:
+        return _buildTempField(field);
       case FieldType.file:
         return _buildFileField(field);
       case 'multiselect':
@@ -1598,6 +1604,8 @@ class _DynamicFormState extends State<DynamicForm>
         return _buildTextField(field);
       case FieldType.number:
         return _buildNumberField(field);
+      case FieldType.temp:
+        return _buildTempField(field);
       case FieldType.file:
         return _buildFileField(field);
       case 'multiselect':
@@ -2689,6 +2697,114 @@ class _DynamicFormState extends State<DynamicForm>
             formControlName: '${field['name']}_comment',
             decoration: InputDecoration(
                 // No labelText to avoid displaying "comments" in the field
+                hintText: field['commentHint'] ?? '',
+                labelStyle: widget.fontFamily,
+                hintStyle: widget.fontFamily,
+                // Add error style
+                errorStyle: widget.accordionView
+                    ? controller
+                        .buildInputDecoration(widget.accordionView)
+                        .errorStyle
+                    : widget.fontFamily
+                        .copyWith(color: Colors.red[700], fontSize: 12),
+                errorBorder: widget.accordionView
+                    ? UnderlineInputBorder(
+                        borderSide:
+                            BorderSide(color: Get.theme.colorScheme.onError))
+                    : null),
+            maxLines: 3,
+            minLines: 1,
+            validationMessages: {
+              'required': (_) => widget.accordionView
+                  ? ""
+                  : StringConstants.commentsAreRequired,
+            },
+            // Add onSubmitted to validate the form when user submits via keyboard
+            onSubmitted: (_) {
+              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+                validateCurrentSection();
+              }
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTempField(Map<String, dynamic> field) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabelRow(field),
+        // Add a safety wrapper that handles potential type mismatches
+        Builder(
+          builder: (context) {
+            // Check if control exists
+            if (!controller.form.contains(field['name'])) {
+              return Text("Error: Form control not found for ${field['name']}",
+                  style: TextStyle(color: Colors.red));
+            }
+
+            // If the form control exists but might not have the right type,
+            // wrap it in a try-catch to prevent runtime errors
+            try {
+              final ctrl = controller.form.control(field['name']);
+              final bool controlIsDouble =
+                  ctrl is FormControl<double> || ctrl.value is double;
+
+              if (controlIsDouble) {
+                return ReactiveTemperatureScrollWidget(
+                  formControlName: field['name'],
+                  min: field['min']?.toDouble() ?? -25.0,
+                  max: field['max']?.toDouble() ?? 110.0,
+                  step: field['step']?.toDouble() ?? 0.1,
+                  initialValue: ctrl.value?.toDouble() ?? 0.0,
+                  unit: field['unit'] ?? '°C',
+                  textStyle: widget.fontFamily,
+                  primaryColor: widget.primaryColor,
+                  backgroundColor: Colors.white,
+                  separatorColor: Colors.grey.shade300,
+                );
+              }
+
+              // Fallback to plain TextField bound to String control to avoid type errors
+              return TextFormField(
+                initialValue: ctrl.value?.toString() ?? '0.0',
+                keyboardType: TextInputType.number,
+                onChanged: (val) => ctrl.value = double.tryParse(val) ?? 0.0,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.-]')),
+                ],
+                decoration: InputDecoration(
+                  hintText: 'Enter temperature',
+                  labelStyle: widget.fontFamily,
+                  hintStyle: widget.fontFamily,
+                ),
+              );
+            } catch (e) {
+              if (kDebugMode) {
+                print("Error rendering temp field ${field['name']}: $e");
+              }
+              // Return a fallback widget if there's a type mismatch
+              return TextFormField(
+                decoration: InputDecoration(
+                  hintText:
+                      "Error loading temperature field - please reload the form",
+                  errorText: "Type mismatch error",
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.red),
+                  ),
+                ),
+                enabled: false,
+              );
+            }
+          },
+        ),
+        if (field['hasComments'] == true) ...[
+          const SizedBox(height: 16),
+          ReactiveTextField(
+            formControlName: '${field['name']}_comment',
+            decoration: InputDecoration(
                 hintText: field['commentHint'] ?? '',
                 labelStyle: widget.fontFamily,
                 hintStyle: widget.fontFamily,
