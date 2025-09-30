@@ -1,28 +1,46 @@
 final List<Map<String, dynamic>> formJson = [
   {
     "name": "question_1",
-    "type": "dropdown",
-    "label": "Fridge number or name ",
-    "options": [
-      "Walk in Fridge 1",
-      "Drinks Fridge 2",
-      "Drinks Fridge 3",
-      "Drinks Fridge 4",
-      "UC Fridge 5",
-      "UC Fridge 6",
-      "UC Fridge 7",
-      "BOH Milk Fridge 8"
-    ],
-    "required": false,
-    "hasAttachments": false,
+    "type": "text",
+    "label": "Fridge name/number: Walk in Fridge 1",
+    "options": [],
+    "required": null,
+    "hasAttachments": null,
     "requireAttachmentsOn": [],
     "disableAttachmentsOn": [],
-    "hasComments": false,
-    "commentsRequired": false,
+    "hasComments": null,
+    "commentsRequired": null,
+    "groupId": "question_4,question_5,question_6"
   },
   {
     "name": "question_2",
     "type": "temp",
+    "label": "Fridge name/number: Drinks Fridge 2",
+    "options": [],
+    "required": null,
+    "hasAttachments": null,
+    "requireAttachmentsOn": [],
+    "disableAttachmentsOn": [],
+    "hasComments": null,
+    "commentsRequired": null,
+    "groupId": "question_4,question_5,question_6"
+  },
+  {
+    "name": "question_3",
+    "type": "text",
+    "label": "Fridge name/number: Drinks Fridge 3",
+    "options": [],
+    "required": null,
+    "hasAttachments": null,
+    "requireAttachmentsOn": [],
+    "disableAttachmentsOn": [],
+    "hasComments": null,
+    "commentsRequired": null,
+    "groupId": "question_4,question_5,question_6"
+  },
+  {
+    "name": "question_4",
+    "type": "number",
     "label": "Temperature in degree C?",
     "options": [],
     "required": true,
@@ -31,14 +49,13 @@ final List<Map<String, dynamic>> formJson = [
     "disableAttachmentsOn": [],
     "hasComments": false,
     "commentsRequired": false,
-    "groupId": "question_1",
     "min": -25.0,
     "max": 110.0,
     "step": 0.1,
     "unit": "°C"
   },
   {
-    "name": "question_3",
+    "name": "question_5",
     "type": "radio",
     "label": "Initials of person completing the check ",
     "options": ["RT", "Other"],
@@ -48,10 +65,9 @@ final List<Map<String, dynamic>> formJson = [
     "disableAttachmentsOn": [],
     "hasComments": false,
     "commentsRequired": false,
-    "groupId": "question_1"
   },
   {
-    "name": "question_4",
+    "name": "question_6",
     "type": "text",
     "label": "Initials of person completing the check if other ",
     "options": [],
@@ -61,10 +77,10 @@ final List<Map<String, dynamic>> formJson = [
     "disableAttachmentsOn": [],
     "hasComments": false,
     "commentsRequired": false,
-    "showWhen": {"question_3": "Other"},
+    "showWhen": {"question_5": "Other"},
   },
   {
-    "name": "question_5",
+    "name": "question_7",
     "type": "radio",
     "label": "Fridge temperature within permissible limits of 1-5 degree C?",
     "options": ["Yes", "No"],
@@ -76,7 +92,7 @@ final List<Map<String, dynamic>> formJson = [
     "commentsRequired": false,
   },
   {
-    "name": "question_6",
+    "name": "question_8",
     "type": "text",
     "label":
         "Corrective action taken if temperature outside of permissible limits ",
@@ -87,7 +103,7 @@ final List<Map<String, dynamic>> formJson = [
     "disableAttachmentsOn": [],
     "hasComments": false,
     "commentsRequired": false,
-    "showWhen": {"question_4": "No"},
+    "showWhen": {"question_7": "No"},
   }
 ];
 
