@@ -14,7 +14,7 @@ final List<Map<String, dynamic>> formJson = [
   },
   {
     "name": "question_2",
-    "type": "text",
+    "type": "temp",
     "label": "Fridge name/number: Drinks Fridge 2",
     "options": [],
     "required": null,
@@ -49,6 +49,10 @@ final List<Map<String, dynamic>> formJson = [
     "disableAttachmentsOn": [],
     "hasComments": false,
     "commentsRequired": false,
+    "min": -25.0,
+    "max": 110.0,
+    "step": 0.1,
+    "unit": "°C"
   },
   {
     "name": "question_5",
