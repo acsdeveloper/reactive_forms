@@ -6,7 +6,6 @@ import 'package:reactive_forms/reactive_forms.dart';
 import 'package:reactiveform/components/app_snackbar.dart';
 import 'package:reactiveform/string_constants.dart';
 import 'package:reactiveform/models/form_field_model.dart';
-import 'package:http/http.dart' as http;
 
 class DynamicFormController extends ChangeNotifier {
   final List<Map<String, dynamic>> formJson;
@@ -282,9 +281,16 @@ class DynamicFormController extends ChangeNotifier {
 
     // First, identify which fields have groupId (are parent fields)
     final Set<String> parentFields = {};
+    // Also identify which fields are children (appear in groupId of other fields)
+    final Set<String> childFields = {};
+    
     for (var field in formJson) {
       if (field['groupId'] != null && field['groupId'].toString().isNotEmpty) {
         parentFields.add(field['name']);
+        // Parse the groupId to identify child fields
+        final groupId = field['groupId'].toString();
+        final childNames = groupId.split(',').map((s) => s.trim()).toList();
+        childFields.addAll(childNames);
       }
     }
 
@@ -313,6 +319,7 @@ class DynamicFormController extends ChangeNotifier {
                 'imageUrls': formValue['${fieldName}_images'] ?? [],
                 'question': _getFieldLabel(originalName),
                 'questionId': originalName,
+                'groupId': parentName, // Add groupId to identify grouped fields
               };
             }
           } else {
@@ -328,14 +335,22 @@ class DynamicFormController extends ChangeNotifier {
         }
       } else {
         // This is a standalone field or parent field
-        if (!parentFields.contains(fieldName)) {
-          standaloneFields[fieldName] = {
-            'answer': value?.toString() ?? '',
-            'comment': formValue['${fieldName}_comment']?.toString() ?? '',
-            'imageUrls': formValue['${fieldName}_images'] ?? [],
-            'question': _getFieldLabel(fieldName),
-            'questionId': fieldName,
-          };
+        // Exclude child fields and comment fields from root level
+        bool isCommentField = fieldName.endsWith('_comment');
+        bool isChildField = childFields.contains(fieldName);
+        bool isParentField = parentFields.contains(fieldName);
+        
+        if (!isParentField && !isChildField && !isCommentField) {
+          // Check if this field should be visible based on showWhen conditions
+          if (_shouldIncludeFieldInOutput(fieldName, fieldName, '')) {
+            standaloneFields[fieldName] = {
+              'answer': value?.toString() ?? '',
+              'comment': formValue['${fieldName}_comment']?.toString() ?? '',
+              'imageUrls': formValue['${fieldName}_images'] ?? [],
+              'question': _getFieldLabel(fieldName),
+              'questionId': fieldName,
+            };
+          }
         }
       }
     });
@@ -397,6 +412,7 @@ class DynamicFormController extends ChangeNotifier {
       
       // If the dependent field is also a child field, it might be transformed
       // Check if there's a transformed version with the same parent
+      // The pattern is: question_X_question_Y
       if (form.contains('${dependentField}_${parentName}')) {
         actualDependentField = '${dependentField}_${parentName}';
       }
