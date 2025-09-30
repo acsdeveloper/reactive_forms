@@ -296,6 +296,12 @@ class DynamicFormController extends ChangeNotifier {
 
     // Group fields by their parent (only for fields that have groupId)
     formValue.forEach((fieldName, value) {
+      // Skip comment fields that belong to grouped fields
+      if (fieldName.endsWith('_comment') && fieldName.contains('_question_')) {
+        // This is a comment field for a grouped field, skip it
+        return;
+      }
+      
       // Check if this is a grouped field (has pattern: originalName_parentName)
       if (fieldName.contains('_question_')) {
         final parts = fieldName.split('_question_');
@@ -339,6 +345,7 @@ class DynamicFormController extends ChangeNotifier {
         bool isCommentField = fieldName.endsWith('_comment');
         bool isChildField = childFields.contains(fieldName);
         bool isParentField = parentFields.contains(fieldName);
+        
         
         if (!isParentField && !isChildField && !isCommentField) {
           // Check if this field should be visible based on showWhen conditions
@@ -1698,10 +1705,24 @@ class DynamicFormController extends ChangeNotifier {
     if (field['hasComments'] == true) {
       final fieldControlName = field['name']?.toString() ?? '';
       final commentControlName = '${fieldControlName}_comment';
-      if (form.contains(commentControlName) &&
-          form.contains(fieldControlName)) {
-        final fieldControl = form.control(fieldControlName);
-        final commentControl = form.control(commentControlName);
+      
+      // Check if this is a grouped field by looking for the transformed name
+      String actualFieldControlName = fieldControlName;
+      String actualCommentControlName = commentControlName;
+      
+      // Look for grouped field names in the form controls
+      for (String controlName in form.controls.keys) {
+        if (controlName.startsWith(fieldControlName) && controlName.contains('_question_')) {
+          actualFieldControlName = controlName;
+          actualCommentControlName = '${controlName}_comment';
+          break;
+        }
+      }
+      
+      if (form.contains(actualCommentControlName) &&
+          form.contains(actualFieldControlName)) {
+        final fieldControl = form.control(actualFieldControlName);
+        final commentControl = form.control(actualCommentControlName);
         final show =
             shouldShowCommentsBasedOnFieldValue(field, fieldControl.value);
         if (show) {
