@@ -1608,9 +1608,20 @@ class DynamicFormController extends ChangeNotifier {
   bool validateFieldAttachmentsIfRequired(Map<String, dynamic> field) {
     final String fieldName = field['name']?.toString() ?? '';
 
+    // Check if this is a grouped field by looking for the transformed name
+    String actualFieldName = fieldName;
+    
+    // Look for grouped field names in the form controls
+    for (String controlName in form.controls.keys) {
+      if (controlName.startsWith(fieldName) && controlName.contains('_question_')) {
+        actualFieldName = controlName;
+        break;
+      }
+    }
+
     // Determine requirement using same rules as _checkIfRequiredFilesUploaded
     dynamic currentValue =
-        form.contains(fieldName) ? form.control(fieldName).value : null;
+        form.contains(actualFieldName) ? form.control(actualFieldName).value : null;
 
     bool requiresAttachments = false;
 
@@ -1684,7 +1695,8 @@ class DynamicFormController extends ChangeNotifier {
 
     if (!requiresAttachments) return true;
 
-    final uploads = uploadedFiles[fieldName];
+    // Use the actual field name for checking uploads
+    final uploads = uploadedFiles[actualFieldName];
     if (uploads == null || uploads.isEmpty) {
       return false;
     }
