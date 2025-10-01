@@ -1573,25 +1573,35 @@ class _DynamicFormState extends State<DynamicForm>
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0, top: 8.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Text(
-              field['label'],
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: field['label'],
               style: TextStyle(
                 fontWeight: FontWeight.w500,
                 fontSize: 16.0,
                 fontFamily: widget.fontFamily?.fontFamily,
-              ),
+                      color: Colors.black,
             ),
           ),
           if (field['required'] == true)
-            Text(' *',
+                    TextSpan(
+                      text: ' *',
                 style: TextStyle(
                   color: Colors.red,
                   fontWeight: FontWeight.bold,
                   fontSize: 16.0,
                   fontFamily: widget.fontFamily?.fontFamily,
-                )),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -5265,7 +5275,7 @@ class _DynamicFormState extends State<DynamicForm>
         continue;
       } else {
         // Standalone field - add as is
-        transformed.add(field);
+      transformed.add(field);
         processedFields.add(i);
       }
     }
