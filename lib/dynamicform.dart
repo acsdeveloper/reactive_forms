@@ -2765,102 +2765,154 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   Widget _buildTempField(Map<String, dynamic> field) {
+    final name = field['name'] as String;
+    final hasComments = field['hasComments'] == true;
+
+    double _toDouble(dynamic v) {
+      if (v == null) return 0.0;
+      if (v is double) return v;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString()) ?? 0.0;
+    }
+
+    Widget _buildTempScroller({
+      required String formControlName,
+      required double min,
+      required double max,
+      required double step,
+      required double initialValue,
+      required bool isDesktop,
+      required double maxWidth,
+    }) {
+      final base = ReactiveTemperatureScrollWidget(
+        formControlName: formControlName,
+        min: min,
+        max: max,
+        step: step,
+        initialValue: initialValue,
+        unit: field['unit'] ?? '°C',
+        textStyle: widget.fontFamily,
+        primaryColor: widget.primaryColor,
+        backgroundColor: Colors.white,
+        separatorColor: Colors.grey.shade300,
+      );
+
+      if (isDesktop) {
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: SizedBox(width: maxWidth * 0.3, child: base),
+        );
+      } else {
+        return base;
+      }
+    }
+
+    Widget _buildStringFallback(FormControl<dynamic> ctrl) {
+      final textController =
+          TextEditingController(text: ctrl.value?.toString() ?? '0.0');
+      return TextFormField(
+        controller: textController,
+        keyboardType:
+            const TextInputType.numberWithOptions(signed: true, decimal: true),
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),
+        ],
+        decoration: InputDecoration(
+          hintText: 'Enter temperature',
+          labelStyle: widget.fontFamily,
+          hintStyle: widget.fontFamily,
+        ),
+        onChanged: (val) {
+          final parsed = double.tryParse(val) ?? 0.0;
+          // Update the form control safely using updateValue
+          try {
+            ctrl.updateValue(parsed);
+          } catch (_) {
+            ctrl.value = parsed;
+          }
+        },
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildLabelRow(field),
-        // Add a safety wrapper that handles potential type mismatches
-        Builder(
-          builder: (context) {
-            // Check if control exists
-            if (!controller.form.contains(field['name'])) {
-              return Text("Error: Form control not found for ${field['name']}",
-                  style: TextStyle(color: Colors.red));
-            }
+        Builder(builder: (context) {
+          if (!controller.form.contains(name)) {
+            return Text(
+              "Error: Form control not found for $name",
+              style: const TextStyle(color: Colors.red),
+            );
+          }
 
-            // If the form control exists but might not have the right type,
-            // wrap it in a try-catch to prevent runtime errors
-            try {
-              final ctrl = controller.form.control(field['name']);
-              final bool controlIsDouble =
-                  ctrl is FormControl<double> || ctrl.value is double;
+          try {
+            final ctrl = controller.form.control(name);
+            final isDoubleType =
+                ctrl is FormControl<double> || (ctrl.value is num);
 
-              if (controlIsDouble) {
-                return ReactiveTemperatureScrollWidget(
-                  formControlName: field['name'],
-                  min: field['min']?.toDouble() ?? -25.0,
-                  max: field['max']?.toDouble() ?? 110.0,
-                  step: field['step']?.toDouble() ?? 0.1,
-                  initialValue: ctrl.value?.toDouble() ?? 0.0,
-                  unit: field['unit'] ?? '°C',
-                  textStyle: widget.fontFamily,
-                  primaryColor: widget.primaryColor,
-                  backgroundColor: Colors.white,
-                  separatorColor: Colors.grey.shade300,
+            // Common scroller config
+            final min = _toDouble(field['min']) ?? -25.0;
+            final max = _toDouble(field['max']) ?? 110.0;
+            final step = _toDouble(field['step']) != 0.0
+                ? _toDouble(field['step'])
+                : 0.1; // avoid zero-step
+            final initial = _toDouble(ctrl.value);
+
+            return LayoutBuilder(builder: (context, constraints) {
+              final isDesktop = constraints.maxWidth > 600;
+              if (isDoubleType) {
+                return _buildTempScroller(
+                  formControlName: name,
+                  min: min,
+                  max: max,
+                  step: step,
+                  initialValue: initial,
+                  isDesktop: isDesktop,
+                  maxWidth: constraints.maxWidth,
                 );
               }
 
-              // Fallback to plain TextField bound to String control to avoid type errors
-              return TextFormField(
-                initialValue: ctrl.value?.toString() ?? '0.0',
-                keyboardType: TextInputType.number,
-                onChanged: (val) => ctrl.value = double.tryParse(val) ?? 0.0,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.-]')),
-                ],
-                decoration: InputDecoration(
-                  hintText: 'Enter temperature',
-                  labelStyle: widget.fontFamily,
-                  hintStyle: widget.fontFamily,
-                ),
-              );
-            } catch (e) {
-              if (kDebugMode) {
-                print("Error rendering temp field ${field['name']}: $e");
-              }
-              // Return a fallback widget if there's a type mismatch
-              return TextFormField(
-                decoration: InputDecoration(
-                  hintText:
-                      "Error loading temperature field - please reload the form",
-                  errorText: "Type mismatch error",
-                  enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.red),
-                  ),
-                ),
-                enabled: false,
-              );
+              // Fallback: string-backed control — show numeric text field and update control
+              return _buildStringFallback(ctrl as FormControl<dynamic>);
+            });
+          } catch (e, st) {
+            if (kDebugMode) {
+              print('Error rendering temp field $name: $e\n$st');
             }
-          },
-        ),
-        if (field['hasComments'] == true) ...[
+            return TextFormField(
+              decoration: InputDecoration(
+                hintText: "Error loading temperature field - please reload the form",
+                errorText: "Type mismatch error",
+                enabledBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.red),
+                ),
+              ),
+              enabled: false,
+            );
+          }
+        }),
+        if (hasComments) ...[
           const SizedBox(height: 16),
           ReactiveTextField(
-            formControlName: '${field['name']}_comment',
+            formControlName: '${name}_comment',
             decoration: InputDecoration(
-                hintText: field['commentHint'] ?? '',
-                labelStyle: widget.fontFamily,
-                hintStyle: widget.fontFamily,
-                // Add error style
-                errorStyle: widget.accordionView
-                    ? controller
-                        .buildInputDecoration(widget.accordionView)
-                        .errorStyle
-                    : widget.fontFamily
-                        .copyWith(color: Colors.red[700], fontSize: 12),
-                errorBorder: widget.accordionView
-                    ? UnderlineInputBorder(
-                        borderSide:
-                            BorderSide(color: Get.theme.colorScheme.onError))
-                    : null),
+              hintText: field['commentHint'] ?? '',
+              labelStyle: widget.fontFamily,
+              hintStyle: widget.fontFamily,
+              errorStyle: widget.accordionView
+                  ? controller.buildInputDecoration(widget.accordionView).errorStyle
+                  : widget.fontFamily.copyWith(color: Colors.red[700], fontSize: 12),
+              errorBorder: widget.accordionView
+                  ? UnderlineInputBorder(
+                      borderSide: BorderSide(color: Get.theme.colorScheme.onError))
+                  : null,
+            ),
             maxLines: 3,
             minLines: 1,
             validationMessages: {
-              'required': (_) => widget.accordionView
-                  ? ""
-                  : StringConstants.commentsAreRequired,
+              'required': (_) => widget.accordionView ? "" : StringConstants.commentsAreRequired,
             },
-            // Add onSubmitted to validate the form when user submits via keyboard
             onSubmitted: (_) {
               if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
                 validateCurrentSection();
