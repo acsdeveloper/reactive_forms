@@ -1010,7 +1010,7 @@ class _DynamicFormState extends State<DynamicForm>
               indices.map((i) => _internalFields[i]).toList();
           final bool showErrorDot = widget.accordionView &&
               _shortTextSubmitAttempted &&
-              !_isAnchorGroupValid(anchor);
+              _hasRequiredEmptyFields(anchor);
           final bool isDraft = isAnchorDraft(anchor) && widget.draftMode;
           return Card(
             key: _fieldKeys[anchor],
@@ -1106,6 +1106,7 @@ class _DynamicFormState extends State<DynamicForm>
                         return true;
                       }).toList(),
                       false,
+                      anchor: anchor,
                     ),
                   ],
                 ),
@@ -1115,15 +1116,8 @@ class _DynamicFormState extends State<DynamicForm>
                     top: 12,
                     child: Container(
                       padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
                       ),
                       child: SvgPicture.asset(
                         MyAppAssets.warningCircle,
@@ -1196,7 +1190,7 @@ class _DynamicFormState extends State<DynamicForm>
     // Add the original card or just the fields based on the shouldShowCard flag
     if (shouldShowCard) {
       // Add the original question as a card
-      widgets.add(_buildCardForFields(currentGroupFields, false));
+      widgets.add(_buildCardForFields(currentGroupFields, false, anchor: currentAnchor));
     } else {
       // Add the original question without a card
       widgets.addAll(currentGroupFields.map(_buildField).toList());
@@ -1264,7 +1258,7 @@ class _DynamicFormState extends State<DynamicForm>
       final fields = indices.map((i) => _internalFields[i]).toList();
 
       // Add the duplicate card with delete button
-      widgets.add(_buildCardForFields(fields, true));
+      widgets.add(_buildCardForFields(fields, true, anchor: anchor));
     }
 
     return widgets;
@@ -1272,13 +1266,21 @@ class _DynamicFormState extends State<DynamicForm>
 
   /// Helper method to build a card for a group of fields
   Widget _buildCardForFields(
-      List<Map<String, dynamic>> fields, bool isDuplicated) {
+      List<Map<String, dynamic>> fields, bool isDuplicated, {int? anchor}) {
+    // Calculate if we should show error dot for this card
+    bool showErrorDot = false;
+    if (anchor != null && !widget.accordionView) {
+      showErrorDot = _hasRequiredEmptyFields(anchor);
+    }
+
     return Card(
       elevation: widget.accordionView ? 0 : 1.0,
       margin: widget.accordionView
           ? EdgeInsets.zero
           : const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      child: Padding(
+      child: Stack(
+        children: [
+          Padding(
         padding: EdgeInsets.all(widget.accordionView ? 16.0 : 12.0),
         child: Column(
           children: [
@@ -1295,6 +1297,36 @@ class _DynamicFormState extends State<DynamicForm>
             ...fields.map(_buildField).toList(),
           ],
         ),
+          ),
+          if (showErrorDot)
+            Positioned(
+              right: 12,
+              top: 12,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: SvgPicture.asset(
+                  MyAppAssets.warningCircle,
+                  width: 20,
+                  height: 20,
+                  colorFilter: ColorFilter.mode(
+                    Get.theme.colorScheme.error,
+                    BlendMode.srcIn,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -3527,17 +3559,37 @@ class _DynamicFormState extends State<DynamicForm>
         // Skip hidden fields
         if (!controller.shouldFieldBeVisible(field)) continue;
 
-        // For grouped fields, we need to find the actual form control name
+        // For grouped fields, the field name is already constructed correctly
         String actualFieldName = fieldName;
-        if (field['groupWith'] != null) {
-          final parentName = field['groupWith'].toString();
-          actualFieldName = '${fieldName}_${parentName}';
-        }
 
         // Control invalid
         if (controller.form.contains(actualFieldName)) {
           final control = controller.form.control(actualFieldName);
           if (!control.valid) return anchor;
+        }
+
+        // For fields with groupId, also check all child fields
+        if (field['groupId'] != null) {
+          final String? groupId = field['groupId']?.toString();
+          if (groupId != null && groupId.isNotEmpty) {
+            final List<String> childNames = groupId.split(',').map((s) => s.trim()).toList();
+            for (final childName in childNames) {
+              if (controller.form.contains(childName)) {
+                final childControl = controller.form.control(childName);
+                if (!childControl.valid) return anchor;
+              }
+              
+              // Also check if any child field has attachment/comment requirements
+              final childField = _internalFields.firstWhere(
+                (f) => f['name'] == childName,
+                orElse: () => <String, dynamic>{},
+              );
+              if (childField.isNotEmpty) {
+                if (!controller.validateFieldAttachmentsIfRequired(childField)) return anchor;
+                if (!controller.validateFieldCommentsIfRequired(childField)) return anchor;
+              }
+            }
+          }
         }
 
         // Attachments missing if required
@@ -3559,16 +3611,37 @@ class _DynamicFormState extends State<DynamicForm>
       final field = _internalFields[idx];
       final String fieldName = field['name']?.toString() ?? '';
 
-      // For grouped fields, we need to find the actual form control name
+      // For grouped fields, the field name is already constructed correctly
       String actualFieldName = fieldName;
-      if (field['groupWith'] != null) {
-        final parentName = field['groupWith'].toString();
-        actualFieldName = '${fieldName}_${parentName}';
-      }
 
+      // Check the main field control
       if (controller.form.contains(actualFieldName)) {
         final control = controller.form.control(actualFieldName);
         if (!control.valid) return false;
+      }
+
+      // For fields with groupId, also check all child fields
+      if (field['groupId'] != null) {
+        final String? groupId = field['groupId']?.toString();
+        if (groupId != null && groupId.isNotEmpty) {
+          final List<String> childNames = groupId.split(',').map((s) => s.trim()).toList();
+          for (final childName in childNames) {
+            if (controller.form.contains(childName)) {
+              final childControl = controller.form.control(childName);
+              if (!childControl.valid) return false;
+            }
+            
+            // Also check if any child field has attachment/comment requirements
+            final childField = _internalFields.firstWhere(
+              (f) => f['name'] == childName,
+              orElse: () => <String, dynamic>{},
+            );
+            if (childField.isNotEmpty) {
+              if (!controller.validateFieldAttachmentsIfRequired(childField)) return false;
+              if (!controller.validateFieldCommentsIfRequired(childField)) return false;
+            }
+          }
+        }
       }
 
       // Attachment requirement
@@ -3578,6 +3651,113 @@ class _DynamicFormState extends State<DynamicForm>
       if (!controller.validateFieldCommentsIfRequired(field)) return false;
     }
     return true;
+  }
+
+  // Check if anchor has required fields that are empty (for warning icon display)
+  bool _hasRequiredEmptyFields(int anchor) {
+    final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+    
+    if (kDebugMode) {
+      print("=== _hasRequiredEmptyFields for anchor $anchor ===");
+      print("Indices: $indices");
+      print("Available form controls: ${controller.form.controls.keys.toList()}");
+    }
+    
+    for (final idx in indices) {
+      if (idx < 0 || idx >= _internalFields.length) continue;
+      final field = _internalFields[idx];
+      final String fieldName = field['name']?.toString() ?? '';
+      final bool isRequired = field['required'] == true;
+
+      if (kDebugMode) {
+        print("Checking field: $fieldName, required: $isRequired, groupId: ${field['groupId']}");
+      }
+
+      // Skip non-required fields
+      if (!isRequired) continue;
+
+      // For grouped fields, the field name is already constructed correctly
+      String actualFieldName = fieldName;
+
+      // Check the main field control for required empty values
+      if (controller.form.contains(actualFieldName)) {
+        final control = controller.form.control(actualFieldName);
+        final value = control.value;
+        final isEmpty = value == null || 
+                       (value is String && value.trim().isEmpty) ||
+                       (value is List && value.isEmpty);
+        
+        if (kDebugMode) {
+          print("Form control exists: $actualFieldName, value: '$value', isEmpty: $isEmpty");
+        }
+        
+        if (isEmpty) {
+          if (kDebugMode) {
+            print("Found required empty field: $actualFieldName, value: $value");
+          }
+          return true;
+        }
+      } else {
+        if (kDebugMode) {
+          print("Form control NOT found: $actualFieldName");
+        }
+      }
+
+      // For fields with groupId, also check all child fields
+      if (field['groupId'] != null) {
+        final String? groupId = field['groupId']?.toString();
+        if (groupId != null && groupId.isNotEmpty) {
+          final List<String> childNames = groupId.split(',').map((s) => s.trim()).toList();
+          for (final childName in childNames) {
+            // Find the child field definition to check if it's required
+            final childField = _internalFields.firstWhere(
+              (f) => f['name'] == childName,
+              orElse: () => <String, dynamic>{},
+            );
+            
+            if (childField.isNotEmpty && childField['required'] == true) {
+              if (controller.form.contains(childName)) {
+                final childControl = controller.form.control(childName);
+                final childValue = childControl.value;
+                final childIsEmpty = childValue == null || 
+                                   (childValue is String && childValue.trim().isEmpty) ||
+                                   (childValue is List && childValue.isEmpty);
+                if (childIsEmpty) {
+                  if (kDebugMode) {
+                    print("Found required empty groupId child field: $childName, value: $childValue");
+                  }
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Check required attachments
+      if (field['type'] == 'file' && isRequired) {
+        final hasFiles = controller.uploadedFiles[fieldName]?.isNotEmpty ?? false;
+        if (!hasFiles) return true;
+      }
+
+      // Check required comments
+      if (field['hasComments'] == true && field['requireCommentsOn']?.contains('Yes') == true) {
+        final commentFieldName = '${fieldName}_comment';
+        if (controller.form.contains(commentFieldName)) {
+          final commentControl = controller.form.control(commentFieldName);
+          final commentValue = commentControl.value;
+          final commentIsEmpty = commentValue == null || 
+                                (commentValue is String && commentValue.trim().isEmpty);
+          if (commentIsEmpty) return true;
+        }
+      }
+    }
+    
+    if (kDebugMode) {
+      print("=== _hasRequiredEmptyFields result: false (no required empty fields found) ===");
+    }
+    
+    return false;
   }
 
   /// Returns true if any content is present for the given anchor (question) that would
@@ -4649,7 +4829,7 @@ class _DynamicFormState extends State<DynamicForm>
     // Add the original card or just the fields based on the shouldShowCard flag
     if (shouldShowCard) {
       // Add the original question as a card
-      widgets.add(_buildCardForFields(currentGroupFields, false));
+      widgets.add(_buildCardForFields(currentGroupFields, false, anchor: currentAnchor));
     } else {
       // Add the original question without a card
       widgets.addAll(currentGroupFields.map(_buildField).toList());
@@ -4717,7 +4897,7 @@ class _DynamicFormState extends State<DynamicForm>
       final fields = indices.map((i) => _internalFields[i]).toList();
 
       // Add the duplicate card with delete button
-      widgets.add(_buildCardForFields(fields, true));
+      widgets.add(_buildCardForFields(fields, true, anchor: anchor));
     }
 
     return widgets;
