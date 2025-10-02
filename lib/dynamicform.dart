@@ -1064,6 +1064,7 @@ class _DynamicFormState extends State<DynamicForm>
                     reverseCurve: Curves.easeInOut,
                   ),
                   tilePadding: const EdgeInsets.symmetric(horizontal: 10),
+                  trailing: showErrorDot ? const SizedBox.shrink() : null,
                   title: Container(
                     height: _expandedAnchor == anchor || expandAll ? null : 40,
                     padding: const EdgeInsets.only(top: 10.0),
@@ -1110,14 +1111,28 @@ class _DynamicFormState extends State<DynamicForm>
                 ),
                 if (showErrorDot)
                   Positioned(
-                    right: 16,
-                    top: 16,
+                    right: 12,
+                    top: 12,
                     child: Container(
-                      width: 10,
-                      height: 10,
+                      padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
-                        color: Get.theme.colorScheme.error,
                         shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: SvgPicture.asset(
+                        MyAppAssets.warningCircle,
+                        width: 20,
+                        height: 20,
+                        colorFilter: ColorFilter.mode(
+                          Get.theme.colorScheme.error,
+                          BlendMode.srcIn,
+                        ),
                       ),
                     ),
                   ),
