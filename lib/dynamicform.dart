@@ -3611,6 +3611,9 @@ class _DynamicFormState extends State<DynamicForm>
       final field = _internalFields[idx];
       final String fieldName = field['name']?.toString() ?? '';
 
+      // Skip hidden fields based on showWhen conditions
+      if (!controller.shouldFieldBeVisible(field)) continue;
+
       // For grouped fields, the field name is already constructed correctly
       String actualFieldName = fieldName;
 
@@ -3626,16 +3629,21 @@ class _DynamicFormState extends State<DynamicForm>
         if (groupId != null && groupId.isNotEmpty) {
           final List<String> childNames = groupId.split(',').map((s) => s.trim()).toList();
           for (final childName in childNames) {
+            // Check if child field should be visible before validating
+            final childField = _internalFields.firstWhere(
+              (f) => f['name'] == childName,
+              orElse: () => <String, dynamic>{},
+            );
+            if (childField.isNotEmpty && !controller.shouldFieldBeVisible(childField)) {
+              continue; // Skip hidden child fields
+            }
+            
             if (controller.form.contains(childName)) {
               final childControl = controller.form.control(childName);
               if (!childControl.valid) return false;
             }
             
             // Also check if any child field has attachment/comment requirements
-            final childField = _internalFields.firstWhere(
-              (f) => f['name'] == childName,
-              orElse: () => <String, dynamic>{},
-            );
             if (childField.isNotEmpty) {
               if (!controller.validateFieldAttachmentsIfRequired(childField)) return false;
               if (!controller.validateFieldCommentsIfRequired(childField)) return false;
@@ -3675,6 +3683,14 @@ class _DynamicFormState extends State<DynamicForm>
 
       // Skip non-required fields
       if (!isRequired) continue;
+
+      // Skip hidden fields based on showWhen conditions
+      if (!controller.shouldFieldBeVisible(field)) {
+        if (kDebugMode) {
+          print("Skipping hidden field: $fieldName (showWhen condition not met)");
+        }
+        continue;
+      }
 
       // For grouped fields, the field name is already constructed correctly
       String actualFieldName = fieldName;
@@ -3716,6 +3732,13 @@ class _DynamicFormState extends State<DynamicForm>
             );
             
             if (childField.isNotEmpty && childField['required'] == true) {
+              // Skip hidden child fields based on showWhen conditions
+              if (!controller.shouldFieldBeVisible(childField)) {
+                if (kDebugMode) {
+                  print("Skipping hidden groupId child field: $childName (showWhen condition not met)");
+                }
+                continue;
+              }
               if (controller.form.contains(childName)) {
                 final childControl = controller.form.control(childName);
                 final childValue = childControl.value;
