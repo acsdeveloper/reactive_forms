@@ -3008,14 +3008,15 @@ class _DynamicFormState extends State<DynamicForm>
                         onFilesUploaded: (files) {
                           setState(() {
                             controller.uploadedFiles[field['name']] = files;
-                            // Update the form control value when files are uploaded
-                            if (files.isNotEmpty) {
-                              control.value =
-                                  files.map((f) => f['fileName']).join(',');
-                            } else {
-                              // Only clear if no composed text/number present
-                              if (!(field['type'] is String &&
-                                  (field['type'] as String).contains(','))) {
+                            // For composite fields like "text, file", don't update the main control
+                            // as it should only contain the text value
+                            if (!(field['type'] is String &&
+                                (field['type'] as String).contains(','))) {
+                              // Only update control value for pure file fields
+                              if (files.isNotEmpty) {
+                                control.value =
+                                    files.map((f) => f['fileName']).join(',');
+                              } else {
                                 control.value = null;
                               }
                             }
@@ -3027,19 +3028,20 @@ class _DynamicFormState extends State<DynamicForm>
                           setState(() {
                             // For single file upload, set to empty list when file is removed
                             controller.uploadedFiles[field['name']] = [];
-                            // Update the form control value when files are removed
-                            final remainingFiles =
-                                controller.uploadedFiles[field['name']] ?? [];
-                            if (remainingFiles.isEmpty) {
-                              // Only clear if no composed text/number present
-                              if (!(field['type'] is String &&
-                                  (field['type'] as String).contains(','))) {
+                            // For composite fields like "text, file", don't update the main control
+                            // as it should only contain the text value
+                            if (!(field['type'] is String &&
+                                (field['type'] as String).contains(','))) {
+                              // Only update control value for pure file fields
+                              final remainingFiles =
+                                  controller.uploadedFiles[field['name']] ?? [];
+                              if (remainingFiles.isEmpty) {
                                 control.value = null;
+                              } else {
+                                control.value = remainingFiles
+                                    .map((f) => f['fileName'])
+                                    .join(',');
                               }
-                            } else {
-                              control.value = remainingFiles
-                                  .map((f) => f['fileName'])
-                                  .join(',');
                             }
                           });
                         },
