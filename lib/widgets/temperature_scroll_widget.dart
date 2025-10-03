@@ -65,21 +65,26 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
       _currentInt = _currentValueCelsius.truncate();
       _currentDec = ((_currentValueCelsius.abs() * 10).round() % 10);
 
-      // Snap to valid integer in range
-      if (!_intValues.contains(_currentInt)) {
-        _currentInt = _closestIntInRange(_currentInt);
+      // Snap to valid integer in range and ensure it's in the list
+      _currentInt = _closestIntInRange(_currentInt);
+
+      // Ensure we have a valid index
+      final intIndex = _intValues.indexOf(_currentInt);
+      if (intIndex == -1 && _intValues.isNotEmpty) {
+        _currentInt = _intValues.first;
       }
 
       _intController = FixedExtentScrollController(
-        initialItem: _intValues.indexOf(_currentInt),
+        initialItem: _intValues.isNotEmpty ? _intValues.indexOf(_currentInt) : 0,
       );
-      _decController = FixedExtentScrollController(initialItem: _currentDec);
+      _decController = FixedExtentScrollController(initialItem: _currentDec.clamp(0, 9));
     } else {
       _buildAllValues();
       final closest = _allValues.reduce((a, b) =>
           (a - _currentValueCelsius).abs() < (b - _currentValueCelsius).abs() ? a : b);
+      final closestIndex = _allValues.indexOf(closest);
       _allController = FixedExtentScrollController(
-        initialItem: _allValues.indexOf(closest),
+        initialItem: closestIndex >= 0 ? closestIndex : 0,
       );
     }
   }
@@ -89,6 +94,27 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
     _intValues = List<int>.generate(
         (widget.max!.floor() - widget.min!.ceil()) + 1,
         (i) => widget.min!.ceil() + i);
+  }
+
+  @override
+  void didUpdateWidget(TemperatureScrollWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    // If the initial value changed significantly, update our internal state
+    if (widget.initialValue != oldWidget.initialValue) {
+      final newValue = widget.initialValue;
+      if ((_currentValueCelsius - newValue).abs() > 0.01) {
+        setValue(newValue);
+      }
+    }
+    
+    // If min/max changed, rebuild ranges
+    if (widget.min != oldWidget.min || widget.max != oldWidget.max) {
+      _rebuildRanges();
+      // Recalculate current int value with new range
+      _currentInt = _closestIntInRange(_currentInt);
+      _jumpToControllers();
+    }
   }
 
   @override
@@ -294,9 +320,21 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
     if (_intValues.isEmpty) return;
     final intIdx = _intValues.indexOf(_currentInt);
     if (intIdx >= 0) {
-      _intController.jumpToItem(intIdx);
+      try {
+        _intController.jumpToItem(intIdx);
+      } catch (e) {
+        // Fallback to the first item if jumpToItem fails
+        _intController.jumpToItem(0);
+      }
+    } else {
+      // Fallback to first available integer
+      _intController.jumpToItem(0);
     }
-    _decController.jumpToItem(_currentDec);
+    try {
+      _decController.jumpToItem(_currentDec.clamp(0, 9));
+    } catch (e) {
+      _decController.jumpToItem(0);
+    }
   }
 }
 
