@@ -2899,12 +2899,13 @@ class _DynamicFormState extends State<DynamicForm>
                 ctrl is FormControl<double> || (ctrl.value is num);
 
             // Common scroller config
-            final min = _toDouble(field['min']) ?? -25.0;
-            final max = _toDouble(field['max']) ?? 110.0;
-            final step = _toDouble(field['step']) != 0.0
-                ? _toDouble(field['step'])
+            final min = field['min'] != null ? _toDouble(field['min']) : -25.0;
+            final max = field['max'] != null ? _toDouble(field['max']) : 110.0;
+            final stepValue = field['step'];
+            final step = stepValue != null && _toDouble(stepValue) != 0.0
+                ? _toDouble(stepValue)
                 : 0.1; // avoid zero-step
-            final initial = _toDouble(ctrl.value);
+            final initial = ctrl.value != null ? _toDouble(ctrl.value) : 0.0;
 
             return LayoutBuilder(builder: (context, constraints) {
               final isDesktop = constraints.maxWidth > 600;
