@@ -48,7 +48,10 @@ class DynamicForm extends StatefulWidget {
   final bool bookingAppModelFileUpload;
   // Controls accordion behavior: when false, all questions are expanded and the
   // "Expand All" toggle is hidden.
-  final bool isBookingApp;
+  final bool showCollapsedWithToggle ;
+  // When true, if a card has mandatory fields missing, show the default arrow
+  // icon instead of a warning indicator.
+  final bool showArrowOnMandatoryWarning;
   final bool isManageToCheckPress;
   final bool draftMode;
   final RxBool draftbtnClicked;
@@ -70,7 +73,8 @@ class DynamicForm extends StatefulWidget {
     this.fileUploadButtonTextColor = Colors.white,
     this.submitButtonText,
     this.bookingAppModelFileUpload = false,
-    this.isBookingApp = true,
+    this.showCollapsedWithToggle  = true,
+    this.showArrowOnMandatoryWarning = true,
     this.isManageToCheckPress = false,
     this.bottomNavigationType = BottomNavigationType.button,
     this.initialValues,
@@ -510,7 +514,7 @@ class _DynamicFormState extends State<DynamicForm>
 
     // If the caller opts out of collapsed accordion with toggle, expand all
     // sections by default and hide the toggle elsewhere.
-    if (widget.accordionView && widget.isBookingApp == false) {
+    if (widget.accordionView && widget.showCollapsedWithToggle  == false) {
       expandAll = true;
     } else {
       expandAll = !widget.draftMode && widget.initialValues != null;
@@ -980,7 +984,7 @@ class _DynamicFormState extends State<DynamicForm>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (widget.isBookingApp)
+        if (widget.showCollapsedWithToggle )
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -1057,7 +1061,7 @@ class _DynamicFormState extends State<DynamicForm>
                   key: ValueKey(
                       '$expandAll exp_${anchor}_${_expandedAnchor == anchor}'),
                   initiallyExpanded:
-                      widget.isBookingApp ? (expandAll ? expandAll : _expandedAnchor == anchor) : true,
+                      widget.showCollapsedWithToggle  ? (expandAll ? expandAll : _expandedAnchor == anchor) : true,
                   onExpansionChanged: (expanded) {
                     setState(() {
                       _expandedAnchor = expanded
@@ -1077,7 +1081,9 @@ class _DynamicFormState extends State<DynamicForm>
                     reverseCurve: Curves.easeInOut,
                   ),
                   tilePadding: const EdgeInsets.symmetric(horizontal: 10),
-                  trailing: showErrorDot && !widget.isBookingApp ? const SizedBox.shrink() : null,
+                  trailing: (showErrorDot && !widget.showArrowOnMandatoryWarning)
+                      ? const SizedBox.shrink()
+                      : null,
                   title: Container(
                     height: _expandedAnchor == anchor || expandAll ? null : 40,
                     padding: const EdgeInsets.only(top: 10.0),
@@ -1123,7 +1129,7 @@ class _DynamicFormState extends State<DynamicForm>
                     ),
                   ],
                 ),
-                if (showErrorDot && !widget.isBookingApp)
+                if (showErrorDot && !widget.showArrowOnMandatoryWarning)
                   Positioned(
                     right: 12,
                     top: 12,
@@ -1311,7 +1317,7 @@ class _DynamicFormState extends State<DynamicForm>
           ],
         ),
           ),
-          if (showErrorDot && !widget.isBookingApp)
+          if (showErrorDot && !widget.showArrowOnMandatoryWarning)
             Positioned(
               right: 12,
               top: 12,
