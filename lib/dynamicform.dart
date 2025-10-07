@@ -1536,13 +1536,28 @@ class _DynamicFormState extends State<DynamicForm>
                       rawValue.map((e) => e.toString()).toList(growable: false);
                 }
 
-                return Wrap(
+                final hasError = state.control.touched && !state.control.valid;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: hasError ? Colors.red : Colors.grey.shade300,
+                          width: hasError ? 2 : 1,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Wrap(
                   spacing: 8.0,
                   runSpacing: 4.0,
                   children: (field['options'] as List<dynamic>? ?? [])
                       .map((opt) => ChoiceChip(
                             label: Text(opt.toString()),
                             selected: currentValue.contains(opt.toString()),
+                                  selectedColor: hasError ? Colors.red.shade100 : null,
                             onSelected: (selected) {
                               final List<String> updated =
                                   List.from(currentValue);
@@ -1559,6 +1574,10 @@ class _DynamicFormState extends State<DynamicForm>
                             },
                           ))
                       .toList(),
+                      ),
+                    ),
+                    // No inline error message; visual highlight only
+                  ],
                 );
               },
             ),
@@ -1776,6 +1795,13 @@ class _DynamicFormState extends State<DynamicForm>
         widget.accordionView
             ? const SizedBox.shrink()
             : const SizedBox(height: 4),
+        ReactiveValueListenableBuilder<String>(
+          formControlName: field['name'],
+          builder: (context, control, child) {
+            final hasError = control.touched && !control.valid;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
         ...options
             .map<Widget>(
               (option) => Transform.translate(
@@ -1785,8 +1811,8 @@ class _DynamicFormState extends State<DynamicForm>
                   title: Text(option, style: widget.fontFamily),
                   value: option,
                   dense: true,
-                  groupValue: controller.form.control(field['name']).value,
-                  activeColor: widget.primaryColor,
+                          groupValue: control.value,
+                          activeColor: hasError ? Colors.red : widget.primaryColor,
                   onChanged: (value) {
                     // Update the form using patchValue instead of directly setting the value
                     // This will ensure that all reactive widgets listening to this field are notified
@@ -1836,6 +1862,11 @@ class _DynamicFormState extends State<DynamicForm>
               ),
             )
             .toList(),
+                  // No inline error message; visual highlight only
+              ],
+            );
+          },
+        ),
 
         // Directly copied from the working dropdown implementation
         if (field['hasAttachments'] == true)
@@ -2107,21 +2138,45 @@ class _DynamicFormState extends State<DynamicForm>
           child: ReactiveValueListenableBuilder<String>(
             formControlName: field['name'],
             builder: (context, control, child) {
-              return Container(
+              final hasError = control.touched && !control.valid;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
+                      border: Border.all(
+                        color: hasError ? Colors.red : Colors.grey.shade400,
+                        width: hasError ? 2 : 1,
+                      ),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: ListTile(
                   title: Text(
                     control.value ?? StringConstants.selectOption,
-                    style: widget.fontFamily,
-                  ),
-                  trailing:
-                      Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+                        style: widget.fontFamily.copyWith(
+                          color: hasError ? Colors.red : null,
+                        ),
+                      ),
+                      trailing: Icon(
+                        Icons.arrow_drop_down,
+                        color: hasError ? Colors.red : Colors.grey.shade600,
+                      ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   visualDensity: VisualDensity.compact,
                 ),
+                  ),
+                  if (hasError && !widget.accordionView)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        'Please select an option',
+                        style: widget.fontFamily.copyWith(
+                          color: Colors.red[700],
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                ],
               );
             },
           ),
