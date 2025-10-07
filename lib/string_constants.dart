@@ -126,4 +126,11 @@ class StringConstants {
   static const String expandAll = "Expand All";
   static const String collapseAll = "Collapse All";
   static const String thisQuestionisRequired = "* This question is required.";
+  static const int initialCompressionQuality = 80;
+  static const int minCompressionQuality = 10;
+  static const int maxImageSizeBytes = 1024 * 1024;
+  static const int compressionQualityStep = 10;
+  static const int megaByte = 1024 * 1024;
+  static const String largeFileSizeWarning =
+      "Image too large (** MB). Failed to upload. Please select a smaller image.";
 }

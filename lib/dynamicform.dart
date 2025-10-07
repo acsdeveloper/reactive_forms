@@ -22,6 +22,8 @@ import 'dynamicformcontroller.dart';
 import 'package:reactiveform/models/form_field_model.dart';
 import 'package:http/http.dart' as http;
 import 'dart:math' as math;
+import 'package:path/path.dart' as path;
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 // Conditional import for web
 import 'web_utils.dart' if (dart.library.html) 'dart:html' as html;
@@ -5488,28 +5490,46 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     Navigator.pop(context);
     try {
       _showLoadingDialog(context);
+
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: [
-          FileTypes.pdf,
-          FileTypes.jpg,
-          FileTypes.gif,
-          FileTypes.jpeg,
-          FileTypes.png,
-          FileTypes.xlsx,
-          FileTypes.xls,
-          FileTypes.text,
-        ],
-        allowMultiple: false, // Ensure only single file selection
-        withData: true,
-        allowCompression: true,
-      );
+          type: FileType.custom,
+          allowedExtensions: [
+            FileTypes.pdf,
+            FileTypes.jpg,
+            FileTypes.gif,
+            FileTypes.jpeg,
+            FileTypes.png,
+            FileTypes.xlsx,
+            FileTypes.xls,
+            FileTypes.text,
+          ],
+          allowMultiple: false,
+          withData: false,
+          allowCompression: true,
+          compressionQuality: 80);
 
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
-        if (file.bytes != null) {
-          _processFile(bytes: file.bytes!, fileName: file.name);
+
+        final filePath = file.path!;
+        final ext = filePath.split('.').last.toLowerCase();
+        final selectedFile = File(filePath);
+
+        Uint8List fileBytes = await selectedFile.readAsBytes();
+
+        if (['jpg', 'jpeg', 'png'].contains(ext)) {
+          final compressedBytes =
+              await imageCompress(fileBytes, XFile(selectedFile.path));
+          if (compressedBytes == null) {
+            return;
+          }
+          fileBytes = compressedBytes;
         }
+
+        _processFile(
+          bytes: fileBytes,
+          fileName: file.name,
+        );
       }
     } catch (e) {
       if (kDebugMode) {
@@ -5534,15 +5554,16 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     try {
       _showLoadingDialog(context);
       final ImagePicker picker = ImagePicker();
-      final XFile? photo = await picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 80,
-      );
+      final XFile? photo = await picker.pickImage(source: ImageSource.camera);
 
       if (photo != null) {
         final bytes = await photo.readAsBytes();
+        final compressedBytes = await imageCompress(bytes, photo);
+        if (compressedBytes == null) {
+          return;
+        }
         _processFile(
-          bytes: bytes,
+          bytes: compressedBytes,
           fileName: photo.name,
           fileType: 'image',
           mimeType: 'image/${photo.name.split('.').last}',
@@ -5566,6 +5587,47 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     }
   }
 
+  
+  Future<Uint8List?> imageCompress(Uint8List bytes, XFile image) async {
+    int quality = StringConstants.initialCompressionQuality;
+    XFile? compressedFile;
+    Uint8List? compressedBytes;
+    if (bytes.lengthInBytes < StringConstants.maxImageSizeBytes) {
+      return bytes;
+    }
+    if (bytes.lengthInBytes >
+        (20 * StringConstants.megaByte)) {
+      AppSnackBar(context).showErrorSnackBar(
+        StringConstants.largeFileSizeWarning.replaceAll(
+            '**', (bytes.lengthInBytes / 1048576).toStringAsFixed(2)),
+      );
+      return compressedBytes;
+    }
+    final newPath = path.join(
+      path.dirname(image.path),
+      'compressed_${path.basename(image.path)}',
+    );
+    while (quality > StringConstants.minCompressionQuality) {
+      compressedFile = await FlutterImageCompress.compressAndGetFile(
+        image.path,
+        newPath,
+        quality: quality,
+        autoCorrectionAngle: true,
+      );
+
+      if (compressedFile != null) {
+        final compressedSize = await compressedFile.length();
+        if (compressedSize < StringConstants.maxImageSizeBytes) {
+          compressedBytes = await compressedFile.readAsBytes();
+          return compressedBytes;
+        }
+      }
+
+      quality -= StringConstants.compressionQualityStep;
+    }
+    return compressedBytes;
+  }
+
   Future<void> galleryOnTap() async {
     Navigator.pop(context);
     try {
@@ -5573,13 +5635,17 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 80,
       );
 
       if (image != null) {
         final bytes = await image.readAsBytes();
+        final compressedBytes = await imageCompress(bytes, image);
+        if (compressedBytes == null) {
+          return;
+        }
+
         _processFile(
-          bytes: bytes,
+          bytes: compressedBytes,
           fileName: image.name,
           fileType: 'image',
           mimeType: 'image/${image.name.split('.').last}',
