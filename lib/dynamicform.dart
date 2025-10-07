@@ -5592,8 +5592,11 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     int quality = StringConstants.initialCompressionQuality;
     XFile? compressedFile;
     Uint8List? compressedBytes;
+    if (bytes.lengthInBytes < StringConstants.maxImageSizeBytes) {
+      return bytes;
+    }
     if (bytes.lengthInBytes >
-        (20 * StringConstants.megaByte * StringConstants.megaByte)) {
+        (20 * StringConstants.megaByte)) {
       AppSnackBar(context).showErrorSnackBar(
         StringConstants.largeFileSizeWarning.replaceAll(
             '**', (bytes.lengthInBytes / 1048576).toStringAsFixed(2)),

@@ -130,7 +130,7 @@ class StringConstants {
   static const int minCompressionQuality = 10;
   static const int maxImageSizeBytes = 1024 * 1024;
   static const int compressionQualityStep = 10;
-  static const int megaByte = 1024;
+  static const int megaByte = 1024 * 1024;
   static const String largeFileSizeWarning =
       "Image too large (** MB). Failed to upload. Please select a smaller image.";
 }
