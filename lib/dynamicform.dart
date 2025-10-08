@@ -46,6 +46,12 @@ class DynamicForm extends StatefulWidget {
   final Color fileUploadButtonTextColor;
   final String? submitButtonText;
   final bool bookingAppModelFileUpload;
+  // Controls accordion behavior: when false, all questions are expanded and the
+  // "Expand All" toggle is hidden.
+  final bool showCollapsedWithToggle ;
+  // When true, if a card has mandatory fields missing, show the default arrow
+  // icon instead of a warning indicator.
+  final bool showArrowOnMandatoryWarning;
   final bool isManageToCheckPress;
   final bool draftMode;
   final RxBool draftbtnClicked;
@@ -67,6 +73,8 @@ class DynamicForm extends StatefulWidget {
     this.fileUploadButtonTextColor = Colors.white,
     this.submitButtonText,
     this.bookingAppModelFileUpload = false,
+    this.showCollapsedWithToggle  = true,
+    this.showArrowOnMandatoryWarning = true,
     this.isManageToCheckPress = false,
     this.bottomNavigationType = BottomNavigationType.button,
     this.initialValues,
@@ -504,7 +512,13 @@ class _DynamicFormState extends State<DynamicForm>
       }
     });
 
-    expandAll = expandAll = !widget.draftMode && widget.initialValues != null;
+    // If the caller opts out of collapsed accordion with toggle, expand all
+    // sections by default and hide the toggle elsewhere.
+    if (widget.accordionView && widget.showCollapsedWithToggle  == false) {
+      expandAll = true;
+    } else {
+      expandAll = !widget.draftMode && widget.initialValues != null;
+    }
 
     // Transform incoming schema to expand groupId-based per-option groups
     final List<Map<String, dynamic>> transformedFormJson =
@@ -970,30 +984,31 @@ class _DynamicFormState extends State<DynamicForm>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text(
-                expandAll
-                    ? StringConstants.collapseAll
-                    : StringConstants.expandAll,
-                style: Get.textTheme.headlineLarge?.copyWith(fontSize: 12)),
-            Transform.scale(
-              scale: 0.7,
-              alignment: Alignment.center,
-              child: CupertinoSwitch(
-                activeColor: Get.theme.colorScheme.secondary,
-                value: expandAll,
-                onChanged: (value) {
-                  setState(() {
-                    _expandedAnchor = null;
-                    expandAll = value;
-                  });
-                },
-              ),
-            )
-          ],
-        ),
+        if (widget.showCollapsedWithToggle )
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text(
+                  expandAll
+                      ? StringConstants.collapseAll
+                      : StringConstants.expandAll,
+                  style: Get.textTheme.headlineLarge?.copyWith(fontSize: 12)),
+              Transform.scale(
+                scale: 0.7,
+                alignment: Alignment.center,
+                child: CupertinoSwitch(
+                  activeColor: Get.theme.colorScheme.secondary,
+                  value: expandAll,
+                  onChanged: (value) {
+                    setState(() {
+                      _expandedAnchor = null;
+                      expandAll = value;
+                    });
+                  },
+                ),
+              )
+            ],
+          ),
         const SizedBox(height: 10.0),
         // Use .map to build widgets properly
         ...List.generate(displayAnchors.length, (index) {
@@ -1046,7 +1061,7 @@ class _DynamicFormState extends State<DynamicForm>
                   key: ValueKey(
                       '$expandAll exp_${anchor}_${_expandedAnchor == anchor}'),
                   initiallyExpanded:
-                      expandAll ? expandAll : _expandedAnchor == anchor,
+                      widget.showCollapsedWithToggle  ? (expandAll ? expandAll : _expandedAnchor == anchor) : true,
                   onExpansionChanged: (expanded) {
                     setState(() {
                       _expandedAnchor = expanded
@@ -1066,7 +1081,9 @@ class _DynamicFormState extends State<DynamicForm>
                     reverseCurve: Curves.easeInOut,
                   ),
                   tilePadding: const EdgeInsets.symmetric(horizontal: 10),
-                  trailing: showErrorDot ? const SizedBox.shrink() : null,
+                  trailing: (showErrorDot && !widget.showArrowOnMandatoryWarning)
+                      ? const SizedBox.shrink()
+                      : null,
                   title: Container(
                     height: _expandedAnchor == anchor || expandAll ? null : 40,
                     padding: const EdgeInsets.only(top: 10.0),
@@ -1112,7 +1129,7 @@ class _DynamicFormState extends State<DynamicForm>
                     ),
                   ],
                 ),
-                if (showErrorDot)
+                if (showErrorDot && !widget.showArrowOnMandatoryWarning)
                   Positioned(
                     right: 12,
                     top: 12,
@@ -1300,7 +1317,7 @@ class _DynamicFormState extends State<DynamicForm>
           ],
         ),
           ),
-          if (showErrorDot)
+          if (showErrorDot && !widget.showArrowOnMandatoryWarning)
             Positioned(
               right: 12,
               top: 12,
