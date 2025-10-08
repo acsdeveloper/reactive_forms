@@ -213,12 +213,16 @@ class DynamicFormController extends ChangeNotifier {
     form = FormGroup(controls);
   }
 
-  List<Validator<dynamic>> _getValidators(
+  List<Validator> _getValidators(
       bool isRequired, Map<String, dynamic>? field) {
-    List<Validator<dynamic>> validatorsList = [];
+    List<Validator> validatorsList = [];
 
     if (isRequired) {
-      validatorsList.add(Validators.required);
+      // For text fields with attachments, skip adding a hard required validator
+      // because we validate with an either-or rule at submission time.
+      if (!(field != null && field['type'] == 'text' && field['hasAttachments'] == true)) {
+        validatorsList.add(Validators.required);
+      }
       if (kDebugMode) {
         print("Adding required validator for field ${field?['name']}");
       }
@@ -666,8 +670,7 @@ class DynamicFormController extends ChangeNotifier {
 
       final bool isMultiselect = field['type'] == 'multiselect';
 
-      bool isTextWithAttachments =
-          field['type'] == 'text' && field['hasAttachments'] == true;
+      
 
       List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
           ? field['disableAttachmentsOn']
@@ -700,8 +703,8 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
-        // require file upload
+        // If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
+        // default to requiring a file unless there is text entered (either-or rule)
         if (!fileRequired && field['hasAttachments'] == true) {
           // Check if requireAttachmentsOn is an empty array
           bool isRequireAttachmentsOnEmpty =
@@ -723,8 +726,11 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        if (!fileRequired && isTextWithAttachments) {
-          fileRequired = true;
+        // Either-or: if there is text, do not require file
+        final bool hasText = currentControl.value != null &&
+            currentControl.value.toString().trim().isNotEmpty;
+        if (hasText) {
+          fileRequired = false;
         }
 
         if (!fileRequired && field['attachmentsRequired'] == true) {
@@ -956,7 +962,15 @@ class DynamicFormController extends ChangeNotifier {
     if (field['required'] == true &&
         (currentControl.value == null ||
             currentControl.value.toString().isEmpty)) {
-      return true;
+      // Either-or for text with attachments: if files exist, don't flag as error
+      if (field['type'] == 'text' && field['hasAttachments'] == true) {
+        final bool hasFiles = uploadedFiles[fieldName]?.isNotEmpty ?? false;
+        if (!hasFiles) {
+          return true;
+        }
+      } else {
+        return true;
+      }
     }
 
     if (field['hasAttachments'] != false) {
@@ -964,8 +978,7 @@ class DynamicFormController extends ChangeNotifier {
 
       final bool isMultiselect = field['type'] == 'multiselect';
 
-      bool isTextWithAttachments =
-          field['type'] == 'text' && field['hasAttachments'] == true;
+      
 
       List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
           ? field['disableAttachmentsOn']
@@ -998,8 +1011,8 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
-        // require file upload
+        // If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
+        // default to requiring a file unless there is text entered (either-or rule)
         if (!fileRequired && field['hasAttachments'] == true) {
           // Check if requireAttachmentsOn is an empty array
           bool isRequireAttachmentsOnEmpty =
@@ -1020,9 +1033,11 @@ class DynamicFormController extends ChangeNotifier {
             fileRequired = true;
           }
         }
-
-        if (!fileRequired && isTextWithAttachments) {
-          fileRequired = true;
+        // Either-or: if there is text, do not require file
+        final bool hasText = currentControl.value != null &&
+            currentControl.value.toString().trim().isNotEmpty;
+        if (hasText) {
+          fileRequired = false;
         }
 
         if (!fileRequired && field['attachmentsRequired'] == true) {
@@ -1062,12 +1077,27 @@ class DynamicFormController extends ChangeNotifier {
 
     if (field['required'] == true &&
         (control.value == null || control.value.toString().isEmpty)) {
-      if (field['type'] == "radio") {
-        return StringConstants.pleaseSelectAnOption;
-      } else if (field['type'] == 'text' || field['type'] == 'number') {
-        return StringConstants.requiredField;
+      // Either-or for text with attachments: if files exist, don't show empty error
+      if (field['type'] == 'text' && field['hasAttachments'] == true) {
+        final String fieldName = field['name']?.toString() ?? '';
+        final bool hasFiles = uploadedFiles[fieldName]?.isNotEmpty ?? false;
+        if (!hasFiles) {
+          if (field['type'] == "radio") {
+            return StringConstants.pleaseSelectAnOption;
+          } else if (field['type'] == 'text' || field['type'] == 'number') {
+            return StringConstants.requiredField;
+          } else {
+            return StringConstants.pleaseAnswerThisQuestion;
+          }
+        }
       } else {
-        return StringConstants.pleaseAnswerThisQuestion;
+        if (field['type'] == "radio") {
+          return StringConstants.pleaseSelectAnOption;
+        } else if (field['type'] == 'text' || field['type'] == 'number') {
+          return StringConstants.requiredField;
+        } else {
+          return StringConstants.pleaseAnswerThisQuestion;
+        }
       }
     }
 
@@ -1077,8 +1107,7 @@ class DynamicFormController extends ChangeNotifier {
 
       final bool isMultiselect = field['type'] == 'multiselect';
 
-      bool isTextWithAttachments =
-          field['type'] == 'text' && field['hasAttachments'] == true;
+      
 
       List<dynamic> disabledOptions = field['disableAttachmentsOn'] is List
           ? field['disableAttachmentsOn']
@@ -1109,8 +1138,8 @@ class DynamicFormController extends ChangeNotifier {
           }
         }
 
-        // NEW CHECK: If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
-        // require file upload
+        // If hasAttachments is true and both requireAttachmentsOn and disableAttachmentsOn are empty arrays,
+        // default to requiring a file unless there is text entered (either-or rule)
         if (!fileRequired && field['hasAttachments'] == true) {
           // Check if requireAttachmentsOn is an empty array
           bool isRequireAttachmentsOnEmpty =
@@ -1131,9 +1160,11 @@ class DynamicFormController extends ChangeNotifier {
             fileRequired = true;
           }
         }
-
-        if (!fileRequired && isTextWithAttachments) {
-          fileRequired = true;
+        // Either-or: if there is text, do not require file
+        final bool hasText = control.value != null &&
+            control.value.toString().trim().isNotEmpty;
+        if (hasText) {
+          fileRequired = false;
         }
 
         if (!fileRequired && field['attachmentsRequired'] == true) {
