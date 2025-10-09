@@ -5926,6 +5926,22 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     List<String>? allowedExtensions,
   }) async {
     if (back) Get.back();
+    
+    if (kIsWeb) {
+      // On web, use FilePicker instead of ImagePicker
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+        withData: true,
+      );
+      
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        return (file.bytes!, file.name);
+      }
+      return null;
+    }
+    
     final source = isGallery ? ImageSource.gallery : ImageSource.camera;
     final pickedFile = await ImagePicker().pickImage(source: source);
     if (pickedFile == null) return null;
@@ -6127,7 +6143,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     widget.onFilesUploaded([newFile]);
   }
 
-  Future<void> fileOnTap() async {
+  Future<void> fileOnTap({bool allowCompress = false}) async {
     Navigator.pop(context);
     try {
       _showLoadingDialog(context);
@@ -6145,22 +6161,40 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
             FileTypes.text,
           ],
           allowMultiple: false,
-          withData: false,
-          allowCompression: true,
+          withData: kIsWeb,
+          allowCompression: allowCompress,
           compressionQuality: 80);
 
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
 
-        final filePath = file.path!;
-        final ext = filePath.split('.').last.toLowerCase();
-        final selectedFile = File(filePath);
+        // Handle web vs mobile platforms differently
+        String ext;
+        Uint8List fileBytes;
+        
+        if (kIsWeb) {
+          // On web, use bytes directly and get extension from filename
+          fileBytes = file.bytes!;
+          ext = file.name.split('.').last.toLowerCase();
+        } else {
+          // On mobile, use file path
+          final filePath = file.path!;
+          ext = filePath.split('.').last.toLowerCase();
+          final selectedFile = File(filePath);
+          fileBytes = await selectedFile.readAsBytes();
+        }
 
-        Uint8List fileBytes = await selectedFile.readAsBytes();
-
-        if (['jpg', 'jpeg', 'png'].contains(ext)) {
-          final compressedBytes =
-              await imageCompress(fileBytes, XFile(selectedFile.path));
+        if (allowCompress && ['jpg', 'jpeg', 'png'].contains(ext)) {
+          Uint8List? compressedBytes;
+          if (kIsWeb) {
+            // On web, we can't use XFile with path, so we'll skip compression for now
+            // or implement web-specific compression if needed
+            compressedBytes = fileBytes;
+          } else {
+            // On mobile, use the file path for compression
+            compressedBytes = await imageCompress(fileBytes, XFile(file.path!));
+          }
+          
           if (compressedBytes == null) {
             return;
           }
@@ -6189,6 +6223,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
       _hideLoadingDialog();
     }
   }
+
 
   Future<void> cameraOnTap() async {
     Navigator.pop(context);
@@ -6230,6 +6265,11 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
 
   
   Future<Uint8List?> imageCompress(Uint8List bytes, XFile image) async {
+    // On web, skip compression for now since FlutterImageCompress doesn't work well with web
+    if (kIsWeb) {
+      return bytes;
+    }
+    
     int quality = StringConstants.initialCompressionQuality;
     XFile? compressedFile;
     Uint8List? compressedBytes;
@@ -6270,6 +6310,32 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     Navigator.pop(context);
     try {
       _showLoadingDialog(context);
+      
+      if (kIsWeb) {
+        // On web, use FilePicker instead of ImagePicker for gallery
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          allowMultiple: false,
+          withData: true,
+        );
+        
+        if (result != null && result.files.isNotEmpty) {
+          final file = result.files.first;
+          final bytes = file.bytes!;
+          final fileName = file.name;
+          final ext = fileName.split('.').last.toLowerCase();
+          
+          // For web, we'll skip compression for now since imageCompress uses file paths
+          _processFile(
+            bytes: bytes,
+            fileName: fileName,
+            fileType: 'image',
+            mimeType: 'image/$ext',
+          );
+        }
+        return;
+      }
+      
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
         source: ImageSource.gallery,
