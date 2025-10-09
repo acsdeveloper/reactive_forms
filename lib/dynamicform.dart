@@ -6161,8 +6161,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
             FileTypes.text,
           ],
           allowMultiple: false,
-          withData: true,
-          allowCompression: true,
+          withData: kIsWeb,
+          allowCompression: allowCompress,
           compressionQuality: 80);
 
       if (result != null && result.files.isNotEmpty) {
