@@ -6152,15 +6152,33 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
 
-        final filePath = file.path!;
-        final ext = filePath.split('.').last.toLowerCase();
-        final selectedFile = File(filePath);
-
-        Uint8List fileBytes = await selectedFile.readAsBytes();
+        // Handle web vs mobile platforms differently
+        String ext;
+        Uint8List fileBytes;
+        
+        if (kIsWeb) {
+          // On web, use bytes directly and get extension from filename
+          fileBytes = file.bytes!;
+          ext = file.name.split('.').last.toLowerCase();
+        } else {
+          // On mobile, use file path
+          final filePath = file.path!;
+          ext = filePath.split('.').last.toLowerCase();
+          final selectedFile = File(filePath);
+          fileBytes = await selectedFile.readAsBytes();
+        }
 
         if (['jpg', 'jpeg', 'png'].contains(ext)) {
-          final compressedBytes =
-              await imageCompress(fileBytes, XFile(selectedFile.path));
+          Uint8List? compressedBytes;
+          if (kIsWeb) {
+            // On web, we can't use XFile with path, so we'll skip compression for now
+            // or implement web-specific compression if needed
+            compressedBytes = fileBytes;
+          } else {
+            // On mobile, use the file path for compression
+            compressedBytes = await imageCompress(fileBytes, XFile(file.path!));
+          }
+          
           if (compressedBytes == null) {
             return;
           }
