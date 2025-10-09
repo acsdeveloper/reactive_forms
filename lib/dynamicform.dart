@@ -6143,7 +6143,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
     widget.onFilesUploaded([newFile]);
   }
 
-  Future<void> fileOnTap() async {
+  Future<void> fileOnTap({bool allowCompress = false}) async {
     Navigator.pop(context);
     try {
       _showLoadingDialog(context);
@@ -6161,7 +6161,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
             FileTypes.text,
           ],
           allowMultiple: false,
-          withData: false,
+          withData: true,
           allowCompression: true,
           compressionQuality: 80);
 
@@ -6184,7 +6184,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
           fileBytes = await selectedFile.readAsBytes();
         }
 
-        if (['jpg', 'jpeg', 'png'].contains(ext)) {
+        if (allowCompress && ['jpg', 'jpeg', 'png'].contains(ext)) {
           Uint8List? compressedBytes;
           if (kIsWeb) {
             // On web, we can't use XFile with path, so we'll skip compression for now
@@ -6223,6 +6223,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
       _hideLoadingDialog();
     }
   }
+
 
   Future<void> cameraOnTap() async {
     Navigator.pop(context);
