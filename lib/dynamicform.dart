@@ -2438,7 +2438,6 @@ class _DynamicFormState extends State<DynamicForm>
                           'required': (error) {
                             final fieldName = field['name'];
                             final hasUploadedFiles = (controller.uploadedFiles[fieldName]?.isNotEmpty ?? false);
-                            final fieldValue = controller.form.control(fieldName).value;
                             
 
                             if (hasUploadedFiles) {
@@ -3583,21 +3582,22 @@ class _DynamicFormState extends State<DynamicForm>
         final value = control.value;
         final isEmpty = value == null ||
             value.toString().isEmpty ||
-            value == 'null';
-        final String typeStr = (currentField['type'] ?? '').toString();
-        final bool isCompositeTextFile = typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
+            value.toString() == 'null' ||
+            (value is List && value.isEmpty);
+        final List<String> types = (currentField['type'] ?? '').toString().split(',').map((s) => s.trim().toLowerCase()).toList();
+        final bool isCompositeTextFile = types.contains('text') && types.contains('file');
 
         if (isCompositeTextFile) {
           final hasFiles = controller.uploadedFiles[currentField['name']]?.isNotEmpty ?? false;
           if (isEmpty && !hasFiles) {
             control.markAsTouched();
-            AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
+            AppSnackBar(context).showErrorSnackBar(StringConstants.fillRequiredFields);
             return;
           }
         } else {
           if (isEmpty) {
             control.markAsTouched();
-            AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
+            AppSnackBar(context).showErrorSnackBar(StringConstants.fillRequiredFields);
             return;
           }
         }
@@ -4593,7 +4593,7 @@ class _DynamicFormState extends State<DynamicForm>
         print("⛔ FIELD VALIDATION FAILED - Navigation blocked");
       }
       // Show a snackbar to inform the user that validation failed
-      AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
+      AppSnackBar(context).showErrorSnackBar(StringConstants.fillRequiredFields);
 
       return;
     }
