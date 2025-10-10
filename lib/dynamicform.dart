@@ -124,6 +124,7 @@ class _DynamicFormState extends State<DynamicForm>
   int currentVisibleQuestionIndex = 0;
   int totalVisibleQuestions = 1;
 
+
   // File handling
   static const _maxFileSize = 3 * 1024 * 1024; // 3MB
   static const double _iconSize = 24.0;
@@ -2434,9 +2435,19 @@ class _DynamicFormState extends State<DynamicForm>
                       ReactiveTextField(
                         formControlName: field['name'],
                         validationMessages: {
-                          'required': (error) => widget.accordionView
-                              ? ""
-                              : StringConstants.requiredField,
+                          'required': (error) {
+                            final fieldName = field['name'];
+                            final hasUploadedFiles = (controller.uploadedFiles[fieldName]?.isNotEmpty ?? false);
+                            final fieldValue = controller.form.control(fieldName).value;
+                            
+
+                            if (hasUploadedFiles) {
+                              return ''; // Suppress required validation when files are uploaded
+                            }
+
+                            final message = widget.accordionView ? '' : StringConstants.requiredField;
+                            return message;
+                          },
                         },
                         keyboardType: field['type'] == 'number'
                             ? TextInputType.number
@@ -3477,17 +3488,28 @@ class _DynamicFormState extends State<DynamicForm>
           continue;
         }
         
-        // Check if field is required and empty
+        // Check if field is required and enforce either-or for composite "text, file"
         if (fieldDef['required'] == true) {
           final value = control.value;
           final isEmpty = value == null || 
                          value.toString().isEmpty || 
                          value.toString() == 'null' ||
                          (value is List && value.isEmpty);
-          
-          if (isEmpty) {
-            isValid = false;
-            break;
+
+          final String typeStr = (fieldDef['type'] ?? '').toString();
+          final bool isCompositeTextFile = typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
+
+          if (isCompositeTextFile) {
+            final bool hasFiles = controller.uploadedFiles[controlName]?.isNotEmpty ?? false;
+            if (isEmpty && !hasFiles) {
+              isValid = false;
+              break;
+            }
+          } else {
+            if (isEmpty) {
+              isValid = false;
+              break;
+            }
           }
         }
         
@@ -3556,14 +3578,29 @@ class _DynamicFormState extends State<DynamicForm>
       final currentField = widget.formJson[controller.currentQuestionIndex];
       final control = controller.form.control(currentField['name']);
 
-      // Check if the current field is required and empty
-      if ((currentField['required'] == true) &&
-          (control.value == null ||
-              control.value.toString().isEmpty ||
-              control.value == 'null')) {
-        control.markAsTouched();
-        AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
-        return;
+      // Check if the current field is required and apply either-or for composite "text, file"
+      if (currentField['required'] == true) {
+        final value = control.value;
+        final isEmpty = value == null ||
+            value.toString().isEmpty ||
+            value == 'null';
+        final String typeStr = (currentField['type'] ?? '').toString();
+        final bool isCompositeTextFile = typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
+
+        if (isCompositeTextFile) {
+          final hasFiles = controller.uploadedFiles[currentField['name']]?.isNotEmpty ?? false;
+          if (isEmpty && !hasFiles) {
+            control.markAsTouched();
+            AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
+            return;
+          }
+        } else {
+          if (isEmpty) {
+            control.markAsTouched();
+            AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
+            return;
+          }
+        }
       }
 
       // Check for required file uploads
