@@ -218,9 +218,17 @@ class DynamicFormController extends ChangeNotifier {
     List<Validator> validatorsList = [];
 
     if (isRequired) {
-      // For text fields with attachments, skip adding a hard required validator
-      // because we validate with an either-or rule at submission time.
-      if (!(field != null && field['type'] == 'text' && field['hasAttachments'] == true)) {
+      // For composite types like "text, file" we enforce an either-or rule at submit time,
+      // so we should not add a hard required validator to the text control here.
+      final String typeStr = (field?['type'] ?? '').toString();
+      final bool isCompositeTextFile =
+          typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
+
+      // Also, for text fields that separately require attachments, we validate at submit time.
+      final bool isTextWithAttachments =
+          (field != null && field['type'] == 'text' && field['hasAttachments'] == true);
+
+      if (!(isCompositeTextFile || isTextWithAttachments)) {
         validatorsList.add(Validators.required);
       }
       if (kDebugMode) {
@@ -271,12 +279,41 @@ class DynamicFormController extends ChangeNotifier {
         continue;
       }
       
-      if (!control.valid) {
-        // Find the field definition to check if it's required
-        final field = findFieldDefinition(controlName);
-        if (field != null && field['required'] == true) {
-        isValid = false;
-        break;
+      // Find the field definition for additional rules
+      final field = findFieldDefinition(controlName);
+
+      // Composite rule: for required fields with type containing both text and file,
+      // accept if either text is provided or a file is uploaded.
+      if (field != null && field['required'] == true) {
+        final String typeStr = (field['type'] ?? '').toString();
+        final bool isCompositeTextFile =
+            typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
+
+        if (isCompositeTextFile) {
+          final dynamic value = control.value;
+          final bool textEmpty = value == null ||
+              value.toString().isEmpty ||
+              value.toString() == 'null' ||
+              (value is List && value.isEmpty);
+          final bool filesEmpty =
+              (uploadedFiles[controlName]?.isEmpty ?? true);
+
+          if (textEmpty && filesEmpty) {
+            isValid = false;
+            break;
+          }
+        } else {
+          // Fallback to existing control validity for non-composite fields
+          if (!control.valid) {
+            isValid = false;
+            break;
+          }
+        }
+      } else {
+        // Non-required fields: still ensure other validators
+        if (!control.valid) {
+          isValid = false;
+          break;
         }
       }
     }
