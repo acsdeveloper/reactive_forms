@@ -1382,6 +1382,7 @@ class _DynamicFormState extends State<DynamicForm>
                 return MultiSelectFormField(
                   field: FormFieldModel.fromJson(field),
                   onChanged: (List<String> value) {
+                    FocusScope.of(context).requestFocus(FocusNode());
                     // Force direct update to the FormGroup's value
                     controller.form.patchValue(
                         {field['name']: value.isEmpty ? null : value});
