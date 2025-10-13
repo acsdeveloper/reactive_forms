@@ -1618,40 +1618,39 @@ class DynamicFormController extends ChangeNotifier {
   bool shouldFieldBeVisible(Map<String, dynamic> field) {
     if (field['showWhen'] == null) return true;
     final conditions = field['showWhen'] as Map<String, dynamic>;
+    if (conditions.isEmpty) return true;
     bool shouldShow = true;
-    
-    
     conditions.forEach((dependentField, expectedValue) {
-      // For grouped fields, we need to find the correct transformed field name
       String actualDependentField = _findTransformedFieldNameForVisibility(field, dependentField);
-      
-      
       if (!form.contains(actualDependentField)) {
-        shouldShow = false;
-        return;
+        if (form.contains(dependentField)) {
+          actualDependentField = dependentField;
+        } else {
+          shouldShow = false;
+          return;
+        }
       }
       final currentValue = form.control(actualDependentField).value;
-      
-      
-      bool matches;
-      if (expectedValue is List) {
-        if (currentValue is List) {
-          matches = currentValue.any((v) => expectedValue.contains(v));
-        } else {
-          matches = expectedValue.contains(currentValue);
-        }
-      } else if (currentValue is List) {
-        matches = currentValue.contains(expectedValue);
-      } else {
-        matches = currentValue == expectedValue;
-      }
-      
-      
+      final bool matches = _valuesMatch(expectedValue, currentValue);
       shouldShow = shouldShow && matches;
     });
-    
-    
     return shouldShow;
+  }
+
+  // Normalize and compare expected vs current values with leniency for strings
+  bool _valuesMatch(dynamic expected, dynamic current) {
+    if (expected is List) {
+      // If expected is a list, match if any element equals current (normalized)
+      return expected.any((e) => _valuesMatch(e, current));
+    }
+    if (current is List) {
+      // If current is a list, match if any element equals expected (normalized)
+      return current.any((c) => _valuesMatch(expected, c));
+    }
+    if (expected is String && current is String) {
+      return expected.trim().toLowerCase() == current.trim().toLowerCase();
+    }
+    return current == expected;
   }
 
   /// Find the transformed field name for showWhen conditions in shouldFieldBeVisible
