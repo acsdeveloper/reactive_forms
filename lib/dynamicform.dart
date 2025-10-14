@@ -67,14 +67,14 @@ class DynamicForm extends StatefulWidget {
     this.primaryColor = const Color(0xFF4BA7D1),
     this.buttonTextColor = Colors.white,
     this.fieldSpacing = 20.0,
-    this.showOneByOne = false,
+    this.showOneByOne = true,
     required this.fontFamily,
     this.fileUploadButtonColor = Colors.black,
     this.fileUploadButtonTextColor = Colors.white,
     this.submitButtonText,
     this.bookingAppModelFileUpload = false,
-    this.showCollapsedWithToggle  = true,
-    this.showArrowOnMandatoryWarning = true,
+    this.showCollapsedWithToggle  = false,
+    this.showArrowOnMandatoryWarning = false,
     this.isManageToCheckPress = false,
     this.bottomNavigationType = BottomNavigationType.button,
     this.initialValues,
@@ -534,6 +534,14 @@ class _DynamicFormState extends State<DynamicForm>
 
     _internalFields = List<Map<String, dynamic>>.from(transformedFormJson);
 
+    // Track last-known visibility of each field to detect transitions hidden -> visible
+    _lastVisibilityByFieldName = {};
+    for (final f in _internalFields) {
+      final name = f['name']?.toString() ?? '';
+      if (name.isEmpty) continue;
+      _lastVisibilityByFieldName[name] = controller.shouldFieldBeVisible(f);
+    }
+
     // Add form controls for the transformed fields only
     // Filter out original fields that have been transformed
     final List<Map<String, dynamic>> fieldsToAdd = [];
@@ -573,6 +581,8 @@ class _DynamicFormState extends State<DynamicForm>
           print(
               "Form values changed: ${formValues?.keys.join(', ') ?? 'null'}");
         }
+        // When values change, re-evaluate visibility and trigger validation on newly visible fields
+        _handleVisibilityTransitions();
         setState(() {});
       }
     });
@@ -621,6 +631,37 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Always calculate progress, but handle exceptions safely
     _safeCalculateProgress();
+  }
+
+  // Keeps last-known visibility per field
+  Map<String, bool> _lastVisibilityByFieldName = {};
+
+  // Detect fields that became visible and mark them as touched to trigger validation display
+  void _handleVisibilityTransitions() {
+    for (final field in _internalFields) {
+      final String fieldName = field['name']?.toString() ?? '';
+      if (fieldName.isEmpty) continue;
+
+      final bool currentlyVisible = controller.shouldFieldBeVisible(field);
+      final bool previouslyVisible = _lastVisibilityByFieldName[fieldName] ?? currentlyVisible;
+
+      if (!previouslyVisible && currentlyVisible) {
+        // Field just became visible: mark its control and any dependent comment control as touched
+        if (controller.form.contains(fieldName)) {
+          final control = controller.form.control(fieldName);
+          control.markAsTouched();
+        }
+
+        if (field['hasComments'] == true) {
+          final commentControlName = '${fieldName}_comment';
+          if (controller.form.contains(commentControlName)) {
+            controller.form.control(commentControlName).markAsTouched();
+          }
+        }
+      }
+
+      _lastVisibilityByFieldName[fieldName] = currentlyVisible;
+    }
   }
 
   // Calculate the progress based on visible questions - safely
@@ -1355,82 +1396,8 @@ class _DynamicFormState extends State<DynamicForm>
     if (field['showWhen'] != null) {
       return ReactiveFormConsumer(
         builder: (context, form, child) {
-          final String fieldName = field['name'].toString();
-
-          // Check for circular dependency
-          if (_fieldEvaluationStack.contains(fieldName)) {
-            if (kDebugMode) {
-              print(
-                  "WARNING: Circular dependency detected in field-level showWhen for: $fieldName");
-              print(
-                  "Dependency chain: ${_fieldEvaluationStack.join(' → ')} → $fieldName");
-            }
-            // Break the circular dependency by showing the field
-            return _buildFieldWidget(field);
-          }
-
-          _fieldEvaluationStack.add(fieldName);
-
-          try {
-            bool shouldShow = false; // Initialize to false for OR logic
-            final conditions = field['showWhen'] as Map<String, dynamic>;
-
-            conditions.forEach((dependentField, expectedValue) {
-              if (!controller.form.contains(dependentField)) {
-                if (kDebugMode) {
-                  print("showWhen: Field '$fieldName' depends on '$dependentField' but form doesn't contain it");
-                }
-                shouldShow = false;
-                return;
-              }
-
-              final dependentControl = form.control(dependentField);
-              final currentValue = dependentControl.value;
-              
-              if (kDebugMode) {
-                print("showWhen: Field '$fieldName' depends on '$dependentField' = '$expectedValue', current value = '$currentValue'");
-              }
-
-              // Check if the dependent field itself has a showWhen condition
-              // Only check if we're not already evaluating it (to prevent circular deps)
-              if (!_fieldEvaluationStack.contains(dependentField)) {
-                // Find the dependent field in the internal fields
-                int dependentFieldIdx = _internalFields
-                    .indexWhere((f) => f['name'] == dependentField);
-
-                if (dependentFieldIdx >= 0 &&
-                    _internalFields[dependentFieldIdx]['showWhen'] != null) {
-                  // Create a temporary instance of the field widget to check visibility
-                  // This is a simplified recursive check
-                  Widget tempWidget =
-                      _buildField(_internalFields[dependentFieldIdx]);
-
-                  // If the dependent field would be hidden, don't match this condition
-                  if (tempWidget is SizedBox &&
-                      tempWidget.width == 0 &&
-                      tempWidget.height == 0) {
-                    // The dependent field would be hidden (SizedBox.shrink)
-                    shouldShow = shouldShow || false;
-                    return;
-                  }
-                }
-              }
-
-              if (expectedValue is List) {
-                shouldShow = shouldShow || expectedValue.contains(currentValue);
-              } else {
-                shouldShow = shouldShow || currentValue == expectedValue;
-              }
-            });
-
-            if (!shouldShow) {
-              return const SizedBox.shrink();
-            }
-
-            return _buildFieldWidget(field);
-          } finally {
-            _fieldEvaluationStack.remove(fieldName);
-          }
+          final bool shouldShow = controller.shouldFieldBeVisible(field);
+          return shouldShow ? _buildFieldWidget(field) : const SizedBox.shrink();
         },
       );
     }
@@ -3799,7 +3766,23 @@ class _DynamicFormState extends State<DynamicForm>
       if (!isRequired) continue;
 
       // Skip hidden fields based on showWhen conditions
-      if (!controller.shouldFieldBeVisible(field)) {
+      bool isVisible = controller.shouldFieldBeVisible(field);
+      if (!isVisible && field['showWhen'] is Map<String, dynamic>) {
+        // Fallback: re-evaluate visibility locally using raw dependent names
+        final Map<String, dynamic> cond = field['showWhen'] as Map<String, dynamic>;
+        bool localVisible = true;
+        cond.forEach((dep, expected) {
+          if (!controller.form.contains(dep)) {
+            localVisible = false;
+            return;
+          }
+          final current = controller.form.control(dep).value;
+          localVisible = localVisible && _valuesMatchForVisibility(expected, current);
+        });
+        isVisible = localVisible;
+      }
+
+      if (!isVisible) {
         if (kDebugMode) {
           print("Skipping hidden field: $fieldName (showWhen condition not met)");
         }
@@ -3895,6 +3878,20 @@ class _DynamicFormState extends State<DynamicForm>
     }
     
     return false;
+  }
+
+  // Local, lenient comparison identical to controller logic
+  bool _valuesMatchForVisibility(dynamic expected, dynamic current) {
+    if (expected is List) {
+      return expected.any((e) => _valuesMatchForVisibility(e, current));
+    }
+    if (current is List) {
+      return current.any((c) => _valuesMatchForVisibility(expected, c));
+    }
+    if (expected is String && current is String) {
+      return expected.trim().toLowerCase() == current.trim().toLowerCase();
+    }
+    return current == expected;
   }
 
   /// Returns true if any content is present for the given anchor (question) that would
