@@ -79,7 +79,7 @@ class DynamicForm extends StatefulWidget {
     this.bottomNavigationType = BottomNavigationType.button,
     this.initialValues,
     this.accordionView = true,
-    this.draftMode = false,
+    this.draftMode = true,
     this.themeData,
     RxBool? draftbtnClicked,
     super.key,
@@ -3372,44 +3372,67 @@ class _DynamicFormState extends State<DynamicForm>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
       child: Row(
-          mainAxisAlignment: isManageToCheckPress
-              ? MainAxisAlignment.spaceBetween
-              : MainAxisAlignment.end,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             if (isManageToCheckPress) ...[
-              SizedBox(
+              Expanded(
+                child: SizedBox(
+                  height: 42.0,
+                  child: ElevatedButton(
+                    onPressed: () => _submitForm(context,
+                        isManageToCheckPress: isManageToCheckPress),
+                    style: ElevatedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      backgroundColor: buttonColor,
+                      foregroundColor: widget.buttonTextColor,
+                    ),
+                    child: Text(StringConstants.managerToCheck,
+                        style: widget.fontFamily
+                            .copyWith(color: widget.buttonTextColor)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            // Show draft button if draft mode is enabled
+            if (widget.draftMode) ...[
+              Expanded(
+                child: SizedBox(
+                  height: 42.0,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      widget.draftbtnClicked.value = true;
+                    },
+                    style: ElevatedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: Text('Save Draft',
+                        style: widget.fontFamily
+                            .copyWith(color: Colors.white)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: SizedBox(
                 height: 42.0,
-                width: MediaQuery.of(context).size.width / 2.0,
                 child: ElevatedButton(
-                  onPressed: () => _submitForm(context,
-                      isManageToCheckPress: isManageToCheckPress),
+                  onPressed: () => _submitForm(context),
                   style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                     backgroundColor: buttonColor,
                     foregroundColor: widget.buttonTextColor,
                   ),
-                  child: Text(StringConstants.managerToCheck,
+                  child: Text(widget.submitButtonText ?? 'Submit',
                       style: widget.fontFamily
                           .copyWith(color: widget.buttonTextColor)),
                 ),
-              ),
-              const SizedBox(width: 40),
-            ],
-            SizedBox(
-              height: 42.0,
-              width: MediaQuery.of(context).size.width / 3.5,
-              child: ElevatedButton(
-                onPressed: () => _submitForm(context),
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  backgroundColor: buttonColor,
-                  foregroundColor: widget.buttonTextColor,
-                ),
-                child: Text(widget.submitButtonText ?? 'Submit',
-                    style: widget.fontFamily
-                        .copyWith(color: widget.buttonTextColor)),
               ),
             )
           ]),
