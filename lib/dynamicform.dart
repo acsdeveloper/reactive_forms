@@ -55,6 +55,7 @@ class DynamicForm extends StatefulWidget {
   final bool isManageToCheckPress;
   final bool draftMode;
   final RxBool draftbtnClicked;
+  final bool isDraftVisible;
   final BottomNavigationType bottomNavigationType;
   final Map<String, dynamic>? initialValues;
   final bool accordionView;
@@ -80,6 +81,7 @@ class DynamicForm extends StatefulWidget {
     this.initialValues,
     this.accordionView = true,
     this.draftMode = true,
+    this.isDraftVisible = false,
     this.themeData,
     RxBool? draftbtnClicked,
     super.key,
@@ -3372,12 +3374,16 @@ class _DynamicFormState extends State<DynamicForm>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
       child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisAlignment: isManageToCheckPress
+              ? MainAxisAlignment.spaceBetween // Manager-to-check mode
+              : (widget.draftMode && widget.isDraftVisible
+                  ? MainAxisAlignment.spaceEvenly // Draft mode visible
+                  : MainAxisAlignment.end), // Only Submit visible
           children: [
             if (isManageToCheckPress) ...[
-              Expanded(
-                child: SizedBox(
+                SizedBox(
                   height: 42.0,
+                  width: MediaQuery.of(context).size.width / 3.5,
                   child: ElevatedButton(
                     onPressed: () => _submitForm(context,
                         isManageToCheckPress: isManageToCheckPress),
@@ -3387,55 +3393,63 @@ class _DynamicFormState extends State<DynamicForm>
                       backgroundColor: buttonColor,
                       foregroundColor: widget.buttonTextColor,
                     ),
-                    child: Text(StringConstants.managerToCheck,
-                        style: widget.fontFamily
-                            .copyWith(color: widget.buttonTextColor)),
+                    child: Text(
+                      StringConstants.managerToCheck,
+                      style:
+                          widget.fontFamily.copyWith(color: widget.buttonTextColor),
                   ),
                 ),
               ),
               const SizedBox(width: 10),
             ],
-            // Show draft button if draft mode is enabled
-            if (widget.draftMode) ...[
-              Expanded(
-                child: SizedBox(
-                  height: 42.0,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      widget.draftbtnClicked.value = true;
-                    },
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: Text('Save Draft',
-                        style: widget.fontFamily
-                            .copyWith(color: Colors.white)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-            ],
-            Expanded(
-              child: SizedBox(
+
+            // Draft button (if draft mode is enabled and visible)
+            if (widget.draftMode && widget.isDraftVisible) ...[
+              SizedBox(
                 height: 42.0,
+                width: MediaQuery.of(context).size.width / 3.5,
                 child: ElevatedButton(
-                  onPressed: () => _submitForm(context),
+                  onPressed: () {
+                    widget.draftbtnClicked.value = true;
+                  },
                   style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
-                    backgroundColor: buttonColor,
-                    foregroundColor: widget.buttonTextColor,
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
                   ),
-                  child: Text(widget.submitButtonText ?? 'Submit',
-                      style: widget.fontFamily
-                          .copyWith(color: widget.buttonTextColor)),
+                  child: Text(
+                    'Save Draft',
+                    style: widget.fontFamily.copyWith(color: Colors.white),
+                  ),
                 ),
               ),
-            )
-          ]),
+              const SizedBox(width: 10),
+            ],
+
+            // Submit button (always visible)
+            SizedBox(
+              height: 42.0,
+              width: MediaQuery.of(context).size.width /
+                  (isManageToCheckPress || (widget.draftMode && widget.isDraftVisible)
+                      ? 3.5
+                      : 2.5),
+              child: ElevatedButton(
+                onPressed: () => _submitForm(context),
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  backgroundColor: buttonColor,
+                  foregroundColor: widget.buttonTextColor,
+                ),
+                child: Text(
+                  widget.submitButtonText ?? 'Submit',
+                  style: widget.fontFamily.copyWith(color: widget.buttonTextColor),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
