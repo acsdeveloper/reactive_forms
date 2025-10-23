@@ -3827,11 +3827,25 @@ class _DynamicFormState extends State<DynamicForm>
           print("Form control exists: $actualFieldName, value: '$value', isEmpty: $isEmpty");
         }
         
-        if (isEmpty) {
-          if (kDebugMode) {
-            print("Found required empty field: $actualFieldName, value: $value");
+        // Apply either-or logic for composite "text, file" fields
+        final String typeStr = (field['type'] ?? '').toString();
+        final bool isCompositeTextFile = typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
+        
+        if (isCompositeTextFile) {
+          final bool hasFiles = controller.uploadedFiles[actualFieldName]?.isNotEmpty ?? false;
+          if (isEmpty && !hasFiles) {
+            if (kDebugMode) {
+              print("Found required empty composite text,file field: $actualFieldName, text empty: $isEmpty, hasFiles: $hasFiles");
+            }
+            return true;
           }
-          return true;
+        } else {
+          if (isEmpty) {
+            if (kDebugMode) {
+              print("Found required empty field: $actualFieldName, value: $value");
+            }
+            return true;
+          }
         }
       } else {
         if (kDebugMode) {
@@ -3865,11 +3879,26 @@ class _DynamicFormState extends State<DynamicForm>
                 final childIsEmpty = childValue == null || 
                                    (childValue is String && childValue.trim().isEmpty) ||
                                    (childValue is List && childValue.isEmpty);
-                if (childIsEmpty) {
-                  if (kDebugMode) {
-                    print("Found required empty groupId child field: $childName, value: $childValue");
+                
+                // Apply either-or logic for composite "text, file" fields in groupId children
+                final String childTypeStr = (childField['type'] ?? '').toString();
+                final bool isChildCompositeTextFile = childTypeStr.contains(',') && childTypeStr.contains('text') && childTypeStr.contains('file');
+                
+                if (isChildCompositeTextFile) {
+                  final bool hasChildFiles = controller.uploadedFiles[childName]?.isNotEmpty ?? false;
+                  if (childIsEmpty && !hasChildFiles) {
+                    if (kDebugMode) {
+                      print("Found required empty composite text,file groupId child field: $childName, text empty: $childIsEmpty, hasFiles: $hasChildFiles");
+                    }
+                    return true;
                   }
-                  return true;
+                } else {
+                  if (childIsEmpty) {
+                    if (kDebugMode) {
+                      print("Found required empty groupId child field: $childName, value: $childValue");
+                    }
+                    return true;
+                  }
                 }
               }
             }
