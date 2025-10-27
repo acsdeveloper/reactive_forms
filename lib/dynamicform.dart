@@ -55,6 +55,7 @@ class DynamicForm extends StatefulWidget {
   final bool isManageToCheckPress;
   final bool draftMode;
   final RxBool draftbtnClicked;
+  final bool isDraftVisible;
   final BottomNavigationType bottomNavigationType;
   final Map<String, dynamic>? initialValues;
   final bool accordionView;
@@ -79,7 +80,8 @@ class DynamicForm extends StatefulWidget {
     this.bottomNavigationType = BottomNavigationType.button,
     this.initialValues,
     this.accordionView = true,
-    this.draftMode = false,
+    this.draftMode = true,
+    this.isDraftVisible = false,
     this.themeData,
     RxBool? draftbtnClicked,
     super.key,
@@ -3373,32 +3375,65 @@ class _DynamicFormState extends State<DynamicForm>
       padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
       child: Row(
           mainAxisAlignment: isManageToCheckPress
-              ? MainAxisAlignment.spaceBetween
-              : MainAxisAlignment.end,
+              ? MainAxisAlignment.spaceBetween // Manager-to-check mode
+              : (widget.draftMode && widget.isDraftVisible
+                  ? MainAxisAlignment.spaceEvenly // Draft mode visible
+                  : MainAxisAlignment.end), // Only Submit visible
           children: [
             if (isManageToCheckPress) ...[
+                SizedBox(
+                  height: 42.0,
+                  width: MediaQuery.of(context).size.width / 3.5,
+                  child: ElevatedButton(
+                    onPressed: () => _submitForm(context,
+                        isManageToCheckPress: isManageToCheckPress),
+                    style: ElevatedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      backgroundColor: buttonColor,
+                      foregroundColor: widget.buttonTextColor,
+                    ),
+                    child: Text(
+                      StringConstants.managerToCheck,
+                      style:
+                          widget.fontFamily.copyWith(color: widget.buttonTextColor),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+
+            // Draft button (if draft mode is enabled and visible)
+            if (widget.draftMode && widget.isDraftVisible) ...[
               SizedBox(
                 height: 42.0,
-                width: MediaQuery.of(context).size.width / 2.0,
+                width: MediaQuery.of(context).size.width / 3.5,
                 child: ElevatedButton(
-                  onPressed: () => _submitForm(context,
-                      isManageToCheckPress: isManageToCheckPress),
+                  onPressed: () {
+                    widget.draftbtnClicked.value = true;
+                  },
                   style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
-                    backgroundColor: buttonColor,
-                    foregroundColor: widget.buttonTextColor,
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
                   ),
-                  child: Text(StringConstants.managerToCheck,
-                      style: widget.fontFamily
-                          .copyWith(color: widget.buttonTextColor)),
+                  child: Text(
+                    'Save Draft',
+                    style: widget.fontFamily.copyWith(color: Colors.white),
+                  ),
                 ),
               ),
-              const SizedBox(width: 40),
+              const SizedBox(width: 10),
             ],
+
+            // Submit button (always visible)
             SizedBox(
               height: 42.0,
-              width: MediaQuery.of(context).size.width / 3.5,
+              width: MediaQuery.of(context).size.width /
+                  (isManageToCheckPress || (widget.draftMode && widget.isDraftVisible)
+                      ? 3.5
+                      : 2.5),
               child: ElevatedButton(
                 onPressed: () => _submitForm(context),
                 style: ElevatedButton.styleFrom(
@@ -3407,12 +3442,14 @@ class _DynamicFormState extends State<DynamicForm>
                   backgroundColor: buttonColor,
                   foregroundColor: widget.buttonTextColor,
                 ),
-                child: Text(widget.submitButtonText ?? 'Submit',
-                    style: widget.fontFamily
-                        .copyWith(color: widget.buttonTextColor)),
+                child: Text(
+                  widget.submitButtonText ?? 'Submit',
+                  style: widget.fontFamily.copyWith(color: widget.buttonTextColor),
               ),
-            )
-          ]),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3745,13 +3782,13 @@ class _DynamicFormState extends State<DynamicForm>
   // Check if anchor has required fields that are empty (for warning icon display)
   bool _hasRequiredEmptyFields(int anchor) {
     final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
-    
+
     if (kDebugMode) {
       print("=== _hasRequiredEmptyFields for anchor $anchor ===");
       print("Indices: $indices");
       print("Available form controls: ${controller.form.controls.keys.toList()}");
     }
-    
+
     for (final idx in indices) {
       if (idx < 0 || idx >= _internalFields.length) continue;
       final field = _internalFields[idx];
@@ -3791,23 +3828,20 @@ class _DynamicFormState extends State<DynamicForm>
 
       // For grouped fields, the field name is already constructed correctly
       String actualFieldName = fieldName;
-
+      // Apply either-or logic for composite "text, file" fields
+      final String typeStr = (field['type'] ?? '').toString();
+      final bool isCompositeTextFile = typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
       // Check the main field control for required empty values
       if (controller.form.contains(actualFieldName)) {
         final control = controller.form.control(actualFieldName);
         final value = control.value;
         final isEmpty = value == null || 
-                       (value is String && value.trim().isEmpty) ||
-                       (value is List && value.isEmpty);
-        
+                      (value is String && value.trim().isEmpty) ||
+                      (value is List && value.isEmpty);
+
         if (kDebugMode) {
           print("Form control exists: $actualFieldName, value: '$value', isEmpty: $isEmpty");
         }
-        
-        // Apply either-or logic for composite "text, file" fields
-        final String typeStr = (field['type'] ?? '').toString();
-        final bool isCompositeTextFile = typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
-        
         if (isCompositeTextFile) {
           final bool hasFiles = controller.uploadedFiles[actualFieldName]?.isNotEmpty ?? false;
           if (isEmpty && !hasFiles) {
@@ -3830,6 +3864,17 @@ class _DynamicFormState extends State<DynamicForm>
         }
       }
 
+      // Check if the field has 'hasAttachments' set to true and no files uploaded
+      if (field['hasAttachments'] == true && !isCompositeTextFile) {
+        final hasFiles = controller.uploadedFiles[fieldName]?.isNotEmpty ?? false;
+        if (!hasFiles) {
+          if (kDebugMode) {
+            print("Found required field with 'hasAttachments' true but no files uploaded: $fieldName");
+          }
+          return true;
+        }
+      }
+
       // For fields with groupId, also check all child fields
       if (field['groupId'] != null) {
         final String? groupId = field['groupId']?.toString();
@@ -3841,7 +3886,7 @@ class _DynamicFormState extends State<DynamicForm>
               (f) => f['name'] == childName,
               orElse: () => <String, dynamic>{},
             );
-            
+
             if (childField.isNotEmpty && childField['required'] == true) {
               // Skip hidden child fields based on showWhen conditions
               if (!controller.shouldFieldBeVisible(childField)) {
@@ -3854,13 +3899,13 @@ class _DynamicFormState extends State<DynamicForm>
                 final childControl = controller.form.control(childName);
                 final childValue = childControl.value;
                 final childIsEmpty = childValue == null || 
-                                   (childValue is String && childValue.trim().isEmpty) ||
-                                   (childValue is List && childValue.isEmpty);
-                
+                                  (childValue is String && childValue.trim().isEmpty) ||
+                                  (childValue is List && childValue.isEmpty);
+
                 // Apply either-or logic for composite "text, file" fields in groupId children
                 final String childTypeStr = (childField['type'] ?? '').toString();
                 final bool isChildCompositeTextFile = childTypeStr.contains(',') && childTypeStr.contains('text') && childTypeStr.contains('file');
-                
+
                 if (isChildCompositeTextFile) {
                   final bool hasChildFiles = controller.uploadedFiles[childName]?.isNotEmpty ?? false;
                   if (childIsEmpty && !hasChildFiles) {
@@ -3901,13 +3946,14 @@ class _DynamicFormState extends State<DynamicForm>
         }
       }
     }
-    
+
     if (kDebugMode) {
       print("=== _hasRequiredEmptyFields result: false (no required empty fields found) ===");
     }
-    
+
     return false;
   }
+
 
   // Local, lenient comparison identical to controller logic
   bool _valuesMatchForVisibility(dynamic expected, dynamic current) {
