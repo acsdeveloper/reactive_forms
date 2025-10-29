@@ -536,6 +536,55 @@ class _DynamicFormState extends State<DynamicForm>
       initialValues: widget.initialValues,
     );
 
+    // Initialize uploadedFiles from initialValues (for draft attachments)
+    if (kDebugMode) {
+      print('[DynamicForm initState] Starting uploadedFiles initialization');
+      print('[DynamicForm initState] initialValues is null: ${widget.initialValues == null}');
+      if (widget.initialValues != null) {
+        print('[DynamicForm initState] initialValues keys: ${widget.initialValues!.keys.toList()}');
+      }
+    }
+
+    if (widget.initialValues != null) {
+      widget.initialValues!.forEach((key, value) {
+        if (kDebugMode) {
+          print('[DynamicForm initState] Processing key: $key, value type: ${value.runtimeType}');
+        }
+
+        if (key.endsWith('_attachments') && value is List && value.isNotEmpty) {
+          // Extract the field name by removing '_attachments' suffix
+          String fieldName = key.substring(0, key.length - '_attachments'.length);
+
+          if (kDebugMode) {
+            print('[DynamicForm initState] Found attachments for field: $fieldName');
+          }
+
+          // Convert the list to List<Map<String, dynamic>>
+          List<Map<String, dynamic>> attachments = [];
+          for (var item in value) {
+            if (item is Map<String, dynamic>) {
+              attachments.add(item);
+              if (kDebugMode) {
+                print('[DynamicForm initState] Added attachment: $item');
+              }
+            }
+          }
+
+          if (attachments.isNotEmpty) {
+            controller.uploadedFiles[fieldName] = attachments;
+            if (kDebugMode) {
+              print('[DynamicForm initState] ✅ Initialized uploadedFiles[$fieldName] with ${attachments.length} attachment(s)');
+              print('[DynamicForm initState] controller.uploadedFiles now has keys: ${controller.uploadedFiles.keys.toList()}');
+            }
+          }
+        }
+      });
+    }
+
+    if (kDebugMode) {
+      print('[DynamicForm initState] Final controller.uploadedFiles keys: ${controller.uploadedFiles.keys.toList()}');
+    }
+
     _internalFields = List<Map<String, dynamic>>.from(transformedFormJson);
 
     // Track last-known visibility of each field to detect transitions hidden -> visible
@@ -3417,11 +3466,11 @@ class _DynamicFormState extends State<DynamicForm>
                   style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
-                    backgroundColor: Colors.orange,
+                    backgroundColor: Colors.black,
                     foregroundColor: Colors.white,
                   ),
                   child: Text(
-                    'Save Draft',
+                    'Save As Draft',
                     style: widget.fontFamily.copyWith(color: Colors.white),
                   ),
                 ),
