@@ -537,45 +537,17 @@ class _DynamicFormState extends State<DynamicForm>
     );
 
     // Initialize uploadedFiles from initialValues (for draft attachments)
-    if (kDebugMode) {
-      print('[DynamicForm initState] Starting uploadedFiles initialization');
-      print('[DynamicForm initState] initialValues is null: ${widget.initialValues == null}');
-      if (widget.initialValues != null) {
-        print('[DynamicForm initState] initialValues keys: ${widget.initialValues!.keys.toList()}');
-      }
-    }
-
     if (widget.initialValues != null) {
       widget.initialValues!.forEach((key, value) {
-        if (kDebugMode) {
-          print('[DynamicForm initState] Processing key: $key, value type: ${value.runtimeType}');
-        }
-
         if (key.endsWith('_attachments') && value is List && value.isNotEmpty) {
           // Extract the field name by removing '_attachments' suffix
-          String fieldName = key.substring(0, key.length - '_attachments'.length);
+          final String fieldName = key.substring(0, key.length - '_attachments'.length);
 
-          if (kDebugMode) {
-            print('[DynamicForm initState] Found attachments for field: $fieldName');
-          }
-
-          // Convert the list to List<Map<String, dynamic>>
-          List<Map<String, dynamic>> attachments = [];
-          for (var item in value) {
-            if (item is Map<String, dynamic>) {
-              attachments.add(item);
-              if (kDebugMode) {
-                print('[DynamicForm initState] Added attachment: $item');
-              }
-            }
-          }
+          // Convert the list to List<Map<String, dynamic>> using a more idiomatic approach.
+          final List<Map<String, dynamic>> attachments = value.whereType<Map<String, dynamic>>().toList();
 
           if (attachments.isNotEmpty) {
             controller.uploadedFiles[fieldName] = attachments;
-            if (kDebugMode) {
-              print('[DynamicForm initState] ✅ Initialized uploadedFiles[$fieldName] with ${attachments.length} attachment(s)');
-              print('[DynamicForm initState] controller.uploadedFiles now has keys: ${controller.uploadedFiles.keys.toList()}');
-            }
           }
         }
       });
