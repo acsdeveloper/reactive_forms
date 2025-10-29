@@ -512,6 +512,8 @@ class _DynamicFormState extends State<DynamicForm>
       // If draftbtnClicked becomes true, trigger form submission
       if (value) {
         _submitForm(context, isDraft: true);
+        // Reset the button state after submission
+        widget.draftbtnClicked.value = false;
       }
     });
 
@@ -3565,9 +3567,9 @@ class _DynamicFormState extends State<DynamicForm>
       // If validation passes, proceed with submission
       final formValue = Map<String, dynamic>.from(controller.form.value);
       final nestedFormData = controller.createNestedStructure(formValue);
-      
+
       try {
-        widget.onSubmit(nestedFormData, controller.uploadedFiles, isManageToCheckPress);
+        widget.onSubmit(nestedFormData, controller.uploadedFiles, isDraft);
       } catch (e) {
         // Show error to user
         AppSnackBar(context).showErrorSnackBar("Error submitting form: $e");
@@ -3654,10 +3656,10 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Create nested structure for grouped fields
     final nestedFormData = controller.createNestedStructure(cleanedFormData);
-    
+
     // Submit the nested data
     widget.onSubmit(
-        nestedFormData, cleanedUploadedFiles, isManageToCheckPress);
+        nestedFormData, cleanedUploadedFiles, isDraft);
   }
 
   /// The function `_findFirstInvalidAnchor` iterates through group anchors and checks for invalid
