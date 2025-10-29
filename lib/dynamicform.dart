@@ -512,6 +512,8 @@ class _DynamicFormState extends State<DynamicForm>
       // If draftbtnClicked becomes true, trigger form submission
       if (value) {
         _submitForm(context, isDraft: true);
+        // Reset the button state after submission
+        widget.draftbtnClicked.value = false;
       }
     });
 
@@ -533,6 +535,27 @@ class _DynamicFormState extends State<DynamicForm>
       isManageToCheckPress: widget.isManageToCheckPress,
       initialValues: widget.initialValues,
     );
+
+    // Initialize uploadedFiles from initialValues (for draft attachments)
+    if (widget.initialValues != null) {
+      widget.initialValues!.forEach((key, value) {
+        if (key.endsWith('_attachments') && value is List && value.isNotEmpty) {
+          // Extract the field name by removing '_attachments' suffix
+          final String fieldName = key.substring(0, key.length - '_attachments'.length);
+
+          // Convert the list to List<Map<String, dynamic>> using a more idiomatic approach.
+          final List<Map<String, dynamic>> attachments = value.whereType<Map<String, dynamic>>().toList();
+
+          if (attachments.isNotEmpty) {
+            controller.uploadedFiles[fieldName] = attachments;
+          }
+        }
+      });
+    }
+
+    if (kDebugMode) {
+      print('[DynamicForm initState] Final controller.uploadedFiles keys: ${controller.uploadedFiles.keys.toList()}');
+    }
 
     _internalFields = List<Map<String, dynamic>>.from(transformedFormJson);
 
@@ -3415,11 +3438,11 @@ class _DynamicFormState extends State<DynamicForm>
                   style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
-                    backgroundColor: Colors.orange,
+                    backgroundColor: Colors.black,
                     foregroundColor: Colors.white,
                   ),
                   child: Text(
-                    'Save Draft',
+                    'Save As Draft',
                     style: widget.fontFamily.copyWith(color: Colors.white),
                   ),
                 ),
@@ -3565,9 +3588,9 @@ class _DynamicFormState extends State<DynamicForm>
       // If validation passes, proceed with submission
       final formValue = Map<String, dynamic>.from(controller.form.value);
       final nestedFormData = controller.createNestedStructure(formValue);
-      
+
       try {
-        widget.onSubmit(nestedFormData, controller.uploadedFiles, isManageToCheckPress);
+        widget.onSubmit(nestedFormData, controller.uploadedFiles, isDraft);
       } catch (e) {
         // Show error to user
         AppSnackBar(context).showErrorSnackBar("Error submitting form: $e");
@@ -3654,10 +3677,10 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Create nested structure for grouped fields
     final nestedFormData = controller.createNestedStructure(cleanedFormData);
-    
+
     // Submit the nested data
     widget.onSubmit(
-        nestedFormData, cleanedUploadedFiles, isManageToCheckPress);
+        nestedFormData, cleanedUploadedFiles, isDraft);
   }
 
   /// The function `_findFirstInvalidAnchor` iterates through group anchors and checks for invalid
