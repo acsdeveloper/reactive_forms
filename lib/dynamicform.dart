@@ -509,15 +509,8 @@ class _DynamicFormState extends State<DynamicForm>
     super.initState();
     // / Listen to draftbtnClicked value
     ever(widget.draftbtnClicked, (value) {
-      if (kDebugMode) {
-        print('🟡 [DYNAMICFORM_EVER] ===== draftbtnClicked changed =====');
-        print('🟡 [DYNAMICFORM_EVER] value: $value');
-      }
       // If draftbtnClicked becomes true, trigger form submission
       if (value) {
-        if (kDebugMode) {
-          print('🟡 [DYNAMICFORM_EVER] Calling _submitForm with isDraft=true');
-        }
         _submitForm(context, isDraft: true);
         // Reset the button state after submission
         widget.draftbtnClicked.value = false;
@@ -3440,10 +3433,6 @@ class _DynamicFormState extends State<DynamicForm>
                 width: MediaQuery.of(context).size.width / 3.5,
                 child: ElevatedButton(
                   onPressed: () {
-                    if (kDebugMode) {
-                      print('🟡 [DYNAMICFORM_BUTTON] ===== Save As Draft button clicked =====');
-                      print('🟡 [DYNAMICFORM_BUTTON] Setting draftbtnClicked.value = true');
-                    }
                     widget.draftbtnClicked.value = true;
                   },
                   style: ElevatedButton.styleFrom(
@@ -3489,12 +3478,6 @@ class _DynamicFormState extends State<DynamicForm>
 
   void _submitForm(BuildContext context,
       {bool isManageToCheckPress = false, bool isDraft = false}) {
-        if (kDebugMode) {
-      print('🟡 [DYNAMICFORM_SUBMIT] ===== _submitForm CALLED =====');
-      print('🟡 [DYNAMICFORM_SUBMIT] isDraft: $isDraft');
-      print('🟡 [DYNAMICFORM_SUBMIT] widget.accordionView: ${widget.accordionView}');
-      print('🟡 [DYNAMICFORM_SUBMIT] controller.uploadedFiles keys: ${controller.uploadedFiles.keys.toList()}');
-    }
     // In accordionview mode, validate the entire form before proceed (skip validation for drafts)
     if (widget.accordionView) {
       if (!isDraft) {
@@ -3610,18 +3593,6 @@ class _DynamicFormState extends State<DynamicForm>
       // If validation passes, proceed with submission
       final formValue = Map<String, dynamic>.from(controller.form.value);
       final nestedFormData = controller.createNestedStructure(formValue);
-      if (kDebugMode) {
-        print('🟡 [DYNAMICFORM_DRAFT_DEBUG] ===== BEFORE ONSUBMIT =====');
-        print('🟡 [DYNAMICFORM_DRAFT_DEBUG] isDraft: $isDraft');
-        print('🟡 [DYNAMICFORM_DRAFT_DEBUG] controller.uploadedFiles keys: ${controller.uploadedFiles.keys.toList()}');
-        print('🟡 [DYNAMICFORM_DRAFT_DEBUG] controller.uploadedFiles contents:');
-        controller.uploadedFiles.forEach((key, value) {
-          print('🟡 [DYNAMICFORM_DRAFT_DEBUG]   $key: ${value.length} file(s)');
-          for (int i = 0; i < value.length; i++) {
-            print('🟡 [DYNAMICFORM_DRAFT_DEBUG]     [$i] ${value[i]}');
-          }
-        });
-      }
       try {
         widget.onSubmit(nestedFormData, controller.uploadedFiles, isDraft);
       } catch (e) {
