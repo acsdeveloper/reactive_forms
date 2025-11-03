@@ -81,7 +81,7 @@ class DynamicForm extends StatefulWidget {
     this.initialValues,
     this.accordionView = true,
     this.draftMode = true,
-    this.isDraftVisible = false,
+    this.isDraftVisible = true,
     this.themeData,
     RxBool? draftbtnClicked,
     super.key,
@@ -3478,83 +3478,88 @@ class _DynamicFormState extends State<DynamicForm>
 
   void _submitForm(BuildContext context,
       {bool isManageToCheckPress = false, bool isDraft = false}) {
-    // In accordionview mode, validate the entire form before proceed
-    if (widget.accordionView && !isDraft) {
-      setState(() {
-        _shortTextSubmitAttempted = true;
-      });
-      
-      // Check if form is valid using controller's validation logic
+    // In accordionview mode, validate the entire form before proceed (skip validation for drafts)
+    if (widget.accordionView) {
+      if (!isDraft) {
+        setState(() {
+          _shortTextSubmitAttempted = true;
+        });
+      }
+
+      // Check if form is valid using controller's validation logic (skip validation for drafts)
       bool isValid = true;
-      
-      // Only validate fields that are in _internalFields (the transformed fields)
-      for (final field in _internalFields) {
-        final controlName = field['name'].toString();
-        
-        // Skip if this field is not in the form controls
-        if (!controller.form.contains(controlName)) continue;
-        
-        final control = controller.form.control(controlName);
-        
-        // Skip comment fields
-        if (controlName.endsWith('_comment')) continue;
-        
-        
-        // Find the field definition for this control
-        final fieldDef = controller.findFieldDefinition(controlName);
-        if (fieldDef == null) {
-          continue;
-        }
-        
-        
-        // Check if this field should be visible using the current field (which has the correct showWhen conditions)
-        bool shouldBeVisible = controller.shouldFieldBeVisible(field);
-        
-        if (!shouldBeVisible) {
-          continue;
-        }
-        
-        // Check if field is required and enforce either-or for composite "text, file"
-        if (fieldDef['required'] == true) {
-          final value = control.value;
-          final isEmpty = value == null || 
-                         value.toString().isEmpty || 
-                         value.toString() == 'null' ||
-                         (value is List && value.isEmpty);
 
-          final String typeStr = (fieldDef['type'] ?? '').toString();
-          final bool isCompositeTextFile = typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
+      // Only validate if this is not a draft submission
+      if (!isDraft) {
+        // Only validate fields that are in _internalFields (the transformed fields)
+        for (final field in _internalFields) {
+          final controlName = field['name'].toString();
 
-          if (isCompositeTextFile) {
-            final bool hasFiles = controller.uploadedFiles[controlName]?.isNotEmpty ?? false;
-            if (isEmpty && !hasFiles) {
-              isValid = false;
-              break;
-            }
-          } else {
-            if (isEmpty) {
-              isValid = false;
-              break;
+          // Skip if this field is not in the form controls
+          if (!controller.form.contains(controlName)) continue;
+
+          final control = controller.form.control(controlName);
+
+          // Skip comment fields
+          if (controlName.endsWith('_comment')) continue;
+
+
+          // Find the field definition for this control
+          final fieldDef = controller.findFieldDefinition(controlName);
+          if (fieldDef == null) {
+            continue;
+          }
+
+
+          // Check if this field should be visible using the current field (which has the correct showWhen conditions)
+          bool shouldBeVisible = controller.shouldFieldBeVisible(field);
+
+          if (!shouldBeVisible) {
+            continue;
+          }
+
+          // Check if field is required and enforce either-or for composite "text, file"
+          if (fieldDef['required'] == true) {
+            final value = control.value;
+            final isEmpty = value == null ||
+                           value.toString().isEmpty ||
+                           value.toString() == 'null' ||
+                           (value is List && value.isEmpty);
+
+            final String typeStr = (fieldDef['type'] ?? '').toString();
+            final bool isCompositeTextFile = typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
+
+            if (isCompositeTextFile) {
+              final bool hasFiles = controller.uploadedFiles[controlName]?.isNotEmpty ?? false;
+              if (isEmpty && !hasFiles) {
+                isValid = false;
+                break;
+              }
+            } else {
+              if (isEmpty) {
+                isValid = false;
+                break;
+              }
             }
           }
-        }
-        
-        // Also check if control is invalid (for other validation rules like email format, etc.)
-        if (!control.valid) {
-          isValid = false;
-          break;
-        }
-        
-        // Check if attachments are required
-        if (!controller.validateFieldAttachmentsIfRequired(fieldDef)) {
-          isValid = false;
-          break;
-        }
-        
-        // Check if comments are required
-        if (!controller.validateFieldCommentsIfRequired(fieldDef)) {
-          isValid = false;
-          break;
+
+          // Also check if control is invalid (for other validation rules like email format, etc.)
+          if (!control.valid) {
+            isValid = false;
+            break;
+          }
+
+          // Check if attachments are required
+          if (!controller.validateFieldAttachmentsIfRequired(fieldDef)) {
+            isValid = false;
+            break;
+          }
+
+          // Check if comments are required
+          if (!controller.validateFieldCommentsIfRequired(fieldDef)) {
+            isValid = false;
+            break;
+          }
         }
       }
       
@@ -3588,7 +3593,6 @@ class _DynamicFormState extends State<DynamicForm>
       // If validation passes, proceed with submission
       final formValue = Map<String, dynamic>.from(controller.form.value);
       final nestedFormData = controller.createNestedStructure(formValue);
-
       try {
         widget.onSubmit(nestedFormData, controller.uploadedFiles, isDraft);
       } catch (e) {
