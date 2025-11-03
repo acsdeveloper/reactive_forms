@@ -151,6 +151,9 @@ class _DynamicFormState extends State<DynamicForm>
   // Subscription to form value changes - will be used to update visibility
   late StreamSubscription<dynamic> _formValueChangeSubscription;
 
+  // Worker for draft button click listener
+  Worker? _draftButtonWorker;
+
   // Track if user attempted to submit in accordionview mode to show error dots
   bool _shortTextSubmitAttempted = false;
 
@@ -507,11 +510,19 @@ class _DynamicFormState extends State<DynamicForm>
   @override
   void initState() {
     super.initState();
-    // / Listen to draftbtnClicked value
-    ever(widget.draftbtnClicked, (value) {
+    // / Listen to draftbtnClicked value and store the worker
+    _draftButtonWorker = ever(widget.draftbtnClicked, (value) {
       // If draftbtnClicked becomes true, trigger form submission
       if (value) {
-        _submitForm(context, isDraft: true);
+        try {
+          if (mounted) {
+            _submitForm(widget.context, isDraft: true);
+          }
+        } catch (e, stackTrace) {
+          if (kDebugMode) {
+            print('[DynamicForm] Error calling _submitForm: $e');
+          }
+        }
         // Reset the button state after submission
         widget.draftbtnClicked.value = false;
       }
@@ -619,8 +630,11 @@ class _DynamicFormState extends State<DynamicForm>
     controller.removeListener(_onControllerChanged);
     _pageController.dispose(); // Ensure the controller is disposed
 
-    // NEW: Cancel the form value change subscription
+    // Cancel the form value change subscription
     _formValueChangeSubscription.cancel();
+
+    // Dispose the draft button worker to prevent memory leaks
+    _draftButtonWorker?.dispose();
 
     super.dispose();
   }
@@ -3593,9 +3607,13 @@ class _DynamicFormState extends State<DynamicForm>
       // If validation passes, proceed with submission
       final formValue = Map<String, dynamic>.from(controller.form.value);
       final nestedFormData = controller.createNestedStructure(formValue);
+
       try {
         widget.onSubmit(nestedFormData, controller.uploadedFiles, isDraft);
       } catch (e) {
+        if (kDebugMode) {
+          print('[DynamicForm] Error calling widget.onSubmit: $e');
+        }
         // Show error to user
         AppSnackBar(context).showErrorSnackBar("Error submitting form: $e");
       }
@@ -3663,11 +3681,14 @@ class _DynamicFormState extends State<DynamicForm>
 
       // Remove empty or null values
       if (value == null || value.toString().isEmpty || value == 'null') {
-        cleanedFormData.remove(fieldName);
-        controller.uploadedFiles.remove(fieldName);
+        // For draft saves, keep files even if the text field is empty
+        if (!isDraft) {
+          cleanedFormData.remove(fieldName);
+          controller.uploadedFiles.remove(fieldName);
+        }
 
-        // Also remove associated comment if it exists
-        if (field['hasComments'] == true) {
+        // Also remove associated comment if it exists (only for non-draft submissions)
+        if (!isDraft && field['hasComments'] == true) {
           cleanedFormData.remove('${fieldName}_comment');
         }
       } else {
@@ -3676,6 +3697,11 @@ class _DynamicFormState extends State<DynamicForm>
           cleanedUploadedFiles[fieldName] =
               controller.uploadedFiles[fieldName]!;
         }
+      }
+
+      // For draft saves, always include uploaded files even if the field value is empty
+      if (isDraft && controller.uploadedFiles.containsKey(fieldName)) {
+        cleanedUploadedFiles[fieldName] = controller.uploadedFiles[fieldName]!;
       }
     }
 
