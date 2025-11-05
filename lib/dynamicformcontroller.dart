@@ -187,11 +187,12 @@ class DynamicFormController extends ChangeNotifier {
 
           // Initialize uploaded files for file-containing combo types
           if (isComboWithFile) {
-            uploadedFiles[fieldName] = initialValues != null &&
-                    initialValues!.containsKey('${fieldName}_attachments')
-                ? List<Map<String, dynamic>>.from(
-                    initialValues!['${fieldName}_attachments'])
-                : [];
+            final dynamic attachments = initialValues?['${fieldName}_attachments'];
+            if (attachments is List) {
+              uploadedFiles[fieldName] = attachments.whereType<Map<String, dynamic>>().toList();
+            } else {
+              uploadedFiles[fieldName] = [];
+            }
           }
 
           controls[fieldName] = FormControl<String>(
