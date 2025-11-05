@@ -175,8 +175,27 @@ class DynamicFormController extends ChangeNotifier {
             );
           }
         } else {
+          // Handle other field types, including comma-separated types like "text, file"
+          // For combo types, we need to check if hasAttachments should be true
+          final String typeStr = (field['type'] ?? '').toString();
+          final bool isComboWithFile = typeStr.contains(',') && typeStr.contains('file');
+
+          // Set hasAttachments for combo fields with file type
+          if (isComboWithFile && field['hasAttachments'] != true) {
+            field['hasAttachments'] = true;
+          }
+
+          // Initialize uploaded files for file-containing combo types
+          if (isComboWithFile) {
+            uploadedFiles[fieldName] = initialValues != null &&
+                    initialValues!.containsKey('${fieldName}_attachments')
+                ? List<Map<String, dynamic>>.from(
+                    initialValues!['${fieldName}_attachments'])
+                : [];
+          }
+
           controls[fieldName] = FormControl<String>(
-            value: field['defaultValue'] ?? '',
+            value: initial != null ? initial.toString() : (field['defaultValue'] ?? ''),
             validators: _getValidators(field['required'] == true, field),
           );
 
