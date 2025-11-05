@@ -857,6 +857,11 @@ class _DynamicFormState extends State<DynamicForm>
 
   Widget _buildBottomNavigation(Color buttonColor, bool isManageToCheckPress,
       BottomNavigationType bottomNavigationType) {
+    // Hide submit and draft buttons when readOnly is true
+    if (widget.readOnly) {
+      return const SizedBox.shrink();
+    }
+    
     // In accordionview mode, always show submit button only
     if (widget.accordionView) {
       return _buildSubmitButton(buttonColor, isManageToCheckPress);
