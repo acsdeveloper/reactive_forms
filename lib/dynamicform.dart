@@ -54,6 +54,7 @@ class DynamicForm extends StatefulWidget {
   final ThemeData? themeData;
   final bool readOnly;
   final bool reactiveFormView;
+  final TextStyle? labelStyle;
 
   DynamicForm({
     required this.formJson,
@@ -76,6 +77,7 @@ class DynamicForm extends StatefulWidget {
     this.themeData,
     this.readOnly = false,
     this.reactiveFormView = false,
+    this.labelStyle,
     RxBool? draftbtnClicked,
     super.key,
   }) : draftbtnClicked = draftbtnClicked ?? false.obs;
@@ -994,15 +996,17 @@ class _DynamicFormState extends State<DynamicForm>
             key: _fieldKeys[anchor],
             clipBehavior: Clip.hardEdge,
             margin: const EdgeInsets.only(bottom: 8),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(
-                color: showErrorDot
-                    ? Get.theme.colorScheme.onError
-                    : Get.theme.dividerColor.withOpacity(0.5),
-                width: 1,
-              ),
-            ),
+            shape: widget.reactiveFormView
+                ? null
+                : RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(
+                      color: showErrorDot
+                          ? Get.theme.colorScheme.onError
+                          : Get.theme.dividerColor.withOpacity(0.5),
+                      width: 1,
+                    ),
+                  ),
             child: Stack(
               children: [
                 if (isDraft) ...[
@@ -1238,7 +1242,7 @@ class _DynamicFormState extends State<DynamicForm>
   Widget _buildCardForFields(
       List<Map<String, dynamic>> fields, bool isDuplicated) {
     return Card(
-      elevation: widget.accordionView ? 0 : 1.0,
+      elevation: widget.reactiveFormView ? 0 : (widget.accordionView ? 0 : 1.0),
       margin: widget.accordionView
           ? EdgeInsets.zero
           : const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -1577,6 +1581,7 @@ class _DynamicFormState extends State<DynamicForm>
                         fontFamily: widget.fontFamily,
                         buttonTextColor: widget.buttonTextColor,
                         readOnly: widget.readOnly,
+                        reactiveFormView: widget.reactiveFormView,
                         onFilesUploaded: (files) {
                           setState(() {
                             controller.uploadedFiles[field['name']] = files;
@@ -1705,10 +1710,10 @@ class _DynamicFormState extends State<DynamicForm>
               Expanded(
                 child: Text(
                   field['label'],
-              style: TextStyle(
+                  style: widget.labelStyle ?? TextStyle(
                     fontWeight: FontWeight.bold,
-                fontSize: 16.0,
-                fontFamily: widget.fontFamily?.fontFamily,
+                    fontSize: 16.0,
+                    fontFamily: widget.fontFamily.fontFamily,
                   ),
             ),
           ),
@@ -2636,6 +2641,7 @@ class _DynamicFormState extends State<DynamicForm>
                 fontFamily: widget.fontFamily,
                 buttonTextColor: widget.buttonTextColor,
                 readOnly: widget.readOnly,
+                reactiveFormView: widget.reactiveFormView,
                 onFilesUploaded: (files) {
                   setState(() {
                     controller.uploadedFiles[field['name']] = files;
@@ -2787,6 +2793,8 @@ class _DynamicFormState extends State<DynamicForm>
                   primaryColor: widget.primaryColor,
                   fontFamily: widget.fontFamily,
                   buttonTextColor: widget.buttonTextColor,
+                  readOnly: widget.readOnly,
+                  reactiveFormView: widget.reactiveFormView,
                   onFilesUploaded: (files) {
                     setState(() {
                       controller.uploadedFiles[field['name']] = files;
@@ -2898,6 +2906,7 @@ class _DynamicFormState extends State<DynamicForm>
                         fontFamily: widget.fontFamily,
                         buttonTextColor: widget.buttonTextColor,
                         readOnly: widget.readOnly,
+                        reactiveFormView: widget.reactiveFormView,
                         onFilesUploaded: (files) {
                           setState(() {
                             controller.uploadedFiles[field['name']] = files;
@@ -4761,6 +4770,7 @@ class _DynamicFormState extends State<DynamicForm>
 
         cards.add(
           Card(
+            elevation: widget.reactiveFormView ? 0 : 1.0,
             margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             child: Padding(
               padding: const EdgeInsets.all(12.0),
@@ -5246,6 +5256,7 @@ class FileUploadWidget extends StatefulWidget {
   final bool bookingAppModelFileUpload;
   final Map<String, dynamic>? initialValues;
   final bool readOnly;
+  final bool reactiveFormView;
 
   const FileUploadWidget({
     Key? key,
@@ -5263,6 +5274,7 @@ class FileUploadWidget extends StatefulWidget {
     this.bookingAppModelFileUpload = false,
     this.initialValues,
     this.readOnly = false,
+    this.reactiveFormView = false,
   }) : super(key: key);
 
   @override
@@ -6124,7 +6136,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
           // Display the single uploaded file with delete option
           Card(
             margin: EdgeInsets.zero,
-            elevation: 1,
+            elevation: widget.reactiveFormView ? 0 : 1,
             child: ListTile(
               leading: Icon(_getFileIcon(widget.uploadedFiles[0]['fileType'])),
               title: Text(
