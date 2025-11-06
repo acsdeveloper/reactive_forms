@@ -53,6 +53,7 @@ class DynamicForm extends StatefulWidget {
   final bool accordionView;
   final ThemeData? themeData;
   final bool readOnly;
+  final bool reactiveFormView;
 
   DynamicForm({
     required this.formJson,
@@ -74,6 +75,7 @@ class DynamicForm extends StatefulWidget {
     this.draftMode = false,
     this.themeData,
     this.readOnly = false,
+    this.reactiveFormView = true,
     RxBool? draftbtnClicked,
     super.key,
   }) : draftbtnClicked = draftbtnClicked ?? false.obs;
@@ -921,8 +923,8 @@ class _DynamicFormState extends State<DynamicForm>
     for (final anchor in _groupAnchors) {
       if (anchor >= 0 && anchor < _internalFields.length) {
         final n = _internalFields[anchor]['name']?.toString() ?? '';
-        if (visibleNames.isEmpty || visibleNames.contains(n)) {
-          displayAnchors.add(anchor);
+          if (visibleNames.isEmpty || visibleNames.contains(n)) {
+            displayAnchors.add(anchor);
         }
       }
     }
@@ -949,7 +951,7 @@ class _DynamicFormState extends State<DynamicForm>
     return SingleChildScrollView(
       controller: _scrollController,
       child: Column(
-        children: [
+      children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -974,102 +976,102 @@ class _DynamicFormState extends State<DynamicForm>
               )
             ],
           ),
-          const SizedBox(height: 10.0),
-          // Use .map to build widgets properly
-          ...List.generate(displayAnchors.length, (index) {
-            final anchor = displayAnchors[index];
-            final field = _internalFields[anchor];
-            final String name = field['name']?.toString() ?? '';
+        const SizedBox(height: 10.0),
+        // Use .map to build widgets properly
+        ...List.generate(displayAnchors.length, (index) {
+          final anchor = displayAnchors[index];
+          final field = _internalFields[anchor];
+          final String name = field['name']?.toString() ?? '';
             final String label = field['label']?.toString() ?? name;
-            final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
-            final List<Map<String, dynamic>> fields =
-                indices.map((i) => _internalFields[i]).toList();
-            final bool showErrorDot = widget.accordionView &&
-                _shortTextSubmitAttempted &&
+          final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
+          final List<Map<String, dynamic>> fields =
+              indices.map((i) => _internalFields[i]).toList();
+          final bool showErrorDot = widget.accordionView &&
+              _shortTextSubmitAttempted &&
                 !_isAnchorGroupValid(anchor);
-            final bool isDraft = isAnchorDraft(anchor) && widget.draftMode;
-            return Card(
-              key: _fieldKeys[anchor],
-              clipBehavior: Clip.hardEdge,
-              margin: const EdgeInsets.only(bottom: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(
-                  color: showErrorDot
-                      ? Get.theme.colorScheme.onError
-                      : Get.theme.dividerColor.withOpacity(0.5),
-                  width: 1,
-                ),
+          final bool isDraft = isAnchorDraft(anchor) && widget.draftMode;
+          return Card(
+            key: _fieldKeys[anchor],
+            clipBehavior: Clip.hardEdge,
+            margin: const EdgeInsets.only(bottom: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(
+                color: showErrorDot
+                    ? Get.theme.colorScheme.onError
+                    : Get.theme.dividerColor.withOpacity(0.5),
+                width: 1,
               ),
-              child: Stack(
-                children: [
-                  if (isDraft) ...[
-                    _buildDraftBanner(),
-                    Positioned(
-                      top: 8,
-                      left: 4,
-                      child: Transform.rotate(
-                        angle: -math.pi / 4,
-                        child: Text(StringConstants.draft,
-                            style: Get.textTheme.headlineLarge
-                                ?.copyWith(fontSize: 6)),
-                      ),
-                    )
-                  ],
-                  ExpansionTile(
-                    key: ValueKey(
-                        '$expandAll exp_${anchor}_${_expandedAnchor == anchor}'),
-                    initiallyExpanded:
-                        expandAll ? expandAll : _expandedAnchor == anchor,
-                    onExpansionChanged: (expanded) {
-                      setState(() {
-                        _expandedAnchor = expanded
-                            ? anchor
-                            : (_expandedAnchor == anchor
-                                ? null
-                                : _expandedAnchor);
-                      });
-                    },
-                    shape: const RoundedRectangleBorder(side: BorderSide.none),
-                    collapsedShape:
-                        const RoundedRectangleBorder(side: BorderSide.none),
-                    expansionAnimationStyle: AnimationStyle(
-                      duration: const Duration(milliseconds: 300),
-                      reverseDuration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                      reverseCurve: Curves.easeInOut,
+            ),
+            child: Stack(
+              children: [
+                if (isDraft) ...[
+                  _buildDraftBanner(),
+                  Positioned(
+                    top: 8,
+                    left: 4,
+                    child: Transform.rotate(
+                      angle: -math.pi / 4,
+                      child: Text(StringConstants.draft,
+                          style: Get.textTheme.headlineLarge
+                              ?.copyWith(fontSize: 6)),
                     ),
-                    tilePadding: const EdgeInsets.symmetric(horizontal: 10),
-                    title: Container(
+                  )
+                ],
+                ExpansionTile(
+                  key: ValueKey(
+                      '$expandAll exp_${anchor}_${_expandedAnchor == anchor}'),
+                  initiallyExpanded:
+                        expandAll ? expandAll : _expandedAnchor == anchor,
+                  onExpansionChanged: (expanded) {
+                    setState(() {
+                      _expandedAnchor = expanded
+                          ? anchor
+                          : (_expandedAnchor == anchor
+                              ? null
+                              : _expandedAnchor);
+                    });
+                  },
+                  shape: const RoundedRectangleBorder(side: BorderSide.none),
+                  collapsedShape:
+                      const RoundedRectangleBorder(side: BorderSide.none),
+                  expansionAnimationStyle: AnimationStyle(
+                    duration: const Duration(milliseconds: 300),
+                    reverseDuration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    reverseCurve: Curves.easeInOut,
+                  ),
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 10),
+                  title: Container(
                       height:
                           _expandedAnchor == anchor || expandAll ? null : 40,
-                      padding: const EdgeInsets.only(top: 10.0),
-                      width: MediaQuery.of(context).size.width,
-                      child: RichText(
-                        textAlign: TextAlign.left,
-                        softWrap: true,
-                        overflow: _expandedAnchor == anchor || expandAll
-                            ? TextOverflow.clip
-                            : TextOverflow.ellipsis,
-                        text: TextSpan(
-                          style: Get.textTheme.labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                          children: [
-                            TextSpan(text: 'Q${index + 1}: $label'),
-                            if (field['required'] == true)
-                              const TextSpan(
-                                text: ' *',
-                                style: TextStyle(
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16.0,
-                                ),
+                    padding: const EdgeInsets.only(top: 10.0),
+                    width: MediaQuery.of(context).size.width,
+                    child: RichText(
+                      textAlign: TextAlign.left,
+                      softWrap: true,
+                      overflow: _expandedAnchor == anchor || expandAll
+                          ? TextOverflow.clip
+                          : TextOverflow.ellipsis,
+                      text: TextSpan(
+                        style: Get.textTheme.labelLarge
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                        children: [
+                          TextSpan(text: 'Q${index + 1}: $label'),
+                          if (field['required'] == true)
+                            const TextSpan(
+                              text: ' *',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16.0,
                               ),
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
                     ),
-                    children: [
+                  ),
+                  children: [
                       ReactiveForm(
                         formGroup: controller.form,
                         child: SafeArea(
@@ -1097,11 +1099,11 @@ class _DynamicFormState extends State<DynamicForm>
                       ),
                     ],
                   ),
-                ],
-              ),
-            );
-          }),
-        ],
+              ],
+            ),
+          );
+        }),
+      ],
       ),
     );
   }
@@ -1276,8 +1278,8 @@ class _DynamicFormState extends State<DynamicForm>
                   "Dependency chain: ${_fieldEvaluationStack.join(' → ')} → $fieldName");
             }
             // Break the circular dependency by showing the field
-            return _buildFieldWidget(field);
-          }
+    return _buildFieldWidget(field);
+  }
 
           _fieldEvaluationStack.add(fieldName);
 
@@ -1321,7 +1323,7 @@ class _DynamicFormState extends State<DynamicForm>
 
               if (expectedValue is List) {
                 shouldShow = shouldShow || expectedValue.contains(currentValue);
-              } else {
+          } else {
                 shouldShow = shouldShow || currentValue == expectedValue;
               }
             });
@@ -1344,7 +1346,32 @@ class _DynamicFormState extends State<DynamicForm>
   Widget _buildFieldWidget(Map<String, dynamic> field) {
     // Access the controller instance variable
     final control = controller.form.control(field['name']);
-    return _buildActualField(field, control, widget.initialValues);
+    final fieldContent = _buildActualField(field, control, widget.initialValues);
+    
+    // If reactiveFormView is true, wrap field with background color and add divider
+    if (widget.reactiveFormView) {
+      return Builder(
+        builder: (context) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                color: Theme.of(context).scaffoldBackgroundColor,
+                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 0.0),
+                child: fieldContent,
+              ),
+              const Divider(
+                height: 1,
+                thickness: 1,
+              ),
+            ],
+          );
+        },
+      );
+    }
+    
+    return fieldContent;
   }
 
   Widget _buildActualField(Map<String, dynamic> field,
@@ -1530,7 +1557,7 @@ class _DynamicFormState extends State<DynamicForm>
                             isEnableAttachmentsOnEmpty) {
                           shouldShowAttachments = true;
                           isRequired = true;
-                        } else {
+                              } else {
                           return const SizedBox.shrink();
                         }
                       } else {
@@ -1570,9 +1597,9 @@ class _DynamicFormState extends State<DynamicForm>
                         bookingAppModelFileUpload:
                             widget.bookingAppModelFileUpload,
                       ),
-                    ],
-                  );
-                },
+                  ],
+                );
+              },
               ),
             // Add support for comments
             if (field['hasComments'] == true) ...[
@@ -1661,7 +1688,8 @@ class _DynamicFormState extends State<DynamicForm>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (questionNumber != null)
+          // Hide question number if reactiveFormView is true
+          if (questionNumber != null && !widget.reactiveFormView)
             Text(
               'Question $questionNumber',
               style: TextStyle(
@@ -1671,28 +1699,28 @@ class _DynamicFormState extends State<DynamicForm>
                 fontFamily: widget.fontFamily?.fontFamily,
               ),
             ),
-          if (questionNumber != null) const SizedBox(height: 4.0),
+          if (questionNumber != null && !widget.reactiveFormView) const SizedBox(height: 4.0),
           Row(
-            children: [
+                children: [
               Expanded(
                 child: Text(
                   field['label'],
-                  style: TextStyle(
+              style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 16.0,
-                    fontFamily: widget.fontFamily?.fontFamily,
+                fontSize: 16.0,
+                fontFamily: widget.fontFamily?.fontFamily,
                   ),
-                ),
-              ),
-              if (field['required'] == true)
+            ),
+          ),
+          if (field['required'] == true)
                 Text(' *',
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16.0,
-                      fontFamily: widget.fontFamily?.fontFamily,
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16.0,
+                  fontFamily: widget.fontFamily?.fontFamily,
                     )),
-            ],
+                ],
           ),
         ],
       ),
@@ -2650,54 +2678,54 @@ class _DynamicFormState extends State<DynamicForm>
             // If the form control exists but might not have the right type,
             // wrap it in a try-catch to prevent runtime errors
             try {
-              return ReactiveTextField<num>(
-                formControlName: field['name'],
+                return ReactiveTextField<num>(
+                  formControlName: field['name'],
                 readOnly: widget.readOnly,
-                keyboardType: TextInputType.number,
-                valueAccessor: NumValueAccessor(),
-                validationMessages: {
+                  keyboardType: TextInputType.number,
+                  valueAccessor: NumValueAccessor(),
+                  validationMessages: {
                   'required': (error) =>
                       widget.accordionView ? "" : StringConstants.requiredField,
-                  'min': (error) =>
-                      '${StringConstants.valueMustBeAtLeast} ${field['min']}',
-                  'max': (error) =>
-                      '${StringConstants.valueMustBeLessThanOrEqualTo} ${field['max']} ${StringConstants.characters}',
-                },
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) {
-                  if (widget.showOneByOne) {
+                    'min': (error) =>
+                        '${StringConstants.valueMustBeAtLeast} ${field['min']}',
+                    'max': (error) =>
+                        '${StringConstants.valueMustBeLessThanOrEqualTo} ${field['max']} ${StringConstants.characters}',
+                  },
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (widget.showOneByOne) {
                     // Only proceed with auto-navigation if we're not on the submit page
-                    if (!isCurrentQuestionEffectivelyLast()) {
+                      if (!isCurrentQuestionEffectivelyLast()) {
                       // First validate the current form section
-                      if (validateCurrentSection()) {
-                        moveToNextQuestion(context);
+                        if (validateCurrentSection()) {
+                          moveToNextQuestion(context);
+                        }
                       }
                     }
-                  }
-                },
-                inputFormatters: [
-                  if (field['allowNegatives'] == false)
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
-                  if (field['allowNegatives'] != false)
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.-]')),
-                  if (field['allowedDecimals'] == 0)
-                    FilteringTextInputFormatter.digitsOnly,
-                ],
-                decoration: InputDecoration(
-                  hintText: StringConstants.enterANumber +
-                      (field['min'] != null || field['max'] != null
-                          ? ' ('
-                          : '') +
-                      (field['min'] != null ? 'min: ${field['min']}' : '') +
-                      (field['min'] != null && field['max'] != null
-                          ? ', '
-                          : '') +
-                      (field['max'] != null ? 'max: ${field['max']}' : '') +
+                  },
+                  inputFormatters: [
+                    if (field['allowNegatives'] == false)
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
+                    if (field['allowNegatives'] != false)
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.-]')),
+                    if (field['allowedDecimals'] == 0)
+                      FilteringTextInputFormatter.digitsOnly,
+                  ],
+                  decoration: InputDecoration(
+                    hintText: StringConstants.enterANumber +
+                        (field['min'] != null || field['max'] != null
+                            ? ' ('
+                            : '') +
+                        (field['min'] != null ? 'min: ${field['min']}' : '') +
+                        (field['min'] != null && field['max'] != null
+                            ? ', '
+                            : '') +
+                        (field['max'] != null ? 'max: ${field['max']}' : '') +
                       (field['min'] != null || field['max'] != null ? ')' : ''),
-                  labelStyle: widget.fontFamily,
-                  hintStyle: widget.fontFamily,
-                  errorStyle: widget.fontFamily
-                      .copyWith(fontSize: 12, color: Colors.red),
+                    labelStyle: widget.fontFamily,
+                    hintStyle: widget.fontFamily,
+                    errorStyle: widget.fontFamily
+                        .copyWith(fontSize: 12, color: Colors.red),
                 ),
               );
             } catch (e) {
@@ -2874,11 +2902,11 @@ class _DynamicFormState extends State<DynamicForm>
                           setState(() {
                             controller.uploadedFiles[field['name']] = files;
                             // Update the form control value when files are uploaded
-                            if (files.isNotEmpty) {
-                              control.value =
-                                  files.map((f) => f['fileName']).join(',');
-                            } else {
-                              control.value = null;
+                              if (files.isNotEmpty) {
+                                control.value =
+                                    files.map((f) => f['fileName']).join(',');
+                              } else {
+                                control.value = null;
                             }
                           });
                         },
@@ -2889,14 +2917,14 @@ class _DynamicFormState extends State<DynamicForm>
                             // For single file upload, set to empty list when file is removed
                             controller.uploadedFiles[field['name']] = [];
                             // Update the form control value when files are removed
-                            final remainingFiles =
-                                controller.uploadedFiles[field['name']] ?? [];
-                            if (remainingFiles.isEmpty) {
-                              control.value = null;
-                            } else {
-                              control.value = remainingFiles
-                                  .map((f) => f['fileName'])
-                                  .join(',');
+                              final remainingFiles =
+                                  controller.uploadedFiles[field['name']] ?? [];
+                              if (remainingFiles.isEmpty) {
+                                control.value = null;
+                              } else {
+                                control.value = remainingFiles
+                                    .map((f) => f['fileName'])
+                                    .join(',');
                             }
                           });
                         },
@@ -3176,19 +3204,19 @@ class _DynamicFormState extends State<DynamicForm>
               ? MainAxisAlignment.spaceBetween
               : MainAxisAlignment.end,
           children: [
-        if (isManageToCheckPress) ...[
-          SizedBox(
-            height: 42.0,
+            if (isManageToCheckPress) ...[
+                SizedBox(
+                  height: 42.0,
             width: MediaQuery.of(context).size.width / 2.0,
-            child: ElevatedButton(
-              onPressed: () => _submitForm(context,
-                  isManageToCheckPress: isManageToCheckPress),
-              style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                backgroundColor: buttonColor,
-                foregroundColor: widget.buttonTextColor,
-              ),
+                  child: ElevatedButton(
+                    onPressed: () => _submitForm(context,
+                        isManageToCheckPress: isManageToCheckPress),
+                    style: ElevatedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      backgroundColor: buttonColor,
+                      foregroundColor: widget.buttonTextColor,
+                    ),
               child: Text(StringConstants.managerToCheck,
                   style: widget.fontFamily
                       .copyWith(color: widget.buttonTextColor)),
@@ -3196,17 +3224,17 @@ class _DynamicFormState extends State<DynamicForm>
           ),
           const SizedBox(width: 40),
         ],
-        SizedBox(
-          height: 42.0,
-          width: MediaQuery.of(context).size.width / 3.5,
-          child: ElevatedButton(
-            onPressed: () => _submitForm(context),
-            style: ElevatedButton.styleFrom(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-              backgroundColor: buttonColor,
-              foregroundColor: widget.buttonTextColor,
-            ),
+              SizedBox(
+                height: 42.0,
+                width: MediaQuery.of(context).size.width / 3.5,
+              child: ElevatedButton(
+                onPressed: () => _submitForm(context),
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  backgroundColor: buttonColor,
+                  foregroundColor: widget.buttonTextColor,
+                ),
             child: Text(widget.submitButtonText ?? 'Submit',
                 style:
                     widget.fontFamily.copyWith(color: widget.buttonTextColor)),
@@ -3220,9 +3248,9 @@ class _DynamicFormState extends State<DynamicForm>
       {bool isManageToCheckPress = false, bool isDraft = false}) {
     // In accordionview mode, validate the entire form before proceed
     if (widget.accordionView && !isDraft) {
-      setState(() {
-        _shortTextSubmitAttempted = true;
-      });
+        setState(() {
+          _shortTextSubmitAttempted = true;
+        });
       if (!controller.validateAllQuestionsAndAttachments(_groupAnchors,
           _anchorToFieldIndices, _internalFields)) {
         final anchor = _findFirstInvalidAnchor();
@@ -3261,9 +3289,9 @@ class _DynamicFormState extends State<DynamicForm>
           (control.value == null ||
               control.value.toString().isEmpty ||
               control.value == 'null')) {
-        control.markAsTouched();
+            control.markAsTouched();
         AppSnackBar(StringConstants.fillRequiredFields as BuildContext);
-        return;
+            return;
       }
 
       // Check for required file uploads
@@ -3295,8 +3323,8 @@ class _DynamicFormState extends State<DynamicForm>
 
       // Remove empty or null values
       if (value == null || value.toString().isEmpty || value == 'null') {
-        cleanedFormData.remove(fieldName);
-        controller.uploadedFiles.remove(fieldName);
+          cleanedFormData.remove(fieldName);
+          controller.uploadedFiles.remove(fieldName);
 
         // Also remove associated comment if it exists
         if (field['hasComments'] == true) {
@@ -5535,9 +5563,9 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
 
-        final filePath = file.path!;
+          final filePath = file.path!;
         final ext = filePath.split('.').last.toLowerCase();
-        final selectedFile = File(filePath);
+          final selectedFile = File(filePath);
 
         Uint8List fileBytes = await selectedFile.readAsBytes();
 
