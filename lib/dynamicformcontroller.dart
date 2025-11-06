@@ -1725,7 +1725,7 @@ class DynamicFormController extends ChangeNotifier {
 
     // Check if this is a grouped field by looking for the transformed name
     String actualFieldName = fieldName;
-    
+
     // Look for grouped field names in the form controls
     for (String controlName in form.controls.keys) {
       if (controlName.startsWith(fieldName) && controlName.contains('_question_')) {
@@ -1737,6 +1737,25 @@ class DynamicFormController extends ChangeNotifier {
     // Determine requirement using same rules as _checkIfRequiredFilesUploaded
     dynamic currentValue =
         form.contains(actualFieldName) ? form.control(actualFieldName).value : null;
+
+    // Check if this is a composite "text, file" field
+    final String typeStr = (field['type'] ?? '').toString();
+    final bool isCompositeTextFile = typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
+
+    // For composite "text, file" fields with required=true, apply either-or logic
+    if (isCompositeTextFile && field['required'] == true) {
+      final textIsEmpty = currentValue == null ||
+                         (currentValue is String && currentValue.trim().isEmpty) ||
+                         (currentValue is List && currentValue.isEmpty);
+      final hasFiles = uploadedFiles[actualFieldName]?.isNotEmpty ?? false;
+
+      // If EITHER text is filled OR file is uploaded, validation passes
+      if (!textIsEmpty || hasFiles) {
+        return true;
+      }
+      // If BOTH are empty, validation fails
+      return false;
+    }
 
     bool requiresAttachments = false;
 
