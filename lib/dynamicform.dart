@@ -75,7 +75,7 @@ class DynamicForm extends StatefulWidget {
     this.draftMode = false,
     this.themeData,
     this.readOnly = false,
-    this.reactiveFormView = true,
+    this.reactiveFormView = false,
     RxBool? draftbtnClicked,
     super.key,
   }) : draftbtnClicked = draftbtnClicked ?? false.obs;
