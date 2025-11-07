@@ -1000,7 +1000,14 @@ class _DynamicFormState extends State<DynamicForm>
                 ? Theme.of(context).scaffoldBackgroundColor
                 : null,
             shape: widget.reactiveFormView
-                ? null
+                ? (showErrorDot
+                    ? RoundedRectangleBorder(
+                        side: BorderSide(
+                          color: Get.theme.colorScheme.onError,
+                          width: 1,
+                        ),
+                      )
+                    : null)
                 : RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                     side: BorderSide(
