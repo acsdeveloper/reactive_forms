@@ -996,6 +996,9 @@ class _DynamicFormState extends State<DynamicForm>
             key: _fieldKeys[anchor],
             clipBehavior: Clip.hardEdge,
             margin: const EdgeInsets.only(bottom: 8),
+            color: widget.reactiveFormView
+                ? Theme.of(context).scaffoldBackgroundColor
+                : null,
             shape: widget.reactiveFormView
                 ? null
                 : RoundedRectangleBorder(
@@ -1246,6 +1249,9 @@ class _DynamicFormState extends State<DynamicForm>
       margin: widget.accordionView
           ? EdgeInsets.zero
           : const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      color: widget.reactiveFormView
+          ? Theme.of(context).scaffoldBackgroundColor
+          : null,
       child: Padding(
         padding: EdgeInsets.all(widget.accordionView ? 0 : 12.0),
         child: Column(
@@ -4772,6 +4778,9 @@ class _DynamicFormState extends State<DynamicForm>
           Card(
             elevation: widget.reactiveFormView ? 0 : 1.0,
             margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            color: widget.reactiveFormView
+                ? Theme.of(context).scaffoldBackgroundColor
+                : null,
             child: Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(
@@ -6137,6 +6146,9 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
           Card(
             margin: EdgeInsets.zero,
             elevation: widget.reactiveFormView ? 0 : 1,
+            color: widget.reactiveFormView
+                ? Theme.of(context).scaffoldBackgroundColor
+                : null,
             child: ListTile(
               leading: Icon(_getFileIcon(widget.uploadedFiles[0]['fileType'])),
               title: Text(
