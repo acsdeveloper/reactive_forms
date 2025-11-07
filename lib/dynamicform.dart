@@ -3269,20 +3269,25 @@ class _DynamicFormState extends State<DynamicForm>
   void _submitForm(BuildContext context,
       {bool isManageToCheckPress = false, bool isDraft = false}) {
     // In accordionview mode, validate the entire form before proceed
-    if (widget.accordionView && !isDraft) {
-        setState(() {
-          _shortTextSubmitAttempted = true;
-        });
-      if (!controller.validateAllQuestionsAndAttachments(_groupAnchors,
-          _anchorToFieldIndices, _internalFields)) {
+    // Previously we validated all questions only when accordionView was enabled.
+    // Keeping the original logic for reference:
+    // if (widget.accordionView && !isDraft) {
+    //   ...
+    // }
+    if (!isDraft && !widget.showOneByOne) {
+      setState(() {
+        _shortTextSubmitAttempted = true;
+      });
+      if (!controller.validateAllQuestionsAndAttachments(
+          _groupAnchors, _anchorToFieldIndices, _internalFields)) {
         final anchor = _findFirstInvalidAnchor();
         if (anchor != null) {
           final key = _fieldKeys[anchor];
           if (key != null) {
-            final context = key.currentContext;
-            if (context != null && context.mounted) {
+            final anchorContext = key.currentContext;
+            if (anchorContext != null && anchorContext.mounted) {
               Scrollable.ensureVisible(
-                context,
+                anchorContext,
                 duration: const Duration(milliseconds: 500),
                 curve: Curves.easeInOut,
                 alignment: 0.0,
@@ -3290,9 +3295,11 @@ class _DynamicFormState extends State<DynamicForm>
             }
           }
 
-          setState(() {
-            _expandedAnchor = anchor;
-          });
+          if (widget.accordionView) {
+            setState(() {
+              _expandedAnchor = anchor;
+            });
+          }
         }
         AppSnackBar(Get.context!)
             .showErrorSnackBar(StringConstants.fillMandatoryFields);
