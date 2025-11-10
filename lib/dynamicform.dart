@@ -3432,6 +3432,10 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   Widget _buildSubmitButton(Color buttonColor, bool isManageToCheckPress) {
+    if (widget.readOnly) {
+      // Submit button hidden in read-only mode to prevent triggering submission
+      return const SizedBox.shrink();
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
       child: Row(
