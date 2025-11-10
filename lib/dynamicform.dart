@@ -3408,80 +3408,87 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   Widget _buildSubmitButton(Color buttonColor, bool isManageToCheckPress) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    double buttonWidth;
+    if (screenWidth < 600) {
+      buttonWidth = screenWidth / 2.5;
+    } else if (isManageToCheckPress || (widget.draftMode && widget.isDraftVisible)) {
+      buttonWidth = screenWidth / 4;
+    } else {
+      buttonWidth = screenWidth / 3;
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
-      child: Row(
-          mainAxisAlignment: isManageToCheckPress
-              ? MainAxisAlignment.spaceBetween // Manager-to-check mode
-              : (widget.draftMode && widget.isDraftVisible
-                  ? MainAxisAlignment.spaceEvenly // Draft mode visible
-                  : MainAxisAlignment.end), // Only Submit visible
+        child: Row(
+          mainAxisAlignment: (isManageToCheckPress || (widget.draftMode && widget.isDraftVisible))
+              ? MainAxisAlignment.spaceEvenly
+              : MainAxisAlignment.end,
           children: [
             if (isManageToCheckPress) ...[
-                SizedBox(
-                  height: 42.0,
-                  width: MediaQuery.of(context).size.width / 3.5,
-                  child: ElevatedButton(
-                    onPressed: () => _submitForm(context,
-                        isManageToCheckPress: isManageToCheckPress),
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      backgroundColor: buttonColor,
-                      foregroundColor: widget.buttonTextColor,
-                    ),
+              SizedBox(
+                height: 42.0,
+                width: buttonWidth,
+                child: ElevatedButton(
+                  onPressed: () => _submitForm(context, isManageToCheckPress: isManageToCheckPress),
+                  style: ElevatedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    backgroundColor: buttonColor,
+                    foregroundColor: widget.buttonTextColor,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
                     child: Text(
                       StringConstants.managerToCheck,
-                      style:
-                          widget.fontFamily.copyWith(color: widget.buttonTextColor),
+                      style: widget.fontFamily.copyWith(color: widget.buttonTextColor),
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-            ],
+            ),
+          ],
 
-            // Draft button (if draft mode is enabled and visible)
-            if (widget.draftMode && widget.isDraftVisible) ...[
-              SizedBox(
-                height: 42.0,
-                width: MediaQuery.of(context).size.width / 3.5,
-                child: ElevatedButton(
-                  onPressed: () {
-                    widget.draftbtnClicked.value = true;
-                  },
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                  ),
+          // Draft button (if visible)
+          if (widget.draftMode && widget.isDraftVisible) ...[
+            SizedBox(
+              height: 42.0,
+              width: buttonWidth,
+              child: ElevatedButton(
+                onPressed: () {
+                  widget.draftbtnClicked.value = true;
+                },
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
                   child: Text(
                     'Save As Draft',
                     style: widget.fontFamily.copyWith(color: Colors.white),
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-            ],
+            ),
+          ],
 
-            // Submit button (always visible)
-            SizedBox(
-              height: 42.0,
-              width: MediaQuery.of(context).size.width /
-                  (isManageToCheckPress || (widget.draftMode && widget.isDraftVisible)
-                      ? 3.5
-                      : 2.5),
-              child: ElevatedButton(
-                onPressed: () => _submitForm(context),
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  backgroundColor: buttonColor,
-                  foregroundColor: widget.buttonTextColor,
-                ),
+          // Submit button (always visible)
+          SizedBox(
+            height: 42.0,
+            width: buttonWidth,
+            child: ElevatedButton(
+              onPressed: () => _submitForm(context),
+              style: ElevatedButton.styleFrom(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
+                backgroundColor: buttonColor,
+                foregroundColor: widget.buttonTextColor,
+              ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
                 child: Text(
                   widget.submitButtonText ?? 'Submit',
                   style: widget.fontFamily.copyWith(color: widget.buttonTextColor),
+                ),
               ),
             ),
           ),
