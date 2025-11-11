@@ -1112,8 +1112,10 @@ class _DynamicFormState extends State<DynamicForm>
               _shortTextSubmitAttempted &&
               _hasRequiredEmptyFields(anchor);
           final bool isDraft = isAnchorDraft(anchor) && widget.draftMode;
+          final cardKey =
+              _fieldKeys.putIfAbsent(anchor, () => GlobalKey());
           return Card(
-            key: _fieldKeys[anchor],
+            key: cardKey,
             clipBehavior: Clip.hardEdge,
             margin: const EdgeInsets.only(bottom: 8),
             shape: RoundedRectangleBorder(
