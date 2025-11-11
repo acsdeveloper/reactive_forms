@@ -6753,8 +6753,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
         // More clear spacing before button
         if (shouldShowUploadUI) const SizedBox(height: 12),
 
-        // Upload button - Show it when upload UI should be shown
-        if (shouldShowUploadUI)
+        // Upload button - Show it when upload UI should be shown and not read-only
+        if (shouldShowUploadUI && !widget.readOnly)
           widget.bookingAppModelFileUpload
               ? Column(
                   children: [
