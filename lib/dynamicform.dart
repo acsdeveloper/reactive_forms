@@ -24,6 +24,7 @@ import 'package:http/http.dart' as http;
 import 'dart:math' as math;
 import 'package:path/path.dart' as path;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:intl/intl.dart';
 
 // Conditional import for web
 import 'web_utils.dart' if (dart.library.html) 'dart:html' as html;
@@ -1539,6 +1540,8 @@ class _DynamicFormState extends State<DynamicForm>
         return _buildTempField(field);
       case FieldType.file:
         return _buildFileField(field);
+      case 'date':
+        return _buildDateField(field);
       case 'multiselect':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -3241,6 +3244,160 @@ class _DynamicFormState extends State<DynamicForm>
         ],
       ],
     );
+  }
+
+  Widget _buildDateField(Map<String, dynamic> field) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabelRow(field),
+        ReactiveValueListenableBuilder<dynamic>(
+          formControlName: field['name'],
+          builder: (context, formControl, child) {
+            final hasError = formControl.touched && formControl.hasErrors;
+            final dateValue = formControl.value;
+
+            // Format the date value for display
+            String displayText = '';
+            if (dateValue != null) {
+              if (dateValue is DateTime) {
+                displayText = DateFormat('dd/MM/yyyy').format(dateValue);
+              } else if (dateValue is String && dateValue.isNotEmpty) {
+                try {
+                  final parsedDate = DateTime.parse(dateValue);
+                  displayText = DateFormat('dd/MM/yyyy').format(parsedDate);
+                } catch (e) {
+                  displayText = dateValue;
+                }
+              }
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  onTap: widget.readOnly ? null : () => _showSingleDatePicker(context, field),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: hasError ? Colors.red : Colors.grey.shade300,
+                        width: hasError ? 2 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          displayText.isEmpty ? 'DD/MM/YYYY' : displayText,
+                          style: widget.fontFamily.copyWith(
+                            color: displayText.isEmpty
+                                ? Colors.grey.shade600
+                                : Colors.black87,
+                          ),
+                        ),
+                        Icon(
+                          Icons.calendar_today,
+                          size: 20,
+                          color: widget.readOnly ? Colors.grey : Colors.black87,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (hasError)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      StringConstants.requiredField,
+                      style: TextStyle(color: Colors.red[700], fontSize: 12),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showSingleDatePicker(BuildContext context, Map<String, dynamic> field) async {
+    final control = controller.form.control(field['name']);
+    final now = DateTime.now();
+
+    // Get initial date from control value or use current date
+    DateTime initialDate = now;
+    if (control.value != null) {
+      if (control.value is DateTime) {
+        initialDate = control.value as DateTime;
+      } else if (control.value is String && (control.value as String).isNotEmpty) {
+        try {
+          initialDate = DateTime.parse(control.value as String);
+        } catch (e) {
+          if (kDebugMode) {
+            print('Error parsing date from control value: $e');
+          }
+        }
+      }
+    }
+
+    try {
+      final DateTime? pickedDate = await showDatePicker(
+        context: context,
+        initialDate: initialDate,
+        firstDate: DateTime(1900),
+        lastDate: DateTime(2100),
+        builder: (context, child) {
+          if (child == null) return Container();
+
+          return Theme(
+            data: ThemeData.light().copyWith(
+              colorScheme: ColorScheme.light(
+                primary: widget.primaryColor,
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: Colors.black87,
+              ),
+              datePickerTheme: DatePickerThemeData(
+                backgroundColor: Colors.white,
+                headerBackgroundColor: widget.primaryColor,
+                headerForegroundColor: Colors.white,
+                dayForegroundColor: MaterialStateProperty.resolveWith((states) {
+                  if (states.contains(MaterialState.selected)) {
+                    return Colors.white;
+                  }
+                  if (states.contains(MaterialState.disabled)) {
+                    return Colors.grey.shade400;
+                  }
+                  return Colors.black87;
+                }),
+                dayBackgroundColor: MaterialStateProperty.resolveWith((states) {
+                  if (states.contains(MaterialState.selected)) {
+                    return widget.primaryColor;
+                  }
+                  return Colors.transparent;
+                }),
+              ),
+              dialogBackgroundColor: Colors.white,
+            ),
+            child: child,
+          );
+        },
+      );
+
+      if (pickedDate != null) {
+        control.value = DateFormat('yyyy-MM-dd').format(pickedDate);
+        control.markAsTouched();
+        if (kDebugMode) {
+          print('Date selected: ${DateFormat('dd/MM/yyyy').format(pickedDate)}');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error showing date picker: $e');
+      }
+    }
   }
 
   void nextButtonPressed(BuildContext context) {
