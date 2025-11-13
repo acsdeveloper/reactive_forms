@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
 import 'package:flutter/cupertino.dart';
@@ -155,7 +157,15 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
             // Integer part picker (-25 to 110)
             Expanded(
               flex: 5,
-              child: CupertinoPicker(
+              child: ScrollConfiguration(
+  behavior: ScrollConfiguration.of(context).copyWith(
+    dragDevices: {
+      PointerDeviceKind.touch,
+      PointerDeviceKind.mouse,
+      PointerDeviceKind.trackpad,
+    },
+  ),
+  child: CupertinoPicker(
                 scrollController: _intController,
                 itemExtent: 40,
                 magnification: 1.25,
@@ -179,7 +189,7 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
                           ),
                         ))
                     .toList(),
-              ),
+              ),),
             ),
             // Decimal separator
             Center(
@@ -191,7 +201,15 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
             // Decimal digit picker (0..9)
             Expanded(
               flex: 3,
-              child: CupertinoPicker(
+              child: ScrollConfiguration(
+  behavior: ScrollConfiguration.of(context).copyWith(
+    dragDevices: {
+      PointerDeviceKind.touch,
+      PointerDeviceKind.mouse,
+      PointerDeviceKind.trackpad,
+    },
+  ),
+  child:CupertinoPicker(
                 scrollController: _decController,
                 itemExtent: 40,
                 magnification: 1.25,
@@ -213,7 +231,7 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
                         style: textStyle?.copyWith(fontWeight: FontWeight.w600),
                       ),
                     )),
-              ),
+              ),)
             ),
             // Space and unit
             const SizedBox(width: 8),
