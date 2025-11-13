@@ -7,6 +7,7 @@ class FieldType {
   static const String input = 'input';
   static const String multiselect = 'multiselect';
   static const String temp = 'temp';
+  static const String date = 'date';
 }
 
 class ValidatorsType {
