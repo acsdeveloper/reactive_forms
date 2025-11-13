@@ -1492,6 +1492,9 @@ class _DynamicFormState extends State<DynamicForm>
           case 'dropdown':
             child = _buildDropdownField(field);
             break;
+          case 'date':
+            child = _buildDateField(field);
+            break;
           case 'multiselect':
             child = Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1544,7 +1547,7 @@ class _DynamicFormState extends State<DynamicForm>
         return _buildTempField(field);
       case FieldType.file:
         return _buildFileField(field);
-      case 'date':
+      case FieldType.date:
         return _buildDateField(field);
       case 'multiselect':
         return Column(
@@ -1739,6 +1742,8 @@ class _DynamicFormState extends State<DynamicForm>
       case FieldType.temp:
         return _buildTempField(field);
       case FieldType.file:
+        return _buildFileField(field);
+      case FieldType.date:
         return _buildFileField(field);
       case 'multiselect':
         return ReactiveFormField<List<String>, List<String>>(
