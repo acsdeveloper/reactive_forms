@@ -3309,11 +3309,11 @@ class _DynamicFormState extends State<DynamicForm>
               children: [
                 InkWell(
                   onTap: widget.readOnly ? null : () async => await _showSingleDatePickerCupertino(
-  context,
-  field,
-  primaryColor: Colors.blue,
-  controller: controller,
-),
+                    context,
+                    field,
+                    primaryColor: Colors.blue,
+                    controller: controller,
+                  ),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                     decoration: BoxDecoration(
@@ -3454,24 +3454,23 @@ class _DynamicFormState extends State<DynamicForm>
                         ),
                       ),
                       child: ScrollConfiguration(
-  behavior: ScrollConfiguration.of(context).copyWith(
-    dragDevices: {
-      PointerDeviceKind.touch,
-      PointerDeviceKind.mouse,
-      PointerDeviceKind.trackpad,
-    },
-  ),
-  child: CupertinoDatePicker(
-    mode: CupertinoDatePickerMode.date,
-    initialDateTime: initialDate,
-    minimumYear: 1900,
-    maximumYear: 2100,
-    onDateTimeChanged: (DateTime newDate) {
-      selectedDate = newDate;
-    },
-  ),
-),
-
+                        behavior: ScrollConfiguration.of(context).copyWith(
+                          dragDevices: {
+                            PointerDeviceKind.touch,
+                            PointerDeviceKind.mouse,
+                            PointerDeviceKind.trackpad,
+                          },
+                        ),
+                        child: CupertinoDatePicker(
+                          mode: CupertinoDatePickerMode.date,
+                          initialDateTime: initialDate,
+                          minimumYear: 1900,
+                          maximumYear: 2100,
+                          onDateTimeChanged: (DateTime newDate) {
+                            selectedDate = newDate;
+                          },
+                        ),
+                      ),
                     ),
                   ),
                 ],
