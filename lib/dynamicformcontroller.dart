@@ -10,7 +10,7 @@ import 'package:reactiveform/models/form_field_model.dart';
 class DynamicFormController extends ChangeNotifier {
   final List<Map<String, dynamic>> formJson;
   final void Function(
-          Map<String, dynamic>, Map<String, List<Map<String, dynamic>>>, bool)
+          Map<String, dynamic>, Map<String, List<Map<String, dynamic>>>, bool?, bool?)
       onSubmit;
   final Map<String, dynamic>? initialValues;
 
@@ -342,7 +342,7 @@ class DynamicFormController extends ChangeNotifier {
     if (isValid) {
       final formValue = Map<String, dynamic>.from(form.value);
       final nestedFormValue = createNestedStructure(formValue);
-      onSubmit(nestedFormValue, uploadedFiles, isManageToCheckPress);
+      onSubmit(nestedFormValue, uploadedFiles, false, isManageToCheckPress);
     } else {
       form.markAllAsTouched();
       _handleFormErrors(context);

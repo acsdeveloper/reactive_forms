@@ -49,7 +49,7 @@ class KitchenInspectionScreen extends StatelessWidget {
           primaryColor: Colors.black,
           formJson: formJson,
           bookingAppModelFileUpload: true,
-          onSubmit: (formData, attachments, bool? isManageToCheckPress) {
+          onSubmit: (formData, attachments, bool? isDraft, bool? isManageToCheckPress) {
             if (kDebugMode) {
               print("Submit button clicked: $formData");
             }
