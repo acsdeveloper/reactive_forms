@@ -8,6 +8,7 @@ class MultiSelectFormField extends StatelessWidget {
   final List<String> value;
   final bool hasError;
   final String? errorText;
+  final bool readOnly;
 
   const MultiSelectFormField({
     Key? key,
@@ -16,6 +17,7 @@ class MultiSelectFormField extends StatelessWidget {
     required this.value,
     this.hasError = false,
     this.errorText,
+    this.readOnly = false,
   }) : super(key: key);
 
   void _showMultiSelectBottomSheet(BuildContext context) {
@@ -53,7 +55,7 @@ class MultiSelectFormField extends StatelessWidget {
         // ),
         const SizedBox(height: 8),
         InkWell(
-          onTap: () => _showMultiSelectBottomSheet(context),
+          onTap: readOnly ? null : () => _showMultiSelectBottomSheet(context),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(

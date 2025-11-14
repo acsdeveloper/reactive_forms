@@ -60,6 +60,7 @@ class DynamicForm extends StatefulWidget {
   final Map<String, dynamic>? initialValues;
   final bool accordionView;
   final ThemeData? themeData;
+  final bool readOnly;
 
   DynamicForm({
     required this.formJson,
@@ -83,6 +84,7 @@ class DynamicForm extends StatefulWidget {
     this.draftMode = true,
     this.isDraftVisible = true,
     this.themeData,
+    this.readOnly = false,
     RxBool? draftbtnClicked,
     super.key,
   }) : draftbtnClicked = draftbtnClicked ?? false.obs;
@@ -1110,8 +1112,10 @@ class _DynamicFormState extends State<DynamicForm>
               _shortTextSubmitAttempted &&
               _hasRequiredEmptyFields(anchor);
           final bool isDraft = isAnchorDraft(anchor) && widget.draftMode;
+          final cardKey =
+              _fieldKeys.putIfAbsent(anchor, () => GlobalKey());
           return Card(
-            key: _fieldKeys[anchor],
+            key: cardKey,
             clipBehavior: Clip.hardEdge,
             margin: const EdgeInsets.only(bottom: 8),
             shape: RoundedRectangleBorder(
@@ -1754,6 +1758,7 @@ class _DynamicFormState extends State<DynamicForm>
 
             return MultiSelectFormField(
               field: FormFieldModel.fromJson(field),
+              readOnly: widget.readOnly,
               onChanged: (List<String> value) {
                 // Force direct update to the FormGroup's value
                 controller.form.patchValue({field['name']: value});
@@ -1837,7 +1842,7 @@ class _DynamicFormState extends State<DynamicForm>
                   dense: true,
                           groupValue: control.value,
                           activeColor: hasError ? Colors.red : widget.primaryColor,
-                  onChanged: (value) {
+                  onChanged: widget.readOnly ? null : (value) {
                     // Update the form using patchValue instead of directly setting the value
                     // This will ensure that all reactive widgets listening to this field are notified
                     if (value != null) {
@@ -2020,6 +2025,7 @@ class _DynamicFormState extends State<DynamicForm>
                     primaryColor: widget.primaryColor,
                     fontFamily: widget.fontFamily,
                     buttonTextColor: widget.buttonTextColor,
+                    readOnly: widget.readOnly,
                     onFilesUploaded: (files) {
                       setState(() {
                         controller.uploadedFiles[field['name']] = files;
@@ -2077,6 +2083,7 @@ class _DynamicFormState extends State<DynamicForm>
                   ),
                   ReactiveTextField(
                     formControlName: '${field['name']}_comment',
+                    readOnly: widget.readOnly,
                     decoration: InputDecoration(
                         hintText: field['commentHint'] ?? '',
                         labelStyle: widget.fontFamily,
@@ -2126,7 +2133,7 @@ class _DynamicFormState extends State<DynamicForm>
             ? const SizedBox.shrink()
             : const SizedBox(height: 4),
         InkWell(
-          onTap: () {
+          onTap: widget.readOnly ? null : () {
             showModalBottomSheet(
               context: context,
               isScrollControlled: true,
@@ -2314,6 +2321,7 @@ class _DynamicFormState extends State<DynamicForm>
                     primaryColor: widget.primaryColor,
                     fontFamily: widget.fontFamily,
                     buttonTextColor: widget.buttonTextColor,
+                    readOnly: widget.readOnly,
                     onFilesUploaded: (files) {
                       setState(() {
                         controller.uploadedFiles[field['name']] = files;
@@ -2357,6 +2365,7 @@ class _DynamicFormState extends State<DynamicForm>
           ),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
+            readOnly: widget.readOnly,
             decoration: InputDecoration(
                 // No labelText to avoid displaying "comments" in the field
                 hintText: field['commentHint'] ?? '',
@@ -2440,6 +2449,7 @@ class _DynamicFormState extends State<DynamicForm>
                       _buildLabelRow(field),
                       ReactiveTextField(
                         formControlName: field['name'],
+                        readOnly: widget.readOnly,
                         validationMessages: {
                           'required': (error) {
                             final fieldName = field['name'];
@@ -2522,6 +2532,7 @@ class _DynamicFormState extends State<DynamicForm>
           ),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
+            readOnly: widget.readOnly,
             decoration: InputDecoration(
                 // No labelText to avoid displaying "comments" in the field
                 hintText: field['commentHint'] ?? '',
@@ -2648,6 +2659,7 @@ class _DynamicFormState extends State<DynamicForm>
                 primaryColor: widget.primaryColor,
                 fontFamily: widget.fontFamily,
                 buttonTextColor: widget.buttonTextColor,
+                readOnly: widget.readOnly,
                 onFilesUploaded: (files) {
                   setState(() {
                     controller.uploadedFiles[field['name']] = files;
@@ -2697,6 +2709,7 @@ class _DynamicFormState extends State<DynamicForm>
               if (controlIsNum) {
                 return ReactiveTextField<num>(
                   formControlName: field['name'],
+                  readOnly: widget.readOnly,
                   keyboardType: TextInputType.number,
                   valueAccessor: NumValueAccessor(),
                   validationMessages: {
@@ -2750,6 +2763,7 @@ class _DynamicFormState extends State<DynamicForm>
               // Fallback to plain TextField bound to String control to avoid type errors
               return TextFormField(
                 initialValue: ctrl.value?.toString() ?? '',
+                readOnly: widget.readOnly,
                 keyboardType: TextInputType.number,
                 onChanged: (val) => ctrl.value = val,
                 inputFormatters: [
@@ -2865,6 +2879,7 @@ class _DynamicFormState extends State<DynamicForm>
           ),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
+            readOnly: widget.readOnly,
             decoration: InputDecoration(
                 // No labelText to avoid displaying "comments" in the field
                 hintText: field['commentHint'] ?? '',
@@ -2949,6 +2964,7 @@ class _DynamicFormState extends State<DynamicForm>
           TextEditingController(text: ctrl.value?.toString() ?? '0.0');
       return TextFormField(
         controller: textController,
+        readOnly: widget.readOnly,
         keyboardType:
             const TextInputType.numberWithOptions(signed: true, decimal: true),
         inputFormatters: [
@@ -2999,8 +3015,9 @@ class _DynamicFormState extends State<DynamicForm>
 
             return LayoutBuilder(builder: (context, constraints) {
               final isDesktop = constraints.maxWidth > 600;
+              Widget tempWidget;
               if (isDoubleType) {
-                return _buildTempScroller(
+                tempWidget = _buildTempScroller(
                   formControlName: name,
                   min: min,
                   max: max,
@@ -3009,10 +3026,16 @@ class _DynamicFormState extends State<DynamicForm>
                   isDesktop: isDesktop,
                   maxWidth: constraints.maxWidth,
                 );
+              } else {
+                // Fallback: string-backed control — show numeric text field and update control
+                tempWidget = _buildStringFallback(ctrl as FormControl<dynamic>);
               }
-
-              // Fallback: string-backed control — show numeric text field and update control
-              return _buildStringFallback(ctrl as FormControl<dynamic>);
+              
+              // Wrap in IgnorePointer when readOnly to disable interaction
+              if (widget.readOnly) {
+                return IgnorePointer(child: tempWidget);
+              }
+              return tempWidget;
             });
           } catch (e, st) {
             if (kDebugMode) {
@@ -3034,6 +3057,7 @@ class _DynamicFormState extends State<DynamicForm>
           const SizedBox(height: 16),
           ReactiveTextField(
             formControlName: '${name}_comment',
+            readOnly: widget.readOnly,
             decoration: InputDecoration(
               hintText: field['commentHint'] ?? '',
               labelStyle: widget.fontFamily,
@@ -3096,6 +3120,7 @@ class _DynamicFormState extends State<DynamicForm>
                         primaryColor: widget.primaryColor,
                         fontFamily: widget.fontFamily,
                         buttonTextColor: widget.buttonTextColor,
+                        readOnly: widget.readOnly,
                         onFilesUploaded: (files) {
                           setState(() {
                             controller.uploadedFiles[field['name']] = files;
@@ -3207,6 +3232,7 @@ class _DynamicFormState extends State<DynamicForm>
           ),
           ReactiveTextField(
             formControlName: '${field['name']}_comment',
+            readOnly: widget.readOnly,
             decoration: InputDecoration(
                 // No labelText to avoid displaying "comments" in the field
                 hintText: field['commentHint'] ?? '',
@@ -3408,6 +3434,10 @@ class _DynamicFormState extends State<DynamicForm>
   }
 
   Widget _buildSubmitButton(Color buttonColor, bool isManageToCheckPress) {
+    if (widget.readOnly) {
+      // Submit button hidden in read-only mode to prevent triggering submission
+      return const SizedBox.shrink();
+    }
     final screenWidth = MediaQuery.of(context).size.width;
     double buttonWidth;
     if (screenWidth < 600) {
@@ -6005,6 +6035,7 @@ class FileUploadWidget extends StatefulWidget {
   final bool hasAttachments; // Add new property
   final bool bookingAppModelFileUpload;
   final Map<String, dynamic>? initialValues;
+  final bool readOnly;
 
   const FileUploadWidget({
     Key? key,
@@ -6021,6 +6052,7 @@ class FileUploadWidget extends StatefulWidget {
     this.hasAttachments = false, // Default to false
     this.bookingAppModelFileUpload = false,
     this.initialValues,
+    this.readOnly = false,
   }) : super(key: key);
 
   @override
@@ -6730,8 +6762,8 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
         // More clear spacing before button
         if (shouldShowUploadUI) const SizedBox(height: 12),
 
-        // Upload button - Show it when upload UI should be shown
-        if (shouldShowUploadUI)
+        // Upload button - Show it when upload UI should be shown and not read-only
+        if (shouldShowUploadUI && !widget.readOnly)
           widget.bookingAppModelFileUpload
               ? Column(
                   children: [
@@ -6879,7 +6911,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    onPressed: () => _pickAndUploadFile(context),
+                    onPressed: widget.readOnly ? null : () => _pickAndUploadFile(context),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -6918,7 +6950,7 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
-              trailing: IconButton(
+              trailing: widget.readOnly ? null : IconButton(
                 icon: const Icon(Icons.delete),
                 onPressed: () =>
                     widget.onRemoveUploadedFile(widget.uploadedFiles[0]),
