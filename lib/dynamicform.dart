@@ -1745,7 +1745,7 @@ class _DynamicFormState extends State<DynamicForm>
       case FieldType.file:
         return _buildFileField(field);
       case FieldType.date:
-        return _buildFileField(field);
+        return _buildDateField(field);
       case 'multiselect':
         return ReactiveFormField<List<String>, List<String>>(
           formControlName: field['name'],
