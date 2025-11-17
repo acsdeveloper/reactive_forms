@@ -36,7 +36,7 @@ import 'widgets/temperature_scroll_widget.dart';
 class DynamicForm extends StatefulWidget {
   final List<Map<String, dynamic>> formJson;
   final Function(
-          Map<String, dynamic>, Map<String, List<Map<String, dynamic>>>, bool?)
+          Map<String, dynamic>, Map<String, List<Map<String, dynamic>>>, bool?, bool?)
       onSubmit;
   final Color primaryColor;
   final Color buttonTextColor;
@@ -3878,7 +3878,7 @@ class _DynamicFormState extends State<DynamicForm>
       final nestedFormData = controller.createNestedStructure(formValue);
 
       try {
-        widget.onSubmit(nestedFormData, controller.uploadedFiles, isDraft);
+        widget.onSubmit(nestedFormData, controller.uploadedFiles, isDraft, isManageToCheckPress);
       } catch (e) {
         if (kDebugMode) {
           print('[DynamicForm] Error calling widget.onSubmit: $e');
@@ -3979,7 +3979,7 @@ class _DynamicFormState extends State<DynamicForm>
 
     // Submit the nested data
     widget.onSubmit(
-        nestedFormData, cleanedUploadedFiles, isDraft);
+        nestedFormData, cleanedUploadedFiles, isDraft, isManageToCheckPress);
   }
 
   /// The function `_findFirstInvalidAnchor` iterates through group anchors and checks for invalid
