@@ -81,7 +81,10 @@ class DynamicFormController extends ChangeNotifier {
             );
           }
         } else if (field['type'] == 'file') {
-          uploadedFiles[fieldName] = [];
+          // Only initialize uploadedFiles if not already set by hasAttachments logic above
+          if (!uploadedFiles.containsKey(fieldName)) {
+            uploadedFiles[fieldName] = [];
+          }
           controls[fieldName] = FormControl<String>(
             value: initial != null ? initial.toString() : '',
             validators: field['required'] == true ? [Validators.required] : [],
@@ -1335,7 +1338,10 @@ class DynamicFormController extends ChangeNotifier {
                 validators: [Validators.required]);
           }
         } else if (f['type'] == 'file') {
-          uploadedFiles[n] = [];
+          // Only initialize uploadedFiles if not already set
+          if (!uploadedFiles.containsKey(n)) {
+            uploadedFiles[n] = [];
+          }
           List<Validator> validators = _getValidators(isRequired, f);
           newControls[n] = FormControl<String>(
             value: initial != null ? initial : '',
@@ -1409,14 +1415,6 @@ class DynamicFormController extends ChangeNotifier {
 
     _addControls(newFields);
     form.addAll(newControls);
-    if (kDebugMode) {
-      print("=== Form Controls After Adding ===");
-      newControls.forEach((key, control) {
-        final hasRequiredValidator = control.validators
-            .any((validator) => validator.toString().contains('required'));
-        print("Control: $key, hasRequiredValidator: $hasRequiredValidator");
-      });
-    }
     notifyListeners();
   }
 

@@ -1,5 +1,5 @@
 import 'dart:io';
-
+import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
 import 'package:reactiveform/bottom_navigation_typr.dart';
+import 'package:reactiveform/components/app_colours.dart';
 import 'package:reactiveform/components/app_snackbar.dart';
 import 'package:reactiveform/components/app_typographpy.dart';
 import 'package:reactiveform/constants.dart';
@@ -24,6 +25,7 @@ import 'package:http/http.dart' as http;
 import 'dart:math' as math;
 import 'package:path/path.dart' as path;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:intl/intl.dart';
 
 // Conditional import for web
 import 'web_utils.dart' if (dart.library.html) 'dart:html' as html;
@@ -1491,6 +1493,9 @@ class _DynamicFormState extends State<DynamicForm>
           case 'dropdown':
             child = _buildDropdownField(field);
             break;
+          case 'date':
+            child = _buildDateField(field);
+            break;
           case 'multiselect':
             child = Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1543,6 +1548,8 @@ class _DynamicFormState extends State<DynamicForm>
         return _buildTempField(field);
       case FieldType.file:
         return _buildFileField(field);
+      case FieldType.date:
+        return _buildDateField(field);
       case 'multiselect':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1737,6 +1744,8 @@ class _DynamicFormState extends State<DynamicForm>
         return _buildTempField(field);
       case FieldType.file:
         return _buildFileField(field);
+      case FieldType.date:
+        return _buildDateField(field);
       case 'multiselect':
         return ReactiveFormField<List<String>, List<String>>(
           formControlName: field['name'],
@@ -3268,6 +3277,229 @@ class _DynamicFormState extends State<DynamicForm>
       ],
     );
   }
+
+  Widget _buildDateField(Map<String, dynamic> field) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabelRow(field),
+        ReactiveValueListenableBuilder<dynamic>(
+          formControlName: field['name'],
+          builder: (context, formControl, child) {
+            final hasError = formControl.touched && formControl.hasErrors;
+            final dateValue = formControl.value;
+
+            // Format the date value for display
+            String displayText = '';
+            if (dateValue != null) {
+              if (dateValue is DateTime) {
+                displayText = DateFormat('dd/MM/yyyy').format(dateValue);
+              } else if (dateValue is String && dateValue.isNotEmpty) {
+                try {
+                  final parsedDate = DateTime.parse(dateValue);
+                  displayText = DateFormat('dd/MM/yyyy').format(parsedDate);
+                } catch (e) {
+                  displayText = dateValue;
+                }
+              }
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  onTap: widget.readOnly ? null : () async => await _showSingleDatePickerCupertino(
+                    context,
+                    field,
+                    primaryColor: Colors.blue,
+                    controller: controller,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: hasError ? Colors.red : Colors.grey.shade300,
+                        width: hasError ? 2 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          displayText.isEmpty ? 'DD-MM-YYYY' : displayText,
+                          style: widget.fontFamily.copyWith(
+                            color: displayText.isEmpty
+                                ? Colors.grey.shade600
+                                : Colors.black87,
+                          ),
+                        ),
+                        Icon(
+                          Icons.calendar_today,
+                          size: 20,
+                          color: widget.readOnly ? Colors.grey : Colors.black87,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (hasError)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      StringConstants.requiredField,
+                      style: TextStyle(color: Colors.red[700], fontSize: 12),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showSingleDatePickerCupertino(
+    BuildContext context,
+    Map<String, dynamic> field, {
+    required Color primaryColor,
+    required dynamic controller,
+  }) async {
+    final control = controller.form.control(field['name']);
+    final now = DateTime.now();
+
+    // Get initial date from control value or use current date
+    DateTime initialDate = now;
+    if (control.value != null) {
+      if (control.value is DateTime) {
+        initialDate = control.value as DateTime;
+      } else if (control.value is String && (control.value as String).isNotEmpty) {
+        try {
+          initialDate = DateFormat('dd-MM-yyyy').parse(control.value as String);
+        } catch (e) {
+          if (kDebugMode) print('Error parsing date: $e');
+        }
+      }
+    }
+
+    DateTime selectedDate = initialDate;
+
+    // We’ll use LayoutBuilder to determine width at runtime
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext dialogContext) {
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth > 600;
+
+            final pickerContent = Container(
+              width: isDesktop ? 400 : double.infinity,
+              height: 320,
+              color: Colors.white,
+              child: Column(
+                children: [
+                  // Header Row
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Cross icon
+                        IconButton(
+                          icon: Icon(Icons.close, color: Colors.grey.shade700),
+                          onPressed: () => Navigator.pop(dialogContext),
+                        ),
+
+                        Text(
+                          "Select Date",
+                          style: AppTypography.listTileSubtitle.copyWith(
+                              color: AppColors.appBlackDark,
+                              fontWeight: FontWeight.w600
+                            ),
+                        ),
+
+                        // Save Button
+                        TextButton(
+                          onPressed: () {
+                            final formatted = DateFormat('dd-MM-yyyy').format(selectedDate);
+                            control.value = formatted;
+                            control.markAsTouched();
+
+                            if (kDebugMode) print('Date selected: $formatted');
+                            Navigator.pop(dialogContext);
+                          },
+                          child: Text(
+                            "Save",
+                            style: AppTypography.listTileSubtitle.copyWith(
+                              color: AppColors.appBlackDark
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+
+                  // Date Picker
+                  Expanded(
+                    child: CupertinoTheme(
+                      data: const CupertinoThemeData(
+                        textTheme: CupertinoTextThemeData(
+                          dateTimePickerTextStyle: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                      child: ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context).copyWith(
+                          dragDevices: {
+                            PointerDeviceKind.touch,
+                            PointerDeviceKind.mouse,
+                            PointerDeviceKind.trackpad,
+                          },
+                        ),
+                        child: CupertinoDatePicker(
+                          mode: CupertinoDatePickerMode.date,
+                          initialDateTime: initialDate,
+                          minimumYear: 1900,
+                          maximumYear: 2100,
+                          onDateTimeChanged: (DateTime newDate) {
+                            selectedDate = newDate;
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            // If it's a wide layout (desktop/tablet) → centered popup
+            if (isDesktop) {
+              return Dialog(
+                backgroundColor: Colors.white,
+                surfaceTintColor: Colors.white,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.zero,
+                ),
+                child: pickerContent,
+              );
+            }
+
+            // If narrow layout (mobile) → bottom sheet style
+            return Align(
+              alignment: Alignment.bottomCenter,
+              child: pickerContent,
+            );
+          },
+        );
+      },
+    );
+  }
+
 
   void nextButtonPressed(BuildContext context) {
     // Log before validation

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:reactive_forms/reactive_forms.dart';
 import 'package:flutter/cupertino.dart';
@@ -155,7 +157,15 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
             // Integer part picker (-25 to 110)
             Expanded(
               flex: 5,
-              child: CupertinoPicker(
+              child: ScrollConfiguration(
+  behavior: ScrollConfiguration.of(context).copyWith(
+    dragDevices: {
+      PointerDeviceKind.touch,
+      PointerDeviceKind.mouse,
+      PointerDeviceKind.trackpad,
+    },
+  ),
+  child: CupertinoPicker(
                 scrollController: _intController,
                 itemExtent: 40,
                 magnification: 1.25,
@@ -179,7 +189,7 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
                           ),
                         ))
                     .toList(),
-              ),
+              ),),
             ),
             // Decimal separator
             Center(
@@ -191,29 +201,42 @@ class _TemperatureScrollWidgetState extends State<TemperatureScrollWidget> {
             // Decimal digit picker (0..9)
             Expanded(
               flex: 3,
-              child: CupertinoPicker(
-                scrollController: _decController,
-                itemExtent: 40,
-                magnification: 1.25,
-                useMagnifier: true,
-                squeeze: 1.15,
-                selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
-                  background: Colors.grey.withOpacity(0.12),
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  dragDevices: {
+                    PointerDeviceKind.touch,
+                    PointerDeviceKind.mouse,
+                    PointerDeviceKind.trackpad,
+                  },
                 ),
-                onSelectedItemChanged: (idx) {
-                  setState(() {
-                    _currentDec = idx; // 0..9
-                    _updateCurrentCelsiusFromDisplay();
-                  });
-                  widget.onChanged?.call(_currentValueCelsius);
-                },
-                children: List<Widget>.generate(10, (i) => Center(
-                      child: Text(
-                        i.toString(),
-                        style: textStyle?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                    )),
-              ),
+                child: CupertinoPicker(
+                  scrollController: _decController,
+                  itemExtent: 40,
+                  magnification: 1.25,
+                  useMagnifier: true,
+                  squeeze: 1.15,
+                  selectionOverlay:
+                      CupertinoPickerDefaultSelectionOverlay(
+                    background: Colors.grey.withOpacity(0.12),
+                  ),
+                  onSelectedItemChanged: (idx) {
+                    setState(() {
+                      _currentDec = idx; // 0..9
+                      _updateCurrentCelsiusFromDisplay();
+                    });
+                    widget.onChanged?.call(_currentValueCelsius);
+                  },
+                  children: List<Widget>.generate(
+                      10,
+                      (i) => Center(
+                            child: Text(
+                              i.toString(),
+                              style: textStyle?.copyWith(
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          )),
+                ),
+              )
             ),
             // Space and unit
             const SizedBox(width: 8),
