@@ -3355,6 +3355,34 @@ class _DynamicFormState extends State<DynamicForm>
             );
           },
         ),
+        // Add file upload widget if hasAttachments is true
+        if (field['hasAttachments'] == true) ...[
+          const SizedBox(height: 16),
+          FileUploadWidget(
+            fieldName: field['name'],
+            fieldLabel: field['label'],
+            primaryColor: widget.primaryColor,
+            fontFamily: widget.fontFamily,
+            buttonTextColor: widget.buttonTextColor,
+            readOnly: widget.readOnly,
+            onFilesUploaded: (files) {
+              setState(() {
+                controller.uploadedFiles[field['name']] = files;
+              });
+            },
+            uploadedFiles: controller.uploadedFiles[field['name']] ?? [],
+            onRemoveUploadedFile: (file) {
+              setState(() {
+                controller.uploadedFiles[field['name']] = [];
+              });
+            },
+            isRequired: field['required'] == true,
+            questionNumber: _getQuestionNumberForField(field),
+            hasAttachments: field['hasAttachments'] == true,
+            initialValues: widget.initialValues,
+            bookingAppModelFileUpload: widget.bookingAppModelFileUpload,
+          ),
+        ],
       ],
     );
   }
@@ -4153,31 +4181,58 @@ class _DynamicFormState extends State<DynamicForm>
       // Apply either-or logic for composite "text, file" fields
       final String typeStr = (field['type'] ?? '').toString();
       final bool isCompositeTextFile = typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
+
       // Check the main field control for required empty values
       if (controller.form.contains(actualFieldName)) {
         final control = controller.form.control(actualFieldName);
         final value = control.value;
-        final isEmpty = value == null || 
-                      (value is String && value.trim().isEmpty) ||
-                      (value is List && value.isEmpty);
 
-        if (kDebugMode) {
-          print("Form control exists: $actualFieldName, value: '$value', isEmpty: $isEmpty");
-        }
-        if (isCompositeTextFile) {
-          final bool hasFiles = controller.uploadedFiles[actualFieldName]?.isNotEmpty ?? false;
-          if (isEmpty && !hasFiles) {
+        // Special handling for date fields
+        if (typeStr == 'date') {
+          bool dateIsEmpty = true;
+          if (value is DateTime) {
+            dateIsEmpty = false; // DateTime object means date is selected
+          } else if (value is String) {
+            // Check if it's not empty and not 'null' string
+            dateIsEmpty = value.trim().isEmpty || value.trim().toLowerCase() == 'null';
+          } else {
+            dateIsEmpty = value == null || value.toString().isEmpty || value.toString().toLowerCase() == 'null';
+          }
+
+          if (kDebugMode) {
+            print("Date field validation: $actualFieldName, value: '$value', type: ${value.runtimeType}, isEmpty: $dateIsEmpty");
+          }
+
+          if (dateIsEmpty) {
             if (kDebugMode) {
-              print("Found required empty composite text,file field: $actualFieldName, text empty: $isEmpty, hasFiles: $hasFiles");
+              print("Found required empty date field: $actualFieldName, value: $value");
             }
             return true;
           }
         } else {
-          if (isEmpty) {
-            if (kDebugMode) {
-              print("Found required empty field: $actualFieldName, value: $value");
+          // Regular field validation
+          final isEmpty = value == null ||
+                        (value is String && value.trim().isEmpty) ||
+                        (value is List && value.isEmpty);
+
+          if (kDebugMode) {
+            print("Form control exists: $actualFieldName, value: '$value', isEmpty: $isEmpty");
+          }
+          if (isCompositeTextFile) {
+            final bool hasFiles = controller.uploadedFiles[actualFieldName]?.isNotEmpty ?? false;
+            if (isEmpty && !hasFiles) {
+              if (kDebugMode) {
+                print("Found required empty composite text,file field: $actualFieldName, text empty: $isEmpty, hasFiles: $hasFiles");
+              }
+              return true;
             }
-            return true;
+          } else {
+            if (isEmpty) {
+              if (kDebugMode) {
+                print("Found required empty field: $actualFieldName, value: $value");
+              }
+              return true;
+            }
           }
         }
       } else {
@@ -4220,28 +4275,54 @@ class _DynamicFormState extends State<DynamicForm>
               if (controller.form.contains(childName)) {
                 final childControl = controller.form.control(childName);
                 final childValue = childControl.value;
-                final childIsEmpty = childValue == null || 
-                                  (childValue is String && childValue.trim().isEmpty) ||
-                                  (childValue is List && childValue.isEmpty);
 
                 // Apply either-or logic for composite "text, file" fields in groupId children
                 final String childTypeStr = (childField['type'] ?? '').toString();
                 final bool isChildCompositeTextFile = childTypeStr.contains(',') && childTypeStr.contains('text') && childTypeStr.contains('file');
 
-                if (isChildCompositeTextFile) {
-                  final bool hasChildFiles = controller.uploadedFiles[childName]?.isNotEmpty ?? false;
-                  if (childIsEmpty && !hasChildFiles) {
+                // Special handling for date fields in groupId children
+                if (childTypeStr == 'date') {
+                  bool childDateIsEmpty = true;
+                  if (childValue is DateTime) {
+                    childDateIsEmpty = false; // DateTime object means date is selected
+                  } else if (childValue is String) {
+                    // Check if it's not empty and not 'null' string
+                    childDateIsEmpty = childValue.trim().isEmpty || childValue.trim().toLowerCase() == 'null';
+                  } else {
+                    childDateIsEmpty = childValue == null || childValue.toString().isEmpty || childValue.toString().toLowerCase() == 'null';
+                  }
+
+                  if (kDebugMode) {
+                    print("Date field validation (child): $childName, value: '$childValue', type: ${childValue.runtimeType}, isEmpty: $childDateIsEmpty");
+                  }
+
+                  if (childDateIsEmpty) {
                     if (kDebugMode) {
-                      print("Found required empty composite text,file groupId child field: $childName, text empty: $childIsEmpty, hasFiles: $hasChildFiles");
+                      print("Found required empty date groupId child field: $childName, value: $childValue");
                     }
                     return true;
                   }
                 } else {
-                  if (childIsEmpty) {
-                    if (kDebugMode) {
-                      print("Found required empty groupId child field: $childName, value: $childValue");
+                  // Regular field validation
+                  final childIsEmpty = childValue == null ||
+                                    (childValue is String && childValue.trim().isEmpty) ||
+                                    (childValue is List && childValue.isEmpty);
+
+                  if (isChildCompositeTextFile) {
+                    final bool hasChildFiles = controller.uploadedFiles[childName]?.isNotEmpty ?? false;
+                    if (childIsEmpty && !hasChildFiles) {
+                      if (kDebugMode) {
+                        print("Found required empty composite text,file groupId child field: $childName, text empty: $childIsEmpty, hasFiles: $hasChildFiles");
+                      }
+                      return true;
                     }
-                    return true;
+                  } else {
+                    if (childIsEmpty) {
+                      if (kDebugMode) {
+                        print("Found required empty groupId child field: $childName, value: $childValue");
+                      }
+                      return true;
+                    }
                   }
                 }
               }
