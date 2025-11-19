@@ -4351,16 +4351,8 @@ class _DynamicFormState extends State<DynamicForm>
             final commentIsEmpty = commentValue == null ||
                                   (commentValue is String && commentValue.trim().isEmpty);
 
-
             if (commentIsEmpty) {
-              if (kDebugMode) {
-                print("✗ Found required empty comment field: $commentFieldName");
-              }
               return true;
-            } else {
-              if (kDebugMode) {
-                print("✓ Comment field $commentFieldName is filled");
-              }
             }
           } else {
             if (kDebugMode) {
