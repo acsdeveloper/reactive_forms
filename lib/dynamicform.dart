@@ -3905,6 +3905,7 @@ class _DynamicFormState extends State<DynamicForm>
       final formValue = Map<String, dynamic>.from(controller.form.value);
       final nestedFormData = controller.createNestedStructure(formValue);
 
+
       try {
         widget.onSubmit(nestedFormData, controller.uploadedFiles, isDraft, isManageToCheckPress);
       } catch (e) {
@@ -4003,7 +4004,10 @@ class _DynamicFormState extends State<DynamicForm>
     }
 
     // Create nested structure for grouped fields
+    
     final nestedFormData = controller.createNestedStructure(cleanedFormData);
+
+    
 
     // Submit the nested data
     widget.onSubmit(
@@ -4337,15 +4341,30 @@ class _DynamicFormState extends State<DynamicForm>
         if (!hasFiles) return true;
       }
 
-      // Check required comments
-      if (field['hasComments'] == true && field['requireCommentsOn']?.contains('Yes') == true) {
+      // Check required comments using the proper validation logic
+      if (field['hasComments'] == true) {
         final commentFieldName = '${fieldName}_comment';
-        if (controller.form.contains(commentFieldName)) {
-          final commentControl = controller.form.control(commentFieldName);
-          final commentValue = commentControl.value;
-          final commentIsEmpty = commentValue == null || 
-                                (commentValue is String && commentValue.trim().isEmpty);
-          if (commentIsEmpty) return true;
+        if (controller.form.contains(commentFieldName) && controller.form.contains(fieldName)) {
+          final fieldControl = controller.form.control(fieldName);
+          final bool shouldShowComments = controller.shouldShowCommentsBasedOnFieldValue(field, fieldControl.value);
+
+          if (shouldShowComments) {
+            final commentControl = controller.form.control(commentFieldName);
+            final commentValue = commentControl.value;
+            final commentIsEmpty = commentValue == null ||
+                                  (commentValue is String && commentValue.trim().isEmpty);
+
+            if (kDebugMode) {
+              print("Checking comment for $fieldName: shouldShow=$shouldShowComments, isEmpty=$commentIsEmpty, value='$commentValue'");
+            }
+
+            if (commentIsEmpty) {
+              if (kDebugMode) {
+                print("Found required empty comment field: $commentFieldName");
+              }
+              return true;
+            }
+          }
         }
       }
     }
