@@ -1110,9 +1110,11 @@ class _DynamicFormState extends State<DynamicForm>
           final List<int> indices = _anchorToFieldIndices[anchor] ?? [anchor];
           final List<Map<String, dynamic>> fields =
               indices.map((i) => _internalFields[i]).toList();
+
+          final bool hasRequiredEmpty = _hasRequiredEmptyFields(anchor);
           final bool showErrorDot = widget.accordionView &&
               _shortTextSubmitAttempted &&
-              _hasRequiredEmptyFields(anchor);
+              hasRequiredEmpty;
           final bool isDraft = isAnchorDraft(anchor) && widget.draftMode;
           final cardKey =
               _fieldKeys.putIfAbsent(anchor, () => GlobalKey());
@@ -3903,6 +3905,7 @@ class _DynamicFormState extends State<DynamicForm>
       
       // If validation passes, proceed with submission
       final formValue = Map<String, dynamic>.from(controller.form.value);
+
       final nestedFormData = controller.createNestedStructure(formValue);
 
       try {
@@ -4002,9 +4005,7 @@ class _DynamicFormState extends State<DynamicForm>
       }
     }
 
-    // Create nested structure for grouped fields
     final nestedFormData = controller.createNestedStructure(cleanedFormData);
-
     // Submit the nested data
     widget.onSubmit(
         nestedFormData, cleanedUploadedFiles, isDraft, isManageToCheckPress);
@@ -4149,9 +4150,6 @@ class _DynamicFormState extends State<DynamicForm>
         print("Checking field: $fieldName, required: $isRequired, groupId: ${field['groupId']}");
       }
 
-      // Skip non-required fields
-      if (!isRequired) continue;
-
       // Skip hidden fields based on showWhen conditions
       bool isVisible = controller.shouldFieldBeVisible(field);
       if (!isVisible && field['showWhen'] is Map<String, dynamic>) {
@@ -4182,8 +4180,8 @@ class _DynamicFormState extends State<DynamicForm>
       final String typeStr = (field['type'] ?? '').toString();
       final bool isCompositeTextFile = typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
 
-      // Check the main field control for required empty values
-      if (controller.form.contains(actualFieldName)) {
+      // Check the main field control for required empty values (only if field is required)
+      if (isRequired && controller.form.contains(actualFieldName)) {
         final control = controller.form.control(actualFieldName);
         final value = control.value;
 
@@ -4241,8 +4239,8 @@ class _DynamicFormState extends State<DynamicForm>
         }
       }
 
-      // Check if the field has 'hasAttachments' set to true and no files uploaded
-      if (field['hasAttachments'] == true && !isCompositeTextFile) {
+      // Check if the field has 'hasAttachments' set to true and no files uploaded (only for required fields)
+      if (isRequired && field['hasAttachments'] == true && !isCompositeTextFile) {
         final hasFiles = controller.uploadedFiles[fieldName]?.isNotEmpty ?? false;
         if (!hasFiles) {
           if (kDebugMode) {
@@ -4252,8 +4250,8 @@ class _DynamicFormState extends State<DynamicForm>
         }
       }
 
-      // For fields with groupId, also check all child fields
-      if (field['groupId'] != null) {
+      // For fields with groupId, also check all child fields (only for required fields)
+      if (isRequired && field['groupId'] != null) {
         final String? groupId = field['groupId']?.toString();
         if (groupId != null && groupId.isNotEmpty) {
           final List<String> childNames = groupId.split(',').map((s) => s.trim()).toList();
@@ -4331,21 +4329,36 @@ class _DynamicFormState extends State<DynamicForm>
         }
       }
 
-      // Check required attachments
-      if (field['type'] == 'file' && isRequired) {
+      // Check required attachments (only for required fields)
+      if (isRequired && field['type'] == 'file') {
         final hasFiles = controller.uploadedFiles[fieldName]?.isNotEmpty ?? false;
         if (!hasFiles) return true;
       }
 
-      // Check required comments
-      if (field['hasComments'] == true && field['requireCommentsOn']?.contains('Yes') == true) {
+      // Check required comments using the proper validation logic
+      if (field['hasComments'] == true) {
         final commentFieldName = '${fieldName}_comment';
-        if (controller.form.contains(commentFieldName)) {
-          final commentControl = controller.form.control(commentFieldName);
-          final commentValue = commentControl.value;
-          final commentIsEmpty = commentValue == null || 
-                                (commentValue is String && commentValue.trim().isEmpty);
-          if (commentIsEmpty) return true;
+
+        if (controller.form.contains(commentFieldName) && controller.form.contains(fieldName)) {
+          final fieldControl = controller.form.control(fieldName);
+          final fieldValue = fieldControl.value;
+          final bool shouldShowComments = controller.shouldShowCommentsBasedOnFieldValue(field, fieldValue);
+
+
+          if (shouldShowComments) {
+            final commentControl = controller.form.control(commentFieldName);
+            final commentValue = commentControl.value;
+            final commentIsEmpty = commentValue == null ||
+                                  (commentValue is String && commentValue.trim().isEmpty);
+
+            if (commentIsEmpty) {
+              return true;
+            }
+          } else {
+            if (kDebugMode) {
+              print("  - Comment not required for current field value");
+            }
+          }
         }
       }
     }
