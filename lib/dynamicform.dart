@@ -3908,8 +3908,6 @@ class _DynamicFormState extends State<DynamicForm>
 
       final nestedFormData = controller.createNestedStructure(formValue);
 
-     
-
       try {
         widget.onSubmit(nestedFormData, controller.uploadedFiles, isDraft, isManageToCheckPress);
       } catch (e) {
@@ -4007,12 +4005,7 @@ class _DynamicFormState extends State<DynamicForm>
       }
     }
 
-    // Create nested structure for grouped fields
-    
     final nestedFormData = controller.createNestedStructure(cleanedFormData);
-
-    
-
     // Submit the nested data
     widget.onSubmit(
         nestedFormData, cleanedUploadedFiles, isDraft, isManageToCheckPress);
@@ -4346,14 +4339,11 @@ class _DynamicFormState extends State<DynamicForm>
       if (field['hasComments'] == true) {
         final commentFieldName = '${fieldName}_comment';
 
-        
-
         if (controller.form.contains(commentFieldName) && controller.form.contains(fieldName)) {
           final fieldControl = controller.form.control(fieldName);
           final fieldValue = fieldControl.value;
           final bool shouldShowComments = controller.shouldShowCommentsBasedOnFieldValue(field, fieldValue);
 
-          
 
           if (shouldShowComments) {
             final commentControl = controller.form.control(commentFieldName);
@@ -4361,7 +4351,6 @@ class _DynamicFormState extends State<DynamicForm>
             final commentIsEmpty = commentValue == null ||
                                   (commentValue is String && commentValue.trim().isEmpty);
 
-            
 
             if (commentIsEmpty) {
               if (kDebugMode) {
