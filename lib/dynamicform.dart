@@ -63,6 +63,10 @@ class DynamicForm extends StatefulWidget {
   final bool accordionView;
   final ThemeData? themeData;
   final bool readOnly;
+  final Color? chipSelectedColor;
+  final Color? chipUnselectedColor;
+  final TextStyle? chipSelectedTextStyle;
+  final TextStyle? chipUnselectedTextStyle;
 
   DynamicForm({
     required this.formJson,
@@ -87,6 +91,10 @@ class DynamicForm extends StatefulWidget {
     this.isDraftVisible = true,
     this.themeData,
     this.readOnly = false,
+    this.chipSelectedColor,
+    this.chipUnselectedColor,
+    this.chipSelectedTextStyle,
+    this.chipUnselectedTextStyle,
     RxBool? draftbtnClicked,
     super.key,
   }) : draftbtnClicked = draftbtnClicked ?? false.obs;
@@ -1574,7 +1582,17 @@ class _DynamicFormState extends State<DynamicForm>
                 }
 
                 final hasError = state.control.touched && !state.control.valid;
+                final FormControl<List<String>> control =
+                    controller.form.control(field['name']) as FormControl<List<String>>;
+                (control.value ?? <String>[]).map((e) => e.toString()).toList(growable: true);
+                final Color selBg = widget.chipSelectedColor ?? Colors.black;
+                final Color unselBg = widget.chipUnselectedColor ?? Colors.grey.shade200;
 
+                final TextStyle selTextStyle =
+                    widget.chipSelectedTextStyle ?? const TextStyle(color: Colors.white);
+
+                final TextStyle unselTextStyle =
+                    widget.chipUnselectedTextStyle ?? const TextStyle(color: Colors.black);
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1590,27 +1608,36 @@ class _DynamicFormState extends State<DynamicForm>
                       child: Wrap(
                   spacing: 8.0,
                   runSpacing: 4.0,
-                  children: (field['options'] as List<dynamic>? ?? [])
-                      .map((opt) => ChoiceChip(
-                            label: Text(opt.toString()),
-                            selected: currentValue.contains(opt.toString()),
-                                  selectedColor: hasError ? Colors.red.shade100 : null,
-                            onSelected: (selected) {
-                              final List<String> updated =
-                                  List.from(currentValue);
-                              if (selected) {
-                                if (!updated.contains(opt.toString())) {
-                                  updated.add(opt.toString());
-                                }
-                              } else {
-                                updated.remove(opt.toString());
-                              }
-                              controller.form.control(field['name']).value =
-                                  updated;
-                              state.didChange(updated);
-                            },
-                          ))
-                      .toList(),
+                  children: (field['options'] as List<dynamic>? ?? []).map((opt) {
+                      final optStr = opt.toString();
+                      final selected = currentValue.contains(optStr);
+
+                      return ChoiceChip(
+                        label: Text(
+                          optStr,
+                          style: selected ? selTextStyle : unselTextStyle,
+                        ),
+                        selected: selected,
+                        selectedColor: selBg,
+                        backgroundColor: unselBg,
+                        side: BorderSide(
+                          color: selected ? selBg : unselBg,
+                        ),
+                        onSelected: (isSelected) {
+                          final updated = List<String>.from(currentValue);
+                          if (isSelected) {
+                            if (!updated.contains(optStr)) updated.add(optStr);
+                          } else {
+                            updated.remove(optStr);
+                          }
+
+                          control.updateValue(updated);
+                          control.markAsDirty();
+                          control.markAsTouched();
+                          state.didChange(updated);
+                        },
+                      );
+                    }).toList(),
                       ),
                     ),
                     // No inline error message; visual highlight only
@@ -7081,16 +7108,14 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                 StringConstants.uploadFiles,
                 style: widget.fontFamily,
               ),
-              if (widget.isRequired) ...[
-                const SizedBox(width: 4),
-                Text(
-                  '*',
-                  style: widget.fontFamily.copyWith(
-                    color: const Color.fromARGB(255, 222, 75, 64),
-                    fontSize: 16,
-                  ),
+              const SizedBox(width: 4),
+              Text(
+                '*',
+                style: widget.fontFamily.copyWith(
+                  color: const Color.fromARGB(255, 222, 75, 64),
+                  fontSize: 16,
                 ),
-              ],
+              ),
             ],
           ),
 
