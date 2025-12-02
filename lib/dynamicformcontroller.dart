@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -33,9 +35,57 @@ class DynamicFormController extends ChangeNotifier {
       notifyListeners(); // Notify after processing completes
     });
   }
+  List<String> _parseInitialToList(dynamic initial, List<dynamic>? options) {
+    if (initial == null) return <String>[];
 
+    if (initial is List) {
+      return initial
+          .map((e) => e.toString().trim())
+          .where(
+              (e) => e.isNotEmpty && (options == null || options.contains(e)))
+          .toList();
+    }
+    if (initial is String) {
+      final s = initial.trim();
+      try {
+        final decoded = jsonDecode(s);
+        if (decoded is List) {
+          return decoded
+              .map((e) => e.toString().trim())
+              .where((e) =>
+                  e.isNotEmpty && (options == null || options.contains(e)))
+              .toList();
+        }
+      } catch (_) {}
+      var cleaned = s;
+      if (cleaned.startsWith('[') && cleaned.endsWith(']')) {
+        cleaned = cleaned.substring(1, cleaned.length - 1);
+      }
+      if (cleaned.isEmpty) return <String>[];
+      return cleaned
+          .split(',')
+          .map((e) => e.trim())
+          .where(
+              (e) => e.isNotEmpty && (options == null || options.contains(e)))
+          .toList();
+    }
+    return initial
+        .toString()
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty && (options == null || options.contains(e)))
+        .toList();
+  }
+  Map<String, dynamic>? requiredListValidator(
+      AbstractControl<dynamic> control) {
+    final value = control.value;
+    if (value is List && value.isNotEmpty) return null;
+    return {'required': true};
+  }
+
+// --- initialization building FormGroup dynamically ---
   void _initializeForm() {
-    Map<String, AbstractControl<dynamic>> controls = {};
+    final Map<String, AbstractControl<dynamic>> controls = {};
 
     void _addControlsForFields(Iterable<Map<String, dynamic>> fieldList) {
       for (var field in fieldList) {
@@ -58,17 +108,17 @@ class DynamicFormController extends ChangeNotifier {
         }
 
         if (field['type'] == 'multiselect') {
-          List<String> initialValue = [];
-          if (initial != null && initial is List<dynamic>) {
-            initialValue = initial
-                .where((item) => field['options'].contains(item))
-                .map((item) => item.toString())
-                .toList();
-          }
+          final List<String> initialValue = _parseInitialToList(
+            initial,
+            field['options'] as List<dynamic>?,
+          );
 
           controls[fieldName] = FormControl<List<String>>(
-            value: initialValue.isNotEmpty ? initialValue : null,
-            validators: field['required'] == true ? [Validators.required] : [],
+            value: initialValue,
+            // <- wrap the function with Validators.delegate
+            validators: field['required'] == true
+                ? [Validators.delegate(requiredListValidator)]
+                : [],
           );
 
           if (field['hasComments'] == true) {
@@ -80,6 +130,7 @@ class DynamicFormController extends ChangeNotifier {
               validators: [Validators.required],
             );
           }
+          continue;
         } else if (field['type'] == 'file') {
           // Only initialize uploadedFiles if not already set by hasAttachments logic above
           if (!uploadedFiles.containsKey(fieldName)) {
