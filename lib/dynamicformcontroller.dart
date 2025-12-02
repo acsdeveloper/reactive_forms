@@ -1771,44 +1771,39 @@ class DynamicFormController extends ChangeNotifier {
   /// attachments are required but not present for the field.
   bool validateFieldAttachmentsIfRequired(Map<String, dynamic> field) {
     final String fieldName = field['name']?.toString() ?? '';
-
-    // Check if this is a grouped field by looking for the transformed name
     String actualFieldName = fieldName;
-
-    // Look for grouped field names in the form controls
     for (String controlName in form.controls.keys) {
-      if (controlName.startsWith(fieldName) && controlName.contains('_question_')) {
+      if (controlName.startsWith(fieldName) &&
+          controlName.contains('_question_')) {
         actualFieldName = controlName;
         break;
       }
     }
 
-    // Determine requirement using same rules as _checkIfRequiredFilesUploaded
-    dynamic currentValue =
-        form.contains(actualFieldName) ? form.control(actualFieldName).value : null;
-
-    // Check if this is a composite "text, file" field
+    // Get current value from the form (if control exists)
+    dynamic currentValue = form.contains(actualFieldName)
+        ? form.control(actualFieldName).value
+        : null;
     final String typeStr = (field['type'] ?? '').toString();
-    final bool isCompositeTextFile = typeStr.contains(',') && typeStr.contains('text') && typeStr.contains('file');
-
-    // For composite "text, file" fields with required=true, apply either-or logic
-    if (isCompositeTextFile && field['required'] == true) {
-      final textIsEmpty = currentValue == null ||
-                         (currentValue is String && currentValue.trim().isEmpty) ||
-                         (currentValue is List && currentValue.isEmpty);
-      final hasFiles = uploadedFiles[actualFieldName]?.isNotEmpty ?? false;
-
-      // If EITHER text is filled OR file is uploaded, validation passes
-      if (!textIsEmpty || hasFiles) {
+    final bool isCompositeTextFile =
+        typeStr.contains('text') && typeStr.contains('file');
+    if (isCompositeTextFile) {
+      if (field['required'] == true) {
+        final bool textIsEmpty = currentValue == null ||
+            (currentValue is String && currentValue.trim().isEmpty) ||
+            (currentValue is List && currentValue.isEmpty);
+        final bool hasFiles =
+            uploadedFiles[actualFieldName]?.isNotEmpty ?? false;
+        return !textIsEmpty || hasFiles;
+      } else {
         return true;
       }
-      // If BOTH are empty, validation fails
-      return false;
     }
 
     bool requiresAttachments = false;
 
-    if (field['type'] == 'file' && field['required'] == true) {
+    // If type is exactly 'file' and required true => attachments required
+    if (typeStr == 'file' && field['required'] == true) {
       requiresAttachments = true;
     }
 
@@ -1878,11 +1873,36 @@ class DynamicFormController extends ChangeNotifier {
 
     if (!requiresAttachments) return true;
 
-    // Use the actual field name for checking uploads
+    // If attachments are required, ensure there is at least one uploaded file
     final uploads = uploadedFiles[actualFieldName];
-    if (uploads == null || uploads.isEmpty) {
-      return false;
+    return uploads != null && uploads.isNotEmpty;
+  }
+
+  /// Separate commenter validation - enforce comment presence when hasComments == true
+  bool validateFieldCommentIfRequired(Map<String, dynamic> field) {
+    if (field['hasComments'] != true) return true;
+
+    final String fieldName = field['name']?.toString() ?? '';
+
+    // --- Find actual/control name for grouped fields (same approach) ---
+    String actualFieldName = fieldName;
+    for (String controlName in form.controls.keys) {
+      if (controlName.startsWith(fieldName) &&
+          controlName.contains('_question_')) {
+        actualFieldName = controlName;
+        break;
+      }
     }
+
+    final String commentControlName = '${actualFieldName}_comment';
+    if (!form.contains(commentControlName))
+      return false; // comment control missing -> fail
+    final dynamic commentValue = form.control(commentControlName).value;
+
+    if (commentValue == null) return false;
+    if (commentValue is String && commentValue.trim().isEmpty) return false;
+    if (commentValue is List && commentValue.isEmpty) return false;
+
     return true;
   }
 
