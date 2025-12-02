@@ -1378,7 +1378,7 @@ class _DynamicFormState extends State<DynamicForm>
     // Calculate if we should show error dot for this card
     bool showErrorDot = false;
     if (anchor != null && !widget.accordionView) {
-      showErrorDot = _hasRequiredEmptyFields(anchor);
+      showErrorDot = _shortTextSubmitAttempted && _hasRequiredEmptyFields(anchor);
     }
 
     return Card(
@@ -3919,6 +3919,14 @@ class _DynamicFormState extends State<DynamicForm>
       }
       return;
     }
+
+    // For non-accordion view, set the submit attempted flag (skip for drafts)
+    if (!isDraft) {
+      setState(() {
+        _shortTextSubmitAttempted = true;
+      });
+    }
+
     // First validate the current question if in step-by-step mode
     if (widget.showOneByOne &&
         controller.currentQuestionIndex < widget.formJson.length &&
@@ -4239,12 +4247,13 @@ class _DynamicFormState extends State<DynamicForm>
         }
       }
 
-      // Check if the field has 'hasAttachments' set to true and no files uploaded (only for required fields)
-      if (isRequired && field['hasAttachments'] == true && !isCompositeTextFile) {
-        final hasFiles = controller.uploadedFiles[fieldName]?.isNotEmpty ?? false;
-        if (!hasFiles) {
+      // Check if the field has 'hasAttachments' and validate using the controller's method
+      // This respects all conditional attachment rules (requireAttachmentsOn, disableAttachmentsOn, etc.)
+      if (field['hasAttachments'] == true) {
+        final bool attachmentsValid = controller.validateFieldAttachmentsIfRequired(field);
+        if (!attachmentsValid) {
           if (kDebugMode) {
-            print("Found required field with 'hasAttachments' true but no files uploaded: $fieldName");
+            print("Field failed attachment validation: $fieldName (type: $typeStr, required: $isRequired)");
           }
           return true;
         }
