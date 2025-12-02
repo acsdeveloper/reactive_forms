@@ -7081,16 +7081,14 @@ class _FileUploadWidgetState extends State<FileUploadWidget> {
                 StringConstants.uploadFiles,
                 style: widget.fontFamily,
               ),
-              if (widget.isRequired) ...[
-                const SizedBox(width: 4),
-                Text(
-                  '*',
-                  style: widget.fontFamily.copyWith(
-                    color: const Color.fromARGB(255, 222, 75, 64),
-                    fontSize: 16,
-                  ),
+              const SizedBox(width: 4),
+              Text(
+                '*',
+                style: widget.fontFamily.copyWith(
+                  color: const Color.fromARGB(255, 222, 75, 64),
+                  fontSize: 16,
                 ),
-              ],
+              ),
             ],
           ),
 
