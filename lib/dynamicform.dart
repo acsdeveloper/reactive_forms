@@ -67,6 +67,7 @@ class DynamicForm extends StatefulWidget {
   final Color? chipUnselectedColor;
   final TextStyle? chipSelectedTextStyle;
   final TextStyle? chipUnselectedTextStyle;
+  final bool useBottomSheetForMultiselect;
 
   DynamicForm({
     required this.formJson,
@@ -95,6 +96,7 @@ class DynamicForm extends StatefulWidget {
     this.chipUnselectedColor,
     this.chipSelectedTextStyle,
     this.chipUnselectedTextStyle,
+    this.useBottomSheetForMultiselect = false,
     RxBool? draftbtnClicked,
     super.key,
   }) : draftbtnClicked = draftbtnClicked ?? false.obs;
@@ -1561,6 +1563,18 @@ class _DynamicFormState extends State<DynamicForm>
       case FieldType.date:
         return _buildDateField(field);
       case 'multiselect':
+        if (widget.useBottomSheetForMultiselect) {
+          return MultiSelectFormField(
+            field: FormFieldModel.fromJson(field),
+            value: (controller.form.control(field['name']).value as List?)
+                    ?.map((e) => e.toString())
+                    .toList() ??
+                [],
+            onChanged: (value) {
+              controller.form.control(field['name']).value = value;
+            },
+          );
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
