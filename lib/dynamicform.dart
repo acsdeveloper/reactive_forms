@@ -1564,15 +1564,22 @@ class _DynamicFormState extends State<DynamicForm>
         return _buildDateField(field);
       case 'multiselect':
         if (widget.useBottomSheetForMultiselect) {
-          return MultiSelectFormField(
-            field: FormFieldModel.fromJson(field),
-            value: (controller.form.control(field['name']).value as List?)
-                    ?.map((e) => e.toString())
-                    .toList() ??
-                [],
-            onChanged: (value) {
-              controller.form.control(field['name']).value = value;
-            },
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              MultiSelectFormField(
+                field: FormFieldModel.fromJson(field),
+                value: (controller.form.control(field['name']).value as List?)
+                        ?.map((e) => e.toString())
+                        .toList() ??
+                    [],
+                onChanged: (value) {
+                  controller.form.control(field['name']).value = value;
+                },
+                readOnly: widget.readOnly,
+              ),
+              _buildCommentSection(field),
+            ],
           );
         }
         return Column(
@@ -1637,19 +1644,22 @@ class _DynamicFormState extends State<DynamicForm>
                         side: BorderSide(
                           color: selected ? selBg : unselBg,
                         ),
-                        onSelected: (isSelected) {
-                          final updated = List<String>.from(currentValue);
-                          if (isSelected) {
-                            if (!updated.contains(optStr)) updated.add(optStr);
-                          } else {
-                            updated.remove(optStr);
-                          }
+                        onSelected: widget.readOnly
+                            ? null
+                            : (isSelected) {
+                                final updated = List<String>.from(currentValue);
+                                if (isSelected) {
+                                  if (!updated.contains(optStr))
+                                    updated.add(optStr);
+                                } else {
+                                  updated.remove(optStr);
+                                }
 
-                          control.updateValue(updated);
-                          control.markAsDirty();
-                          control.markAsTouched();
-                          state.didChange(updated);
-                        },
+                                control.updateValue(updated);
+                                control.markAsDirty();
+                                control.markAsTouched();
+                                state.didChange(updated);
+                              },
                       );
                     }).toList(),
                       ),
@@ -1659,6 +1669,7 @@ class _DynamicFormState extends State<DynamicForm>
                 );
               },
             ),
+            _buildCommentSection(field),
           ],
         );
       default:
@@ -2102,74 +2113,81 @@ class _DynamicFormState extends State<DynamicForm>
             },
           ),
 
-        if (field['hasComments'] == true)
-          ReactiveValueListenableBuilder(
-            formControlName: field['name'],
-            builder: (context, control, child) {
-              bool shouldShowComments = controller
-                  .shouldShowCommentsBasedOnFieldValue(field, control.value);
-
-              if (!shouldShowComments) {
-                return const SizedBox
-                    .shrink(); // Don't render the comment field if not required
-              }
-
-              return Column(
-                children: [
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Text(
-                        field['commentLabel'] ?? StringConstants.comments,
-                        style: widget.fontFamily,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '*',
-                        style: widget.fontFamily.copyWith(
-                          color: const Color.fromARGB(255, 222, 75, 64),
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                  ReactiveTextField(
-                    formControlName: '${field['name']}_comment',
-                    readOnly: widget.readOnly,
-                    decoration: InputDecoration(
-                        hintText: field['commentHint'] ?? '',
-                        labelStyle: widget.fontFamily,
-                        hintStyle: widget.fontFamily,
-                        errorStyle: widget.accordionView
-                            ? controller
-                                .buildInputDecoration(widget.accordionView)
-                                .errorStyle
-                            : widget.fontFamily
-                                .copyWith(color: Colors.red[700], fontSize: 12),
-                        errorBorder: widget.accordionView
-                            ? UnderlineInputBorder(
-                                borderSide: BorderSide(
-                                    color: Get.theme.colorScheme.onError))
-                            : null),
-                    maxLines: 3,
-                    minLines: 1,
-                    validationMessages: {
-                      'required': (_) => widget.accordionView
-                          ? ""
-                          : StringConstants.commentsAreRequired,
-                    },
-                    onSubmitted: (_) {
-                      if (widget.showOneByOne &&
-                          !isCurrentQuestionEffectivelyLast()) {
-                        validateCurrentSection();
-                      }
-                    },
-                  ),
-                ],
-              );
-            },
-          )
+          _buildCommentSection(field),
       ],
+    );
+  }
+
+  Widget _buildCommentSection(Map<String, dynamic> field) {
+    if (field['hasComments'] != true) {
+      return const SizedBox.shrink();
+    }
+
+    return ReactiveValueListenableBuilder(
+      formControlName: field['name'],
+      builder: (context, control, child) {
+        bool shouldShowComments = controller.shouldShowCommentsBasedOnFieldValue(
+            field, control.value);
+
+        if (!shouldShowComments) {
+          return const SizedBox
+              .shrink(); // Don't render the comment field if not required
+        }
+
+        return Column(
+          children: [
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Text(
+                  field['commentLabel'] ?? StringConstants.comments,
+                  style: widget.fontFamily,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '*',
+                  style: widget.fontFamily.copyWith(
+                    color: const Color.fromARGB(255, 222, 75, 64),
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            ReactiveTextField(
+              formControlName: '${field['name']}_comment',
+              readOnly: widget.readOnly,
+              decoration: InputDecoration(
+                  hintText: field['commentHint'] ?? '',
+                  labelStyle: widget.fontFamily,
+                  hintStyle: widget.fontFamily,
+                  errorStyle: widget.accordionView
+                      ? controller
+                          .buildInputDecoration(widget.accordionView)
+                          .errorStyle
+                      : widget.fontFamily
+                          .copyWith(color: Colors.red[700], fontSize: 12),
+                  errorBorder: widget.accordionView
+                      ? UnderlineInputBorder(
+                          borderSide: BorderSide(
+                              color: Get.theme.colorScheme.onError))
+                      : null),
+              maxLines: 3,
+              minLines: 1,
+              validationMessages: {
+                'required': (_) => widget.accordionView
+                    ? ""
+                    : StringConstants.commentsAreRequired,
+              },
+              onSubmitted: (_) {
+                if (widget.showOneByOne &&
+                    !isCurrentQuestionEffectivelyLast()) {
+                  validateCurrentSection();
+                }
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 

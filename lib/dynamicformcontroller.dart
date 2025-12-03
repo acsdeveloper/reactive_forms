@@ -910,8 +910,18 @@ class DynamicFormController extends ChangeNotifier {
             ? [field['disableCommentsOn']]
             : [];
 
+    // Helper to check if value matches options (handles both single value and List)
+    bool matchesOptions(dynamic value, List<dynamic> options) {
+      if (value is List) {
+        // For multiselect: match if ANY selected value is in the options list
+        return value.any((v) => options.contains(v));
+      }
+      return options.contains(value);
+    }
+
     // If control value is in disabled options, don't show comments
-    if (disabledOptions.isNotEmpty && disabledOptions.contains(controlValue)) {
+    if (disabledOptions.isNotEmpty &&
+        matchesOptions(controlValue, disabledOptions)) {
       return false;
     }
 
@@ -920,7 +930,7 @@ class DynamicFormController extends ChangeNotifier {
     // Check if field has comments and if the value is not in disabled options
     if (field['hasComments'] == true &&
         disabledOptions.isNotEmpty &&
-        !disabledOptions.contains(controlValue)) {
+        !matchesOptions(controlValue, disabledOptions)) {
       shouldShowComments = true;
     } else {
       // Check requireCommentsOn
@@ -929,7 +939,7 @@ class DynamicFormController extends ChangeNotifier {
             ? field['requireCommentsOn']
             : [field['requireCommentsOn']];
 
-        if (requiredOptions.contains(controlValue)) {
+        if (matchesOptions(controlValue, requiredOptions)) {
           shouldShowComments = true;
         }
       }
@@ -940,7 +950,7 @@ class DynamicFormController extends ChangeNotifier {
             ? field['enableCommentsOn']
             : [field['enableCommentsOn']];
 
-        if (enabledOptions.contains(controlValue)) {
+        if (matchesOptions(controlValue, enabledOptions)) {
           shouldShowComments = true;
         }
       }
