@@ -16,6 +16,7 @@ class TemperatureScrollWidget extends StatefulWidget {
   final Color? backgroundColor;
   final Color? separatorColor;
   final Function(double)? onChanged;
+  final bool? hasComments;
   // Toggle between new 3-column (int.dec unit) picker and legacy single-column picker
   final bool useTriplePicker;
 
@@ -33,6 +34,7 @@ class TemperatureScrollWidget extends StatefulWidget {
     this.separatorColor,
     this.onChanged,
     this.useTriplePicker = true,
+    this.hasComments,
   });
 
   @override
@@ -373,6 +375,7 @@ class ReactiveTemperatureScrollWidget extends StatelessWidget {
   final Color? primaryColor;
   final Color? backgroundColor;
   final Color? separatorColor;
+  final bool? hasComments;
 
   const ReactiveTemperatureScrollWidget({
     super.key,
@@ -386,6 +389,7 @@ class ReactiveTemperatureScrollWidget extends StatelessWidget {
     this.primaryColor,
     this.backgroundColor,
     this.separatorColor,
+    this.hasComments,
   });
 
   @override
@@ -407,6 +411,7 @@ class ReactiveTemperatureScrollWidget extends StatelessWidget {
           onChanged: (value) {
             field.didChange(value);
           },
+          hasComments: hasComments,
         );
       },
     );
