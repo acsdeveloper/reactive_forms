@@ -1763,13 +1763,16 @@ class _DynamicFormState extends State<DynamicForm>
               style: widget.fontFamily,
             ),
             const SizedBox(width: 4),
-            Text(
-              '*',
-              style: widget.fontFamily.copyWith(
-                color: const Color.fromARGB(255, 222, 75, 64),
-                fontSize: 16,
+            if (field['required'] == true &&
+                !(field['type'] is String &&
+                    (field['type'] as String).contains(',')))
+              Text(
+                '*',
+                style: widget.fontFamily.copyWith(
+                  color: const Color.fromARGB(255, 222, 75, 64),
+                  fontSize: 16,
+                ),
               ),
-            ),
           ],
         ),
         ReactiveTextField(
@@ -2520,8 +2523,10 @@ class _DynamicFormState extends State<DynamicForm>
           },
         ),
         // Rest of the code remains the same
-        _buildCommentsField(field, useConditionalDisplay: false),
-        if (field['hasAttachments'] == true ||
+        if (!(field['type'] is String &&
+          (field['type'] as String).contains(','))) ...[
+            _buildCommentsField(field, useConditionalDisplay: false),
+          ] else if (field['hasAttachments'] == true ||
             field['requireAttachmentsOn'] == true ||
             field['requiredAttachmentsOn'] == true) ...[
           const SizedBox(height: 16),
