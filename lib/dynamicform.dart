@@ -2843,7 +2843,6 @@ class _DynamicFormState extends State<DynamicForm>
       required double initialValue,
       required bool isDesktop,
       required double maxWidth,
-      bool? hasComments,
     }) {
       final base = ReactiveTemperatureScrollWidget(
         formControlName: formControlName,
@@ -2856,7 +2855,6 @@ class _DynamicFormState extends State<DynamicForm>
         primaryColor: widget.primaryColor,
         backgroundColor: Colors.white,
         separatorColor: Colors.grey.shade300,
-        hasComments: hasComments,
       );
 
       if (isDesktop) {
