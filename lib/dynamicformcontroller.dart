@@ -910,17 +910,43 @@ class DynamicFormController extends ChangeNotifier {
             ? [field['disableCommentsOn']]
             : [];
 
+    // Helper function to check if controlValue matches any disabled option
+    bool isValueInDisabledOptions() {
+      if (disabledOptions.isEmpty) return false;
+
+      // For multiselect (List values), check if any selected value is in disabled options
+      if (controlValue is List) {
+        return controlValue.any((val) => disabledOptions.contains(val));
+      }
+
+      // For single values (dropdown, radio, date, etc.)
+      return disabledOptions.contains(controlValue);
+    }
+
     // If control value is in disabled options, don't show comments
-    if (disabledOptions.isNotEmpty && disabledOptions.contains(controlValue)) {
+    if (isValueInDisabledOptions()) {
       return false;
     }
 
     bool shouldShowComments = false;
 
+    // Helper function to check if controlValue matches any option in a list
+    bool isValueInOptions(List<dynamic> options) {
+      if (options.isEmpty) return false;
+
+      // For multiselect (List values), check if any selected value is in the options
+      if (controlValue is List) {
+        return controlValue.any((val) => options.contains(val));
+      }
+
+      // For single values
+      return options.contains(controlValue);
+    }
+
     // Check if field has comments and if the value is not in disabled options
     if (field['hasComments'] == true &&
         disabledOptions.isNotEmpty &&
-        !disabledOptions.contains(controlValue)) {
+        !isValueInDisabledOptions()) {
       shouldShowComments = true;
     } else {
       // Check requireCommentsOn
@@ -929,7 +955,7 @@ class DynamicFormController extends ChangeNotifier {
             ? field['requireCommentsOn']
             : [field['requireCommentsOn']];
 
-        if (requiredOptions.contains(controlValue)) {
+        if (isValueInOptions(requiredOptions)) {
           shouldShowComments = true;
         }
       }
@@ -940,7 +966,7 @@ class DynamicFormController extends ChangeNotifier {
             ? field['enableCommentsOn']
             : [field['enableCommentsOn']];
 
-        if (enabledOptions.contains(controlValue)) {
+        if (isValueInOptions(enabledOptions)) {
           shouldShowComments = true;
         }
       }

@@ -1645,6 +1645,9 @@ class _DynamicFormState extends State<DynamicForm>
                 );
               },
             ),
+
+            // Add comments widget for multiselect
+            _buildCommentsField(field),
           ],
         );
       default:
@@ -1737,6 +1740,94 @@ class _DynamicFormState extends State<DynamicForm>
         ],
       ),
     );
+  }
+
+  /// Builds a reusable comments field widget that listens to the field value
+  /// and conditionally displays based on shouldShowCommentsBasedOnFieldValue
+  ///
+  /// Parameters:
+  /// - field: The field configuration
+  /// - useConditionalDisplay: If true, wraps in ReactiveValueListenableBuilder for conditional display
+  Widget _buildCommentsField(Map<String, dynamic> field, {bool useConditionalDisplay = true}) {
+    if (field['hasComments'] != true) {
+      return const SizedBox.shrink();
+    }
+
+    Widget commentsWidget = Column(
+      children: [
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Text(
+              field['commentLabel'] ?? StringConstants.comments,
+              style: widget.fontFamily,
+            ),
+            const SizedBox(width: 4),
+            if (field['required'] == true &&
+                !(field['type'] is String &&
+                    (field['type'] as String).contains(',')))
+              Text(
+                '*',
+                style: widget.fontFamily.copyWith(
+                  color: const Color.fromARGB(255, 222, 75, 64),
+                  fontSize: 16,
+                ),
+              ),
+          ],
+        ),
+        ReactiveTextField(
+          formControlName: '${field['name']}_comment',
+          readOnly: widget.readOnly,
+          decoration: InputDecoration(
+              hintText: field['commentHint'] ?? '',
+              labelStyle: widget.fontFamily,
+              hintStyle: widget.fontFamily,
+              errorStyle: widget.accordionView
+                  ? controller
+                      .buildInputDecoration(widget.accordionView)
+                      .errorStyle
+                  : widget.fontFamily
+                      .copyWith(color: Colors.red[700], fontSize: 12),
+              errorBorder: widget.accordionView
+                  ? UnderlineInputBorder(
+                      borderSide: BorderSide(
+                          color: Get.theme.colorScheme.onError))
+                  : null),
+          minLines: 1,
+          maxLines: 3,
+          validationMessages: {
+            'required': (_) => widget.accordionView
+                ? ""
+                : StringConstants.commentsAreRequired,
+          },
+          onSubmitted: (_) {
+            if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
+              validateCurrentSection();
+            }
+          },
+        ),
+      ],
+    );
+
+    // If conditional display is needed, wrap in ReactiveValueListenableBuilder
+    if (useConditionalDisplay) {
+      return ReactiveValueListenableBuilder(
+        formControlName: field['name'],
+        builder: (context, control, child) {
+          bool shouldShowComments = controller
+              .shouldShowCommentsBasedOnFieldValue(field, control.value);
+
+          if (!shouldShowComments) {
+            return const SizedBox
+                .shrink(); // Don't render the comment field if not required
+          }
+
+          return commentsWidget;
+        },
+      );
+    }
+
+    return commentsWidget;
   }
 
   Widget _buildQuestionHeader(Map<String, dynamic> field) {
@@ -2088,73 +2179,7 @@ class _DynamicFormState extends State<DynamicForm>
             },
           ),
 
-        if (field['hasComments'] == true)
-          ReactiveValueListenableBuilder(
-            formControlName: field['name'],
-            builder: (context, control, child) {
-              bool shouldShowComments = controller
-                  .shouldShowCommentsBasedOnFieldValue(field, control.value);
-
-              if (!shouldShowComments) {
-                return const SizedBox
-                    .shrink(); // Don't render the comment field if not required
-              }
-
-              return Column(
-                children: [
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Text(
-                        field['commentLabel'] ?? StringConstants.comments,
-                        style: widget.fontFamily,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '*',
-                        style: widget.fontFamily.copyWith(
-                          color: const Color.fromARGB(255, 222, 75, 64),
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                  ReactiveTextField(
-                    formControlName: '${field['name']}_comment',
-                    readOnly: widget.readOnly,
-                    decoration: InputDecoration(
-                        hintText: field['commentHint'] ?? '',
-                        labelStyle: widget.fontFamily,
-                        hintStyle: widget.fontFamily,
-                        errorStyle: widget.accordionView
-                            ? controller
-                                .buildInputDecoration(widget.accordionView)
-                                .errorStyle
-                            : widget.fontFamily
-                                .copyWith(color: Colors.red[700], fontSize: 12),
-                        errorBorder: widget.accordionView
-                            ? UnderlineInputBorder(
-                                borderSide: BorderSide(
-                                    color: Get.theme.colorScheme.onError))
-                            : null),
-                    maxLines: 3,
-                    minLines: 1,
-                    validationMessages: {
-                      'required': (_) => widget.accordionView
-                          ? ""
-                          : StringConstants.commentsAreRequired,
-                    },
-                    onSubmitted: (_) {
-                      if (widget.showOneByOne &&
-                          !isCurrentQuestionEffectivelyLast()) {
-                        validateCurrentSection();
-                      }
-                    },
-                  ),
-                ],
-              );
-            },
-          )
+        _buildCommentsField(field),
       ],
     );
   }
@@ -2383,59 +2408,7 @@ class _DynamicFormState extends State<DynamicForm>
               );
             },
           ),
-        if (field['hasComments'] == true) ...[
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Text(
-                field['commentLabel'] ?? StringConstants.comments,
-                style: widget.fontFamily,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '*',
-                style: widget.fontFamily.copyWith(
-                  color: const Color.fromARGB(255, 222, 75, 64),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            readOnly: widget.readOnly,
-            decoration: InputDecoration(
-                // No labelText to avoid displaying "comments" in the field
-                hintText: field['commentHint'] ?? '',
-                labelStyle: widget.fontFamily,
-                hintStyle: widget.fontFamily,
-                // Add error style
-                errorStyle: widget.accordionView
-                    ? controller
-                        .buildInputDecoration(widget.accordionView)
-                        .errorStyle
-                    : widget.fontFamily
-                        .copyWith(color: Colors.red[700], fontSize: 12),
-                errorBorder: widget.accordionView
-                    ? UnderlineInputBorder(
-                        borderSide:
-                            BorderSide(color: Get.theme.colorScheme.onError))
-                    : null),
-            maxLines: 3,
-            minLines: 1,
-            validationMessages: {
-              'required': (_) => widget.accordionView
-                  ? ""
-                  : StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
-        ],
+        _buildCommentsField(field, useConditionalDisplay: false),
       ],
     );
   }
@@ -2550,60 +2523,10 @@ class _DynamicFormState extends State<DynamicForm>
           },
         ),
         // Rest of the code remains the same
-        if (field['hasComments'] == true) ...[
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Text(
-                field['commentLabel'] ?? StringConstants.comments,
-                style: widget.fontFamily,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '*',
-                style: widget.fontFamily.copyWith(
-                  color: const Color.fromARGB(255, 222, 75, 64),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            readOnly: widget.readOnly,
-            decoration: InputDecoration(
-                // No labelText to avoid displaying "comments" in the field
-                hintText: field['commentHint'] ?? '',
-                labelStyle: widget.fontFamily,
-                hintStyle: widget.fontFamily,
-                // Add error style
-                errorStyle: widget.accordionView
-                    ? controller
-                        .buildInputDecoration(widget.accordionView)
-                        .errorStyle
-                    : widget.fontFamily
-                        .copyWith(color: Colors.red[700], fontSize: 12),
-                errorBorder: widget.accordionView
-                    ? UnderlineInputBorder(
-                        borderSide:
-                            BorderSide(color: Get.theme.colorScheme.onError))
-                    : null),
-            maxLines: 3,
-            minLines: 1,
-            validationMessages: {
-              'required': (_) => widget.accordionView
-                  ? ""
-                  : StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
-        ],
-        if (field['hasAttachments'] == true ||
+        if (!(field['type'] is String &&
+          (field['type'] as String).contains(','))) ...[
+            _buildCommentsField(field, useConditionalDisplay: false),
+          ] else if (field['hasAttachments'] == true ||
             field['requireAttachmentsOn'] == true ||
             field['requiredAttachmentsOn'] == true) ...[
           const SizedBox(height: 16),
@@ -2897,66 +2820,13 @@ class _DynamicFormState extends State<DynamicForm>
                 );
               }),
         ],
-        if (field['hasComments'] == true) ...[
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Text(
-                field['commentLabel'] ?? StringConstants.comments,
-                style: widget.fontFamily,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '*',
-                style: widget.fontFamily.copyWith(
-                  color: const Color.fromARGB(255, 222, 75, 64),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            readOnly: widget.readOnly,
-            decoration: InputDecoration(
-                // No labelText to avoid displaying "comments" in the field
-                hintText: field['commentHint'] ?? '',
-                labelStyle: widget.fontFamily,
-                hintStyle: widget.fontFamily,
-                // Add error style
-                errorStyle: widget.accordionView
-                    ? controller
-                        .buildInputDecoration(widget.accordionView)
-                        .errorStyle
-                    : widget.fontFamily
-                        .copyWith(color: Colors.red[700], fontSize: 12),
-                errorBorder: widget.accordionView
-                    ? UnderlineInputBorder(
-                        borderSide:
-                            BorderSide(color: Get.theme.colorScheme.onError))
-                    : null),
-            maxLines: 3,
-            minLines: 1,
-            validationMessages: {
-              'required': (_) => widget.accordionView
-                  ? ""
-                  : StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
-        ],
+        _buildCommentsField(field, useConditionalDisplay: false),
       ],
     );
   }
 
   Widget _buildTempField(Map<String, dynamic> field) {
     final name = field['name'] as String;
-    final hasComments = field['hasComments'] == true;
 
     double _toDouble(dynamic v) {
       if (v == null) return 0.0;
@@ -3091,35 +2961,7 @@ class _DynamicFormState extends State<DynamicForm>
             );
           }
         }),
-        if (hasComments) ...[
-          const SizedBox(height: 16),
-          ReactiveTextField(
-            formControlName: '${name}_comment',
-            readOnly: widget.readOnly,
-            decoration: InputDecoration(
-              hintText: field['commentHint'] ?? '',
-              labelStyle: widget.fontFamily,
-              hintStyle: widget.fontFamily,
-              errorStyle: widget.accordionView
-                  ? controller.buildInputDecoration(widget.accordionView).errorStyle
-                  : widget.fontFamily.copyWith(color: Colors.red[700], fontSize: 12),
-              errorBorder: widget.accordionView
-                  ? UnderlineInputBorder(
-                      borderSide: BorderSide(color: Get.theme.colorScheme.onError))
-                  : null,
-            ),
-            maxLines: 3,
-            minLines: 1,
-            validationMessages: {
-              'required': (_) => widget.accordionView ? "" : StringConstants.commentsAreRequired,
-            },
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
-        ],
+        _buildCommentsField(field, useConditionalDisplay: false),
       ],
     );
   }
@@ -3250,59 +3092,7 @@ class _DynamicFormState extends State<DynamicForm>
           },
         ),
         // Comments section if `hasComments` is true
-        if (field['hasComments'] == true) ...[
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Text(
-                field['commentLabel'] ?? StringConstants.comments,
-                style: widget.fontFamily,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '*',
-                style: widget.fontFamily.copyWith(
-                  color: const Color.fromARGB(255, 222, 75, 64),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-          ReactiveTextField(
-            formControlName: '${field['name']}_comment',
-            readOnly: widget.readOnly,
-            decoration: InputDecoration(
-                // No labelText to avoid displaying "comments" in the field
-                hintText: field['commentHint'] ?? '',
-                labelStyle: widget.fontFamily,
-                hintStyle: widget.fontFamily,
-                // Add error style
-                errorStyle: widget.accordionView
-                    ? controller
-                        .buildInputDecoration(widget.accordionView)
-                        .errorStyle
-                    : widget.fontFamily
-                        .copyWith(color: Colors.red[700], fontSize: 12),
-                errorBorder: widget.accordionView
-                    ? UnderlineInputBorder(
-                        borderSide:
-                            BorderSide(color: Get.theme.colorScheme.onError))
-                    : null),
-            maxLines: 3,
-            minLines: 1,
-            validationMessages: {
-              'required': (_) => widget.accordionView
-                  ? ""
-                  : StringConstants.commentsAreRequired,
-            },
-            // Add onSubmitted to validate the form when user submits via keyboard
-            onSubmitted: (_) {
-              if (widget.showOneByOne && !isCurrentQuestionEffectivelyLast()) {
-                validateCurrentSection();
-              }
-            },
-          ),
-        ],
+        _buildCommentsField(field, useConditionalDisplay: false),
       ],
     );
   }
@@ -3412,6 +3202,9 @@ class _DynamicFormState extends State<DynamicForm>
             bookingAppModelFileUpload: widget.bookingAppModelFileUpload,
           ),
         ],
+
+        // Add comments widget for date field
+        _buildCommentsField(field),
       ],
     );
   }
