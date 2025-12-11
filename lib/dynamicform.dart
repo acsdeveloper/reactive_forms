@@ -1763,8 +1763,7 @@ class _DynamicFormState extends State<DynamicForm>
               style: widget.fontFamily,
             ),
             const SizedBox(width: 4),
-            if (field['required'] == true &&
-                !(field['type'] is String &&
+            if (!(field['type'] is String &&
                     (field['type'] as String).contains(',')))
               Text(
                 '*',
