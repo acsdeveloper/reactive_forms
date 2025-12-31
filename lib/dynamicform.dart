@@ -618,6 +618,9 @@ class _DynamicFormState extends State<DynamicForm>
 
     _recomputeGroupStructure();
 
+    // Initialize visibility tracking map to prevent false transitions on first interaction
+    _initializeVisibilityTracking();
+
     // Jump to first unanswered required question in draft + one-by-one mode
     skipToFirstUnansweredQuestion();
 
@@ -687,6 +690,21 @@ class _DynamicFormState extends State<DynamicForm>
   // Keeps last-known visibility per field
   Map<String, bool> _lastVisibilityByFieldName = {};
 
+  // Initialize the visibility tracking map with current visibility states
+  void _initializeVisibilityTracking() {
+    for (final field in _internalFields) {
+      final String fieldName = field['name']?.toString() ?? '';
+      if (fieldName.isEmpty) continue;
+
+      final bool currentlyVisible = controller.shouldFieldBeVisible(field);
+      _lastVisibilityByFieldName[fieldName] = currentlyVisible;
+    }
+
+    if (kDebugMode) {
+      print("Initialized visibility tracking for ${_lastVisibilityByFieldName.length} fields");
+    }
+  }
+
   // Detect fields that became visible and mark them as touched to trigger validation display
   void _handleVisibilityTransitions() {
     for (final field in _internalFields) {
@@ -694,23 +712,29 @@ class _DynamicFormState extends State<DynamicForm>
       if (fieldName.isEmpty) continue;
 
       final bool currentlyVisible = controller.shouldFieldBeVisible(field);
-      final bool previouslyVisible = _lastVisibilityByFieldName[fieldName] ?? currentlyVisible;
 
-      if (!previouslyVisible && currentlyVisible) {
-        // Field just became visible: mark its control and any dependent comment control as touched
-        if (controller.form.contains(fieldName)) {
-          final control = controller.form.control(fieldName);
-          control.markAsTouched();
-        }
+      // Only process if we have a previous state recorded
+      // This prevents marking fields as touched on initial load
+      if (_lastVisibilityByFieldName.containsKey(fieldName)) {
+        final bool previouslyVisible = _lastVisibilityByFieldName[fieldName]!;
 
-        if (field['hasComments'] == true) {
-          final commentControlName = '${fieldName}_comment';
-          if (controller.form.contains(commentControlName)) {
-            controller.form.control(commentControlName).markAsTouched();
+        if (!previouslyVisible && currentlyVisible) {
+          // Field just became visible: mark its control and any dependent comment control as touched
+          if (controller.form.contains(fieldName)) {
+            final control = controller.form.control(fieldName);
+            control.markAsTouched();
+          }
+
+          if (field['hasComments'] == true) {
+            final commentControlName = '${fieldName}_comment';
+            if (controller.form.contains(commentControlName)) {
+              controller.form.control(commentControlName).markAsTouched();
+            }
           }
         }
       }
 
+      // Always update the last known visibility state
       _lastVisibilityByFieldName[fieldName] = currentlyVisible;
     }
   }
