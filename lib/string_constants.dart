@@ -121,7 +121,7 @@ class StringConstants {
   static String gallery = 'Gallery';
   static String managerToCheck = 'Manager to Check';
   static const String fillMandatoryFields =
-      'Please fill the mandatory questions.';
+      'Please complete all mandatory fields.';
   static const String draft = "Draft";
   static const String expandAll = "Expand All";
   static const String collapseAll = "Collapse All";
