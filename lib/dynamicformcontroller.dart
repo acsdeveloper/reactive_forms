@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -127,7 +128,7 @@ class DynamicFormController extends ChangeNotifier {
                       initialValues!.containsKey('${fieldName}_comment')
                   ? initialValues!['${fieldName}_comment']
                   : '',
-              validators: [Validators.required],
+              validators: _commentValidators(field, fieldName),
             );
           }
           continue;
@@ -147,7 +148,7 @@ class DynamicFormController extends ChangeNotifier {
                       initialValues!.containsKey('${fieldName}_comment')
                   ? initialValues!['${fieldName}_comment']
                   : '',
-              validators: [Validators.required],
+              validators: _commentValidators(field, fieldName),
             );
           }
         } else if (field['type'] == 'text') {
@@ -161,7 +162,7 @@ class DynamicFormController extends ChangeNotifier {
                       initialValues!.containsKey('${fieldName}_comment')
                   ? initialValues!['${fieldName}_comment']
                   : '',
-              validators: [Validators.required],
+              validators: _commentValidators(field, fieldName),
             );
           }
         } else if (field['type'] == 'number') {
@@ -176,7 +177,7 @@ class DynamicFormController extends ChangeNotifier {
                       initialValues!.containsKey('${fieldName}_comment')
                   ? initialValues!['${fieldName}_comment']
                   : '',
-              validators: [Validators.required],
+              validators: _commentValidators(field, fieldName),
             );
           }
         } else if (field['type'] == 'temp') {
@@ -191,7 +192,7 @@ class DynamicFormController extends ChangeNotifier {
                       initialValues!.containsKey('${fieldName}_comment')
                   ? initialValues!['${fieldName}_comment']
                   : '',
-              validators: [Validators.required],
+              validators: _commentValidators(field, fieldName),
             );
           }
         } else if (field['type'] == 'radio') {
@@ -209,7 +210,7 @@ class DynamicFormController extends ChangeNotifier {
                       initialValues!.containsKey('${fieldName}_comment')
                   ? initialValues!['${fieldName}_comment']
                   : '',
-              validators: [Validators.required],
+              validators: _commentValidators(field, fieldName),
             );
           }
         } else if (field['type'] == 'dropdown') {
@@ -225,7 +226,7 @@ class DynamicFormController extends ChangeNotifier {
                       initialValues!.containsKey('${fieldName}_comment')
                   ? initialValues!['${fieldName}_comment']
                   : '',
-              validators: [Validators.required],
+              validators: _commentValidators(field, fieldName),
             );
           }
         } else {
@@ -260,7 +261,7 @@ class DynamicFormController extends ChangeNotifier {
                       initialValues!.containsKey('${fieldName}_comment')
                   ? initialValues!['${fieldName}_comment']
                   : '',
-              validators: [Validators.required],
+              validators: _commentValidators(field, fieldName),
             );
           }
 
@@ -285,6 +286,7 @@ class DynamicFormController extends ChangeNotifier {
 
     _addControlsForFields(formJson);
     form = FormGroup(controls);
+    _wireOptionalCommentValidation();
   }
 
   List<Validator> _getValidators(
@@ -451,7 +453,7 @@ class DynamicFormController extends ChangeNotifier {
               // Add the field to the group with the required structure
               groups[parentName]![originalName] = {
                 'answer': value?.toString() ?? '',
-                'comment': formValue['${fieldName}_comment']?.toString() ?? '',
+                'comment': _commentForOutput(formValue, fieldName, originalName),
                 'imageUrls': formValue['${fieldName}_images'] ?? [],
                 'question': _getFieldLabel(originalName),
                 'questionId': originalName,
@@ -462,7 +464,7 @@ class DynamicFormController extends ChangeNotifier {
             // This is a standalone field that happens to have underscore in name
             standaloneFields[fieldName] = {
               'answer': value?.toString() ?? '',
-              'comment': formValue['${fieldName}_comment']?.toString() ?? '',
+              'comment': _commentForOutput(formValue, fieldName, fieldName),
               'imageUrls': formValue['${fieldName}_images'] ?? [],
               'question': _getFieldLabel(fieldName),
               'questionId': fieldName,
@@ -482,7 +484,7 @@ class DynamicFormController extends ChangeNotifier {
           if (_shouldIncludeFieldInOutput(fieldName, fieldName, '')) {
             standaloneFields[fieldName] = {
               'answer': value?.toString() ?? '',
-              'comment': formValue['${fieldName}_comment']?.toString() ?? '',
+              'comment': _commentForOutput(formValue, fieldName, fieldName),
               'imageUrls': formValue['${fieldName}_images'] ?? [],
               'question': _getFieldLabel(fieldName),
               'questionId': fieldName,
@@ -767,7 +769,9 @@ class DynamicFormController extends ChangeNotifier {
 
         commentControl.markAsTouched();
 
-        if (!commentControl.valid) {
+        final showComment =
+            shouldShowCommentsBasedOnFieldValue(field, currentControl.value);
+        if (showComment && !commentControl.valid) {
           AppSnackBar(context)
               .showErrorSnackBar(StringConstants.commentsAreRequired);
           notifyListeners();
@@ -893,6 +897,98 @@ class DynamicFormController extends ChangeNotifier {
     return true;
   }
 
+  /// Normalises a config value (List, or comma-separated String from the sheet)
+  /// into a list of trimmed, non-empty answers.
+  List<String> _commentAnswerList(dynamic raw) {
+    if (raw == null) return [];
+    final items = raw is List ? raw : raw.toString().split(',');
+    return items
+        .map((e) => e.toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+  }
+
+  bool _valueMatchesAnswers(dynamic value, List<String> answers) {
+    if (answers.isEmpty || value == null) return false;
+    if (value is List) {
+      return value.any((v) => answers.contains(v.toString().trim()));
+    }
+    return answers.contains(value.toString().trim());
+  }
+
+  /// True when the comment for this answer is shown but not mandatory:
+  /// the answer is in optionalCommentsOn and NOT in requireCommentsOn
+  /// (if an answer is in both, mandatory wins).
+  bool isCommentOptionalForValue(dynamic field, dynamic value) {
+    if (!_valueMatchesAnswers(value, _commentAnswerList(field['optionalCommentsOn']))) {
+      return false;
+    }
+    return !_valueMatchesAnswers(
+        value, _commentAnswerList(field['requireCommentsOn']));
+  }
+
+  /// True when the question configures optionalCommentsOn.
+  bool hasOptionalCommentsConfig(dynamic field) =>
+      _commentAnswerList(field['optionalCommentsOn']).isNotEmpty;
+
+  final List<MapEntry<String, dynamic>> _pendingOptionalComments = [];
+  final List<StreamSubscription<dynamic>> _optionalCommentSubs = [];
+
+  /// Validators for a comment control. Mandatory by default (unchanged
+  /// behaviour); when the question has optionalCommentsOn, the comment is only
+  /// required if the current answer is not an optional one.
+  List<Validator<dynamic>> _commentValidators(dynamic field, dynamic answerName) {
+    if (_commentAnswerList(field['optionalCommentsOn']).isEmpty) {
+      return [Validators.required];
+    }
+    final name = answerName.toString();
+    _pendingOptionalComments.add(MapEntry(name, field));
+    return [
+      Validators.delegate((control) {
+        final parent = control.parent;
+        if (parent is FormGroup && parent.contains(name)) {
+          if (isCommentOptionalForValue(field, parent.control(name).value)) {
+            return null;
+          }
+        }
+        return Validators.required.validate(control);
+      })
+    ];
+  }
+
+  /// Re-runs the comment validator whenever the answer changes, so the
+  /// comment's valid state follows the selected answer.
+  void _wireOptionalCommentValidation() {
+    for (final entry in _pendingOptionalComments) {
+      final commentName = '${entry.key}_comment';
+      if (!form.contains(entry.key) || !form.contains(commentName)) continue;
+      final comment = form.control(commentName);
+      comment.updateValueAndValidity();
+      _optionalCommentSubs.add(form
+          .control(entry.key)
+          .valueChanges
+          .listen((_) => comment.updateValueAndValidity()));
+    }
+    _pendingOptionalComments.clear();
+  }
+
+  /// Comment text to submit for a control. A comment that is currently hidden
+  /// is dropped so stale text typed for a previous answer is not submitted.
+  String _commentForOutput(
+      Map<String, dynamic> formValue, String controlName, String originalName) {
+    final comment = formValue['${controlName}_comment']?.toString() ?? '';
+    if (comment.isEmpty) return comment;
+    final field = formJson.firstWhere(
+      (f) => f['name'] == originalName,
+      orElse: () => <String, dynamic>{},
+    );
+    if (field['hasComments'] == true &&
+        !shouldShowCommentsBasedOnFieldValue(field, formValue[controlName])) {
+      return '';
+    }
+    return comment;
+  }
+
   /// Given a field and its control value, determine if comments should be shown.
   ///
   /// 1. If the control value is in the disabled options, don't show comments.
@@ -926,6 +1022,13 @@ class DynamicFormController extends ChangeNotifier {
     // If control value is in disabled options, don't show comments
     if (isValueInDisabledOptions()) {
       return false;
+    }
+
+    // Answers listed in optionalCommentsOn always show the comment box
+    // (it is just not mandatory - see isCommentOptionalForValue).
+    final optionalAnswers = _commentAnswerList(field['optionalCommentsOn']);
+    if (_valueMatchesAnswers(controlValue, optionalAnswers)) {
+      return true;
     }
 
     bool shouldShowComments = false;
@@ -981,8 +1084,11 @@ class DynamicFormController extends ChangeNotifier {
             (field['enableCommentsOn'] is List &&
                 (field['enableCommentsOn'] as List).isEmpty);
 
-        // If both requireCommentsOn and enableCommentsOn are empty or null, show comments
-        if (isRequireCommentsOnEmpty && isEnableCommentsOnEmpty) {
+        // If both requireCommentsOn and enableCommentsOn are empty or null, show comments.
+        // When optionalCommentsOn is used, only the listed answers get a comment box.
+        if (isRequireCommentsOnEmpty &&
+            isEnableCommentsOnEmpty &&
+            optionalAnswers.isEmpty) {
           shouldShowComments = true;
         }
       }
@@ -1412,7 +1518,7 @@ class DynamicFormController extends ChangeNotifier {
                         initialValues!.containsKey('${n}_comment')
                     ? initialValues!['${n}_comment']
                     : '',
-                validators: [Validators.required]);
+                validators: _commentValidators(f, n));
           }
         } else if (f['type'] == 'file') {
           // Only initialize uploadedFiles if not already set
@@ -1430,7 +1536,7 @@ class DynamicFormController extends ChangeNotifier {
                         initialValues!.containsKey('${n}_comment')
                     ? initialValues!['${n}_comment']
                     : '',
-                validators: [Validators.required]);
+                validators: _commentValidators(f, n));
           }
         } else if (f['type'] == 'number') {
           List<Validator> validators = _getValidators(isRequired, f);
@@ -1442,7 +1548,7 @@ class DynamicFormController extends ChangeNotifier {
                         initialValues!.containsKey('${n}_comment')
                     ? initialValues!['${n}_comment']
                     : '',
-                validators: [Validators.required]);
+                validators: _commentValidators(f, n));
           }
         } else if (f['type'] == 'temp') {
           List<Validator> validators = _getValidators(isRequired, f);
@@ -1455,7 +1561,7 @@ class DynamicFormController extends ChangeNotifier {
                         initialValues!.containsKey('${n}_comment')
                     ? initialValues!['${n}_comment']
                     : '',
-                validators: [Validators.required]);
+                validators: _commentValidators(f, n));
           }
         } else if (f['type'] == 'radio') {
           if (f['options'] == null || (f['options'] as List).isEmpty) {
@@ -1472,7 +1578,7 @@ class DynamicFormController extends ChangeNotifier {
                         initialValues!.containsKey('${n}_comment')
                     ? initialValues!['${n}_comment']
                     : '',
-                validators: [Validators.required]);
+                validators: _commentValidators(f, n));
           }
         } else {
           List<Validator> validators = _getValidators(isRequired, f);
@@ -1484,7 +1590,7 @@ class DynamicFormController extends ChangeNotifier {
                         initialValues!.containsKey('${n}_comment')
                     ? initialValues!['${n}_comment']
                     : '',
-                validators: [Validators.required]);
+                validators: _commentValidators(f, n));
           }
         }
       }
@@ -1492,6 +1598,7 @@ class DynamicFormController extends ChangeNotifier {
 
     _addControls(newFields);
     form.addAll(newControls);
+    _wireOptionalCommentValidation();
     notifyListeners();
   }
 
@@ -1522,6 +1629,10 @@ class DynamicFormController extends ChangeNotifier {
   @override
   void dispose() {
     super.dispose();
+    for (final sub in _optionalCommentSubs) {
+      sub.cancel();
+    }
+    _optionalCommentSubs.clear();
     form.dispose();
     if (kDebugMode) {
       print('DynamicFormController disposed');

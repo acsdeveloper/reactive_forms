@@ -27,6 +27,9 @@ Each question in the form is represented as a JSON object with various propertie
 | `groupWith` | String | Groups this question with another question |
 | `hasAttachments` | Boolean | Whether file attachments are allowed |
 | `hasComments` | Boolean | Whether comments are allowed |
+| `requireCommentsOn` | Array | Answers for which the comment box is shown and the comment is **mandatory** |
+| `optionalCommentsOn` | Array | Answers for which the comment box is shown but the comment is **optional** (no `*`, empty comment does not block). If an answer is in both `requireCommentsOn` and `optionalCommentsOn`, mandatory wins. When `optionalCommentsOn` is set, only the listed/required answers get a comment box. |
+| `disableCommentsOn` | Array | Answers for which the comment box is hidden (takes priority over the other lists) |
 | `min` / `max` | Number | For number inputs: minimum and maximum values |
 
 ## Conditional Logic with showWhen

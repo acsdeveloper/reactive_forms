@@ -104,6 +104,20 @@ final List<Map<String, dynamic>> formJson = [
     "hasComments": false,
     "commentsRequired": false,
     "showWhen": {"question_7": "No"},
+  },
+  {
+    // Mandatory comment on "No", optional comment on "Yes".
+    "name": "question_9",
+    "type": "radio",
+    "label": "Any other observations?",
+    "options": ["Yes", "No"],
+    "required": true,
+    "hasAttachments": false,
+    "requireAttachmentsOn": [],
+    "disableAttachmentsOn": [],
+    "hasComments": true,
+    "requireCommentsOn": ["No"],
+    "optionalCommentsOn": ["Yes"],
   }
 ];
 

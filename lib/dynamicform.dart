@@ -1766,6 +1766,26 @@ class _DynamicFormState extends State<DynamicForm>
     );
   }
 
+  /// Red asterisk next to the comment label. Questions that configure
+  /// optionalCommentsOn hide it for the answers where the comment is optional.
+  Widget _buildCommentStar(Map<String, dynamic> field) {
+    final star = Text(
+      '*',
+      style: widget.fontFamily.copyWith(
+        color: const Color.fromARGB(255, 222, 75, 64),
+        fontSize: 16,
+      ),
+    );
+    if (!controller.hasOptionalCommentsConfig(field)) return star;
+    return ReactiveValueListenableBuilder(
+      formControlName: field['name'],
+      builder: (context, control, child) =>
+          controller.isCommentOptionalForValue(field, control.value)
+              ? const SizedBox.shrink()
+              : star,
+    );
+  }
+
   /// Builds a reusable comments field widget that listens to the field value
   /// and conditionally displays based on shouldShowCommentsBasedOnFieldValue
   ///
@@ -1789,13 +1809,7 @@ class _DynamicFormState extends State<DynamicForm>
             const SizedBox(width: 4),
             if (!(field['type'] is String &&
                     (field['type'] as String).contains(',')))
-              Text(
-                '*',
-                style: widget.fontFamily.copyWith(
-                  color: const Color.fromARGB(255, 222, 75, 64),
-                  fontSize: 16,
-                ),
-              ),
+              _buildCommentStar(field),
           ],
         ),
         ReactiveTextField(
@@ -4197,7 +4211,8 @@ class _DynamicFormState extends State<DynamicForm>
           final bool shouldShowComments = controller.shouldShowCommentsBasedOnFieldValue(field, fieldValue);
 
 
-          if (shouldShowComments) {
+          if (shouldShowComments &&
+              !controller.isCommentOptionalForValue(field, fieldValue)) {
             final commentControl = controller.form.control(commentFieldName);
             final commentValue = commentControl.value;
             final commentIsEmpty = commentValue == null ||
@@ -4571,7 +4586,10 @@ class _DynamicFormState extends State<DynamicForm>
           final commentControl = controller.form.control(commentControlName);
           commentControl.markAsTouched();
 
-          if (!commentControl.valid) {
+          final showDuplicateComment = controller.form.contains(fieldName) &&
+              controller.shouldShowCommentsBasedOnFieldValue(
+                  field, controller.form.control(fieldName).value);
+          if (showDuplicateComment && !commentControl.valid) {
             if (kDebugMode) {
               print("Comment for duplicate field $fieldName validation failed");
             }

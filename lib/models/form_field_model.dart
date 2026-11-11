@@ -18,7 +18,7 @@ class FormFieldModel {
   final dynamic showAttachmentsOn;
   final dynamic disableAttachmentsOn;
   final bool? hasComments;
-  final String? requiredCommentsOn;
+  final String? requireCommentsOn;
   final Map<String, dynamic>? branching;
   final int? min;
   final int? max;
@@ -35,7 +35,7 @@ class FormFieldModel {
     this.showAttachmentsOn,
     this.disableAttachmentsOn,
     this.hasComments,
-    this.requiredCommentsOn,
+    this.requireCommentsOn,
     this.branching,
     this.min,
     this.max,
@@ -101,7 +101,7 @@ class FormFieldModel {
         showAttachmentsOn: json['showAttachmentsOn'],
         disableAttachmentsOn: json['disableAttachmentsOn'],
         hasComments: parseBooleanField(json['hasComments']),
-        requiredCommentsOn: json['requiredCommentsOn']?.toString(),
+        requireCommentsOn: json['requireCommentsOn']?.toString(),
         branching: json['branching'] as Map<String, dynamic>?,
         min: json['min'] != null ? int.tryParse(json['min'].toString()) : null,
         max: json['max'] != null ? int.tryParse(json['max'].toString()) : null,
