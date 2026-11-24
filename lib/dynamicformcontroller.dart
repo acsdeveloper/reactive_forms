@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +37,32 @@ class DynamicFormController extends ChangeNotifier {
     });
   }
 
+  /// Turns a saved multiselect answer back into the list of selected options.
+  /// Submitted answers are stored as text (`"[Sit, Down]"`), so a saved value
+  /// can be a List, a JSON array string, or that bracketed text. Only values
+  /// that are options of the question are kept. (Ported from f996b29.)
+  List<String> _parseInitialToList(dynamic initial, dynamic options) {
+    if (initial == null) return <String>[];
+    final List<dynamic>? opts = options is List ? options : null;
+    bool keep(String e) => e.isNotEmpty && (opts == null || opts.contains(e));
+
+    if (initial is List) {
+      return initial.map((e) => e.toString().trim()).where(keep).toList();
+    }
+    var s = initial.toString().trim();
+    try {
+      final decoded = jsonDecode(s);
+      if (decoded is List) {
+        return decoded.map((e) => e.toString().trim()).where(keep).toList();
+      }
+    } catch (_) {}
+    if (s.startsWith('[') && s.endsWith(']')) {
+      s = s.substring(1, s.length - 1);
+    }
+    if (s.isEmpty) return <String>[];
+    return s.split(',').map((e) => e.trim()).where(keep).toList();
+  }
+
   void _initializeForm() {
     Map<String, AbstractControl<dynamic>> controls = {};
 
@@ -60,13 +87,8 @@ class DynamicFormController extends ChangeNotifier {
         }
 
         if (field['type'] == 'multiselect') {
-          List<String> initialValue = [];
-          if (initial != null && initial is List<dynamic>) {
-            initialValue = initial
-                .where((item) => field['options'].contains(item))
-                .map((item) => item.toString())
-                .toList();
-          }
+          final List<String> initialValue =
+              _parseInitialToList(initial, field['options']);
 
           controls[fieldName] = FormControl<List<String>>(
             value: initialValue.isNotEmpty ? initialValue : null,
@@ -1423,8 +1445,8 @@ class DynamicFormController extends ChangeNotifier {
         final bool isRequired = f['required'] == true;
         if (f['type'] == 'multiselect') {
           List<String> initialValue = [];
-          if (initial != null && initial is List) {
-            initialValue = initial.map((item) => item.toString()).toList();
+          if (initial != null) {
+            initialValue = _parseInitialToList(initial, f['options']);
           } else if (f['defaultValue'] != null && f['defaultValue'] is List) {
             initialValue = (f['defaultValue'] as List)
                 .map((item) => item.toString())
